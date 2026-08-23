@@ -1,0 +1,5 @@
+{
+  "summary": "Module 4: AtmosphericInversionLoss — a physics-informed PyTorch loss function combining MSE+MAE prediction error with a Conservation of Mass Penalty Term. The penalty fires when wind velocity is stagnant (<2 m/s) AND PBL height is compressed (<400m) BUT PM2.5 is predicted to decrease without a transport mechanism, violating mass conservation. Also includes an inversion severity regulariser that penalises underestimation of PM2.5 during PBL trap events.",
+  "updatedAt": "2026-08-22T10:00:23.664284Z",
+  "userFacing": true
+}

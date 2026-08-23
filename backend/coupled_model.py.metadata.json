@@ -1,0 +1,5 @@
+{
+  "summary": "Module 3: PyTorch coupled spatiotemporal model. Contains CoupledConvLSTMCell (ConvLSTM with peephole connections), FeedbackCouplingModule (physics-informed PM2.5/AOD → delta-Temp and delta-PBL computation using non-linear sigmoid/tanh constraints), and AirPollutionCoupledForecaster (72-step autoregressive rollout with feedback injection at each step, spatial attention, and a lightweight decoder head per output channel).",
+  "updatedAt": "2026-08-22T09:58:21.510964100Z",
+  "userFacing": true
+}

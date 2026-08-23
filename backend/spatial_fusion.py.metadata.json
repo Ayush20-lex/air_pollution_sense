@@ -1,0 +1,5 @@
+{
+  "summary": "Module 2: SpatialDataFusion class. Accepts raw CPCB station DataFrames and NASA FIRMS fire points. Implements both IDW (Inverse Distance Weighting) and Ordinary Kriging spatial interpolation onto a 70x80 1km grid over Delhi NCR bounding box. Computes smoke transport vectors from fire pixels to grid center using U/V wind components and haversine distance. Returns xarray DataArrays for downstream tensor building.",
+  "updatedAt": "2026-08-22T09:58:21.100296300Z",
+  "userFacing": true
+}

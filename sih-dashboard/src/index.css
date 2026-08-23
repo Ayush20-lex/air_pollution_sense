@@ -1,0 +1,91 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) * .6);
+  --radius-md: calc(var(--radius) * .8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --font-sans: var(--font-geist-sans), Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
+}
+
+:root {
+  color-scheme: dark;
+  --background: oklch(0.115 0.025 190);
+  --foreground: oklch(0.94 0.02 180);
+  --card: oklch(0.155 0.025 190 / .82);
+  --card-foreground: oklch(0.94 0.02 180);
+  --popover: oklch(0.12 0.03 195);
+  --popover-foreground: oklch(0.94 0.02 180);
+  --primary: oklch(0.78 0.17 170);
+  --primary-foreground: oklch(0.12 0.03 190);
+  --secondary: oklch(0.21 0.035 192);
+  --secondary-foreground: oklch(0.93 0.02 180);
+  --muted: oklch(0.2 0.025 190);
+  --muted-foreground: oklch(0.57 0.035 185);
+  --accent: oklch(0.7 0.2 290);
+  --accent-foreground: oklch(0.98 0.01 290);
+  --destructive: oklch(0.69 0.18 32);
+  --border: oklch(0.74 0.06 190 / .18);
+  --input: oklch(0.74 0.06 190 / .22);
+  --ring: oklch(0.78 0.17 170);
+  --chart-1: oklch(0.78 0.17 170);
+  --chart-2: oklch(0.7 0.2 290);
+  --chart-3: oklch(0.73 0.16 80);
+  --chart-4: oklch(0.7 0.18 35);
+  --chart-5: oklch(0.62 0.11 190);
+  --radius: .6rem;
+}
+
+* { @apply border-border outline-ring/50; }
+html { background: var(--background); }
+body { @apply bg-background text-foreground; min-width: 320px; overflow: hidden; }
+button, input { font: inherit; }
+::selection { background: color-mix(in oklab, var(--primary) 30%, transparent); }
+
+/* ── Global dark scrollbar (Webkit) ────────────────────────────────────── */
+::-webkit-scrollbar              { width: 4px; height: 4px; }
+::-webkit-scrollbar-track        { background: transparent; }
+::-webkit-scrollbar-thumb        { background: #334155; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover  { background: #475569; }
+::-webkit-scrollbar-corner       { background: transparent; }
+
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
+
+/* ── Left panel scoped scrollbar (extra specificity) ───────────────────── */
+.panel-scroll::-webkit-scrollbar             { width: 4px; }
+.panel-scroll::-webkit-scrollbar-track       { background: #090D16; }
+.panel-scroll::-webkit-scrollbar-thumb       { background: #334155; border-radius: 9999px; }
+.panel-scroll::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+@keyframes pulse-danger {
+  0% { opacity: 1; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+  100% { opacity: 1; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}

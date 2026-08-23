@@ -1,0 +1,5 @@
+{
+  "summary": "Module 5: Production-grade FastAPI inference server. Three REST routes: GET /api/v1/forecast/grid (72h compressed GeoJSON grid), GET /api/v1/forecast/station/{station_id} (time-series vector), GET /api/v1/alerts/inversion (active ISI zones). Integrates mock dataset generation for immediate jury-demo execution. Uses orjson for fast serialisation, Redis cache with TTL=900s, background model inference via asyncio thread pool, and gzip response compression.",
+  "updatedAt": "2026-08-22T10:00:24.083049300Z",
+  "userFacing": true
+}

@@ -1,0 +1,5 @@
+{
+  "summary": "Module 1: End-to-end system architecture for SIH26082. Contains two Mermaid diagrams: (1) a full data-flow flowchart from ingestion sources through the ML pipeline to the frontend, and (2) a sequence diagram showing the real-time inference request lifecycle.",
+  "updatedAt": "2026-08-22T09:56:17.015110600Z",
+  "userFacing": true
+}

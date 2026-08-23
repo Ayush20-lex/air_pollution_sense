@@ -1,0 +1,4 @@
+{
+  "summary": "Python requirements for the SIH26082 backend: FastAPI, PyTorch, GeoPandas, TimescaleDB/PostGIS drivers, Redis, and spatial interpolation libraries.",
+  "updatedAt": "2026-08-22T09:56:16.612509200Z"
+}
