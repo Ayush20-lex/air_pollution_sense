@@ -7,7 +7,10 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 # Determine engine parameters depending on DB dialect
-db_url = settings.DB_URL
+db_url = (settings.DB_URL or "").strip()
+if not db_url:
+    db_url = "sqlite:///./delhi_aqi.db"
+
 connect_args = {}
 
 if db_url.startswith("sqlite"):

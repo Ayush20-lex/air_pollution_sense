@@ -39,6 +39,12 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+*.db
+*.sqlite
+*.sqlite3
+.pytest_cache/
+.coverage
+
 
 # Editor/IDE
 .vscode/
