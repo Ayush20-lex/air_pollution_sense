@@ -347,7 +347,7 @@ export default function CoupledSolutionDashboard() {
           </Card>
 
           {/* Current Key Telemetry */}
-          <Card className="border-border/30 bg-background/50 p-4 shadow-sm backdrop-blur-md">
+          <Card className="shrink-0 border-border/30 bg-background/50 p-4 shadow-sm backdrop-blur-md">
             <PanelTitle icon={CloudRain} meta={`T+${activeHour}H`}>Conditions</PanelTitle>
             <div className="flex flex-col gap-2">
               <Metric label="PM2.5 Avg"     value={current.pm25}  unit="µg/m³" />
