@@ -311,6 +311,7 @@ class AirPollutionCoupledForecaster(nn.Module):
             nn.Conv2d(hidden_dim, hidden_dim // 2, kernel_size=3, padding=1),
             nn.GELU(),
             nn.Conv2d(hidden_dim // 2, in_channels, kernel_size=1),
+            nn.Sigmoid(),
         )
 
         self._init_weights()

@@ -19,7 +19,7 @@ import gzip
 import json
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from functools import lru_cache
 from typing import Any
 
@@ -508,7 +508,7 @@ async def forecast_station(
     series = pred[0, :, channel, hi, wi].numpy()
     now = datetime.now(timezone.utc)
     timestamps = [
-        now.replace(hour=(now.hour + t) % 24).strftime("%Y-%m-%dT%H:00:00Z")
+        (now + timedelta(hours=t)).strftime("%Y-%m-%dT%H:00:00Z")
         for t in range(N_STEPS)
     ]
 
