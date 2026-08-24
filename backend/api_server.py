@@ -54,16 +54,19 @@ from grap_policy import calculate_indian_aqi_pm25, evaluate_grap_stage
 
 class Settings(BaseSettings):
     redis_url:      str   = "redis://localhost:6379/0"
-    db_url:         str   = "postgresql+asyncpg://ncmrwf:ncmrwf@localhost/sih26082"
+    db_url:         str   = "sqlite:///delhi_aqi.db"
     device:         str   = "cuda" if torch.cuda.is_available() else "cpu"
     cache_ttl_s:    int   = 900
-    mock_mode:      bool  = False   # Using real WAQI API now
+    mock_mode:      bool  = False
     model_path:     str   = "weights/forecaster_v1.pt"
     log_level:      str   = "info"
-    aqicn_token:    str   = "48116118881f20812a580f331d185244ab8cca84"
+    # ── REQUIRED: set AQICN_TOKEN in your .env file ──────────────────────────
+    # Do NOT commit a real token value here.
+    aqicn_token:    str   = ""
 
     class Config:
         env_file = ".env"
+        extra   = "ignore"
 
 @lru_cache
 def get_settings() -> Settings:
@@ -72,20 +75,87 @@ def get_settings() -> Settings:
 
 # ── App State ────────────────────────────────────────────────────────────────
 
+import logging as _logging
+_log = _logging.getLogger("api_server")
+
+# Channel normalisation constants — MUST match FeedbackCouplingModule.*_NORM
+# and coupled_model.py channel order: [pm25, pm10, o3, nox, u, v, temp, rh, solar, pbl, frp, smoke]
+_CHANNEL_NORMS = np.array(
+    [500.0, 700.0, 120.0, 250.0, 20.0, 20.0, 40.0, 100.0, 1200.0, 3000.0, 200.0, 300.0],
+    dtype=np.float32,
+)
+
+
 class AppState:
-    model:   AirPollutionCoupledForecaster | None = None
-    fusion:  SpatialDataFusion | None = None
-    cache:   dict[str, tuple[float, Any]] = {}   # key → (timestamp, value)
+    model:          AirPollutionCoupledForecaster | None = None
+    fusion:         SpatialDataFusion | None = None
+    cache:          dict[str, tuple[float, Any]] = {}   # key → (timestamp, value)
+    # Weight / data-mode truth fields
+    weights_loaded: bool = False   # True only when a real .pt file was loaded
+    weights_path:   str  = ""
+    started_at:     str  = ""
+    data_mode:      str  = "unknown"  # "live", "synthetic", or "mixed"
 
 
 _state = AppState()
+
+
+# ── Synthetic History Builder (DEMO / PROTOTYPE) ───────────────────────────────
+
+def _build_synthetic_history(
+    frame_norm: np.ndarray,
+    n_steps: int = 24,
+    jitter_sigma: float = 0.02,
+    seed: int = 99,
+) -> np.ndarray:
+    """
+    Builds a SYNTHETIC (prototype / demo) n-step historical context by
+    adding small Gaussian jitter to the current normalised observation frame.
+
+    ⚠  DATA INTEGRITY WARNING:
+        This is NOT real historical data.  The LSTM encoder receives
+        near-identical frames and will not capture genuine temporal
+        dynamics.  Outputs produced from this context MUST be treated as
+        prototype / demonstration data, not operational forecasts.
+
+    Future integration stub
+    -----------------------
+    Replace the return value of this function with a real (T, C, H, W)
+    float32 array of normalised historical observations sorted oldest-first.
+    The shape must be (n_steps, C, H, W) and values must be divided by
+    _CHANNEL_NORMS before being passed here.
+
+    Parameters
+    ----------
+    frame_norm   : Current-step normalised frame, shape (C, H, W).
+    n_steps      : Context length (default 24 = 24-hour look-back).
+    jitter_sigma : Noise std dev in normalised units (default 0.02).
+    seed         : Fixed seed for reproducibility of the synthetic context.
+
+    Returns
+    -------
+    history : float32 ndarray of shape (n_steps, C, H, W).
+              Context source is always "synthetic" when this function is used.
+    """
+    rng = np.random.default_rng(seed=seed)
+    return np.stack(
+        [
+            frame_norm + rng.normal(0, jitter_sigma, frame_norm.shape).astype(np.float32)
+            for _ in range(n_steps)
+        ],
+        axis=0,
+    )  # (n_steps, C, H, W)
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import logging
+    log = logging.getLogger("api_server")
+
     cfg = get_settings()
+    _state.started_at = datetime.now(timezone.utc).isoformat()
     _state.fusion = SpatialDataFusion()
     _state.model  = AirPollutionCoupledForecaster(
         in_channels=N_CHANNELS, hidden_dim=64, n_steps=N_STEPS
@@ -94,10 +164,26 @@ async def lifespan(app: FastAPI):
 
     if not cfg.mock_mode:
         try:
-            sd = torch.load(cfg.model_path, map_location=cfg.device)
+            sd = torch.load(cfg.model_path, map_location=cfg.device, weights_only=True)
             _state.model.load_state_dict(sd)
+            _state.weights_loaded = True
+            _state.weights_path   = cfg.model_path
+            log.info(f"[model] Weights loaded from {cfg.model_path} on {cfg.device}")
         except FileNotFoundError:
-            pass   # Proceed with random weights in demo mode
+            _state.weights_loaded = False
+            log.warning(
+                f"[model] Weight file not found: {cfg.model_path}. "
+                "Running with RANDOM (untrained) weights — outputs are SYNTHETIC."
+            )
+    else:
+        _state.weights_loaded = False
+        log.info("[model] MOCK_MODE=True — running with random weights.")
+
+    # Determine data mode for status endpoint
+    _state.data_mode = (
+        "live" if (not cfg.mock_mode and cfg.aqicn_token and _state.weights_loaded)
+        else "synthetic"
+    )
 
     yield
     _state.cache.clear()
@@ -172,49 +258,78 @@ def _cache_set(key: str, value: Any) -> None:
     _state.cache[key] = (time.time(), value)
 
 
-def _generate_forecast_tensor() -> torch.Tensor:
+def _generate_forecast_tensor() -> tuple[torch.Tensor, bool]:
     """
-    Builds a mock input tensor and runs the coupled model inference.
-    Returns (1, 72, 12, 70, 80) prediction tensor on CPU.
+    Builds input tensor from available data and runs coupled model inference.
+
+    Returns
+    -------
+    (pred, is_synthetic) where:
+        pred         : (1, 72, 12, 70, 80) prediction tensor on CPU
+        is_synthetic : True if ANY input channel is synthetic/mock
     """
+    import logging
+    log = logging.getLogger("api_server")
+
     cfg = get_settings()
-    if cfg.mock_mode:
+    is_synthetic = False
+
+    # ── CPCB / AQI data ───────────────────────────────────────────────────────
+    if cfg.mock_mode or not cfg.aqicn_token:
+        if not cfg.aqicn_token:
+            log.warning(
+                "AQICN_TOKEN not set — using SYNTHETIC CPCB data. "
+                "Set AQICN_TOKEN in backend/.env for live station data."
+            )
         cpcb_df = generate_mock_cpcb_df()
+        is_synthetic = True
     else:
         cpcb_df = fetch_live_cpcb_waqi_df(cfg.aqicn_token)
-        
-    firms_df = generate_mock_firms_df()
+        # fetch_live_cpcb_waqi_df falls back to mock internally if the API fails
+        if cpcb_df.attrs.get("source") == "mock":
+            is_synthetic = True
 
+    # ── FIRMS fire data — always synthetic (no live FIRMS integration yet) ────
+    firms_df = generate_mock_firms_df()
+    is_synthetic = True   # FIRMS is always synthetic until live pipeline is wired
+
+    # ── IMD meteorological grids — synthetic placeholders ─────────────────────
+    # NOTE: Real IMD/WRF gridded data is NOT yet integrated.
+    # These values are fixed/seeded estimates for demo purposes.
+    # u_wind / v_wind: representative NW winter flow over Delhi NCR (m/s)
     imd_grids = {
-        "u_wind":    np.full((GRID_H, GRID_W), -2.1, np.float32),
-        "v_wind":    np.full((GRID_H, GRID_W),  3.4, np.float32),
-        "temp":      np.random.uniform(12, 24, (GRID_H, GRID_W)).astype(np.float32),
-        "rh":        np.random.uniform(55, 85, (GRID_H, GRID_W)).astype(np.float32),
-        "solar_irr": np.random.uniform(180, 600, (GRID_H, GRID_W)).astype(np.float32),
-        "pbl":       np.random.uniform(280, 800, (GRID_H, GRID_W)).astype(np.float32),
+        "u_wind":    np.full((GRID_H, GRID_W), -2.1, np.float32),   # synthetic
+        "v_wind":    np.full((GRID_H, GRID_W),  3.4, np.float32),   # synthetic
+        # Seeded random fields — deterministic but not from real IMD data
+        "temp":      np.random.default_rng(seed=7).uniform(12, 24, (GRID_H, GRID_W)).astype(np.float32),
+        "rh":        np.random.default_rng(seed=8).uniform(55, 85, (GRID_H, GRID_W)).astype(np.float32),
+        "solar_irr": np.random.default_rng(seed=9).uniform(180, 600, (GRID_H, GRID_W)).astype(np.float32),
+        "pbl":       np.random.default_rng(seed=10).uniform(280, 800, (GRID_H, GRID_W)).astype(np.float32),
     }
+
     fire_transport = _state.fusion.compute_fire_transport(
         firms_df, u_wind_ms=-2.1, v_wind_ms=3.4
     )
     frame = _state.fusion.build_channel_stack(cpcb_df, imd_grids, fire_transport)  # (12, 70, 80)
 
-    # Normalise
-    norms = np.array([500, 700, 120, 250, 20, 20, 40, 100, 1200, 3000, 200, 300], np.float32)
-    frame_norm = frame / norms[:, None, None]
+    # ── Normalise to model input space ────────────────────────────────────────
+    frame_norm = (frame / _CHANNEL_NORMS[:, None, None]).astype(np.float32)
 
-    # Build 24-step mock history by adding Gaussian noise
-    rng = np.random.default_rng(seed=99)
-    history = np.stack([
-        frame_norm + rng.normal(0, 0.02, frame_norm.shape).astype(np.float32)
-        for _ in range(24)
-    ], axis=0)   # (24, 12, 70, 80)
+    # ── Historical context (SYNTHETIC — see _build_synthetic_history docstring)
+    history = _build_synthetic_history(frame_norm, n_steps=24)
+    is_synthetic = True   # context is always synthetic until real history integrated
 
     x = torch.tensor(history[None], dtype=torch.float32).to(cfg.device)  # (1, 24, 12, 70, 80)
 
+    # ── Model inference ────────────────────────────────────────────────────────
+    # Output domain: decoder has no output activation.  With trained weights
+    # values are guided toward [0, 1] by normalised MSE loss.  With untrained
+    # (random) weights outputs may be outside [0, 1] and denormalised values
+    # will be physically unrealistic — reported via is_synthetic.
     with torch.inference_mode():
         pred = _state.model(x)   # (1, 72, 12, 70, 80)
 
-    return pred.cpu()
+    return pred.cpu(), is_synthetic
 
 
 def _tensor_to_geojson(pred: torch.Tensor, step: int, channels: list[int]) -> dict:
@@ -256,7 +371,54 @@ def _tensor_to_geojson(pred: torch.Tensor, step: int, channels: list[int]) -> di
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "model_loaded": _state.model is not None, "ts": datetime.now(timezone.utc).isoformat()}
+    cfg = get_settings()
+    return {
+        "status": "ok",
+        "model_loaded": _state.model is not None,
+        "weights_loaded": _state.weights_loaded,
+        "data_mode": _state.data_mode,
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/api/v1/status")
+async def model_status():
+    """
+    Returns truthful model and data pipeline status.
+    The frontend should display this to the user so they know
+    whether outputs are from real trained weights or are SYNTHETIC.
+    """
+    cfg = get_settings()
+    n_params = (
+        sum(p.numel() for p in _state.model.parameters())
+        if _state.model else 0
+    )
+    return {
+        "model_name": "AirPollutionCoupledForecaster",
+        "version": "ConvLSTM-SIH26082-v1",
+        "architecture": "ConvLSTM ×2 + SpatialAttn + DynGNN + FeedbackCoupling",
+        "parameters": n_params,
+        "weights_loaded": _state.weights_loaded,
+        "weights_path": _state.weights_path if _state.weights_loaded else None,
+        "device": cfg.device,
+        "forecast_horizon_hours": N_STEPS,
+        "grid_shape": [GRID_H, GRID_W],
+        "channels": N_CHANNELS,
+        "data_mode": _state.data_mode,
+        # Per-source data availability
+        "sources": {
+            "cpcb_waqi": "live" if (cfg.aqicn_token and not cfg.mock_mode) else "synthetic",
+            "imd_met": "synthetic",    # Not yet integrated
+            "nasa_firms": "synthetic", # Not yet integrated
+        },
+        "started_at": _state.started_at,
+        "queried_at": datetime.now(timezone.utc).isoformat(),
+        # Honest note if outputs cannot be trusted as real predictions
+        "warning": (
+            None if _state.weights_loaded
+            else "Model weights not loaded. Outputs are from RANDOM (untrained) weights and are SYNTHETIC."
+        ),
+    }
 
 
 @app.get("/api/v1/forecast/grid")
@@ -287,7 +449,7 @@ async def forecast_grid(
         raise HTTPException(400, "Invalid channel indices")
 
     loop = asyncio.get_event_loop()
-    pred = await loop.run_in_executor(None, _generate_forecast_tensor)
+    pred, is_synthetic = await loop.run_in_executor(None, _generate_forecast_tensor)
 
     now = datetime.now(timezone.utc)
     meta = ForecastMeta(
@@ -297,6 +459,8 @@ async def forecast_grid(
     )
     geojson = _tensor_to_geojson(pred, step, ch_list)
     geojson["meta"] = meta.model_dump()
+    geojson["meta"]["data_mode"] = "synthetic" if is_synthetic else "live"
+    geojson["meta"]["weights_loaded"] = _state.weights_loaded
 
     body = json.dumps(geojson, separators=(",", ":")).encode()
     _cache_set(cache_key, body)
@@ -311,8 +475,8 @@ async def forecast_grid(
 async def forecast_station(
     station_id: str,
     channel: int = Query(default=0, ge=0, le=11, description="Channel index (0=PM2.5)"),
-    lat: float  = Query(default=28.63, ge=NCR_LAT_MIN, le=NCR_LAT_MAX),
-    lon: float  = Query(default=77.22, ge=NCR_LON_MIN, le=NCR_LON_MAX),
+    lat: float  = Query(default=28.63, description="Latitude — clamped to NCR grid if out of bounds"),
+    lon: float  = Query(default=77.22, description="Longitude — clamped to NCR grid if out of bounds"),
 ):
     """
     Returns 72-hour time-series forecast vector for a specific location.
@@ -320,13 +484,16 @@ async def forecast_station(
     Bilinearly interpolates the spatial grid to the (lat, lon) coordinate.
     """
     cfg = get_settings()
+    # Clamp out-of-NCR coordinates to grid edges (avoids 422 for Punjab/Haryana etc.)
+    lat = float(np.clip(lat, NCR_LAT_MIN, NCR_LAT_MAX))
+    lon = float(np.clip(lon, NCR_LON_MIN, NCR_LON_MAX))
     cache_key = f"station:{station_id}:{channel}:{lat:.3f}:{lon:.3f}"
     cached = _cache_get(cache_key, cfg.cache_ttl_s)
     if cached:
         return cached
 
     loop = asyncio.get_event_loop()
-    pred = await loop.run_in_executor(None, _generate_forecast_tensor)   # (1, 72, 12, 70, 80)
+    pred, _is_synthetic = await loop.run_in_executor(None, _generate_forecast_tensor)   # (1, 72, 12, 70, 80)
 
     # Bilinear grid lookup
     lat_vec = np.linspace(NCR_LAT_MIN, NCR_LAT_MAX, GRID_H)
@@ -378,7 +545,7 @@ async def alerts_inversion(
         return cached
 
     loop = asyncio.get_event_loop()
-    pred = await loop.run_in_executor(None, _generate_forecast_tensor)   # (1, 72, 12, 70, 80)
+    pred, _is_synthetic = await loop.run_in_executor(None, _generate_forecast_tensor)   # (1, 72, 12, 70, 80)
 
     # Take worst-case step (max PM2.5 over forecast horizon)
     pm25_max = pred[0, :, CH_PM25].max(dim=0).values   # (H, W) normalised
@@ -457,7 +624,7 @@ async def policy_grap():
         return cached
 
     loop = asyncio.get_event_loop()
-    pred = await loop.run_in_executor(None, _generate_forecast_tensor)   # (1, 72, 12, 70, 80)
+    pred, _is_synthetic = await loop.run_in_executor(None, _generate_forecast_tensor)   # (1, 72, 12, 70, 80)
     
     # Evaluate worst-case PM2.5 across the entire grid and all 72 hours
     # pred shape: (1, 72, 12, 70, 80)
@@ -495,7 +662,7 @@ async def ws_live(websocket: WebSocket):
     await websocket.accept()
     step = 0
     try:
-        pred = await asyncio.get_event_loop().run_in_executor(None, _generate_forecast_tensor)
+        pred, _is_synthetic = await asyncio.get_event_loop().run_in_executor(None, _generate_forecast_tensor)
         while True:
             frame = pred[0, step % N_STEPS]
             pm25_mean = round(float(frame[CH_PM25].mean()) * 500, 1)

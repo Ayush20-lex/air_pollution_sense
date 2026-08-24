@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useRef } from 'react';
+import React, { useMemo, useEffect, useRef, useState } from 'react';
 import DeckGL from '@deck.gl/react';
 import {
   ColumnLayer, ScatterplotLayer, ArcLayer, TextLayer
@@ -6,14 +6,13 @@ import {
 import { LightingEffect, AmbientLight, DirectionalLight } from '@deck.gl/core';
 import Map from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { fetchForecastGrid } from '@/lib/api';
 
 // ── Free basemap (no token needed) ───────────────────────────────────────────
 const MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 // ── Delhi NCR bounds ─────────────────────────────────────────────────────────
-const BOUNDS = { minLon: 76.85, maxLon: 77.55, minLat: 28.35, maxLat: 28.85 };
-const GRID_COLS = 36;
-const GRID_ROWS = 30;
+const BOUNDS = { minLon: 76.80, maxLon: 77.60, minLat: 28.20, maxLat: 28.90 };
 
 const INITIAL_VIEW = {
   longitude: 77.2090,
@@ -23,20 +22,19 @@ const INITIAL_VIEW = {
   bearing:   -8,
 };
 
-// ── CPCB AQI monitoring stations — PM2.5 values span full CPCB AQI range
-// so the colour gradient is visible across the map
-const STATIONS = [
-  { name: "Anand Vihar",     lat: 28.6469, lon: 77.3160, pm25: 340 },  // Severe
-  { name: "ITO",             lat: 28.6312, lon: 77.2410, pm25: 210 },  // Very Poor
-  { name: "Punjabi Bagh",    lat: 28.6683, lon: 77.1167, pm25: 155 },  // Very Poor (low)
-  { name: "RK Puram",        lat: 28.5632, lon: 77.1869, pm25: 110 },  // Poor
-  { name: "Gurugram Sec-51", lat: 28.4221, lon: 77.0677, pm25:  72 },  // Moderate
-  { name: "Noida Sec-62",    lat: 28.6245, lon: 77.3649, pm25: 240 },  // Very Poor
-  { name: "DTU",             lat: 28.7497, lon: 77.1160, pm25:  45 },  // Satisfactory
-  { name: "Okhla",           lat: 28.5621, lon: 77.2753, pm25: 185 },  // Very Poor
-  { name: "Faridabad",       lat: 28.4089, lon: 77.3178, pm25:  88 },  // Moderate (hi)
-  { name: "Ghaziabad",       lat: 28.6692, lon: 77.4538, pm25: 290 },  // Very Poor
-  { name: "Sonipat",         lat: 28.9988, lon: 77.0151, pm25:  22 },  // Good
+// ── Known CPCB monitoring stations (positions are real; PM2.5 values from backend) ──
+// These are used as station markers. Values are populated from backend when available.
+const STATION_POSITIONS = [
+  { name: "Anand Vihar",     lat: 28.6469, lon: 77.3160 },
+  { name: "ITO",             lat: 28.6312, lon: 77.2410 },
+  { name: "Punjabi Bagh",    lat: 28.6683, lon: 77.1167 },
+  { name: "RK Puram",        lat: 28.5632, lon: 77.1869 },
+  { name: "Gurugram Sec-51", lat: 28.4221, lon: 77.0677 },
+  { name: "Noida Sec-62",    lat: 28.6245, lon: 77.3649 },
+  { name: "DTU",             lat: 28.7497, lon: 77.1160 },
+  { name: "Okhla",           lat: 28.5621, lon: 77.2753 },
+  { name: "Faridabad",       lat: 28.4089, lon: 77.3178 },
+  { name: "Ghaziabad",       lat: 28.6692, lon: 77.4538 },
 ];
 
 // ── Deck.gl lighting ─────────────────────────────────────────────────────────
@@ -48,61 +46,28 @@ const LIGHTING = new LightingEffect({
   }),
 });
 
-// ── CPCB AQI colour scale — softened saturation, per-band alpha ───────────────
+// ── CPCB AQI colour scale ─────────────────────────────────────────────────────
 function cpcbColor(pm25) {
-  if (pm25 <= 50)  return [0,   210,   0,  145];   // Good        – near-floor, soft green
-  if (pm25 <= 100) return [230, 230,   0,  155];   // Satisfactory – yellow
-  if (pm25 <= 200) return [255, 126,   0,  170];   // Moderate/Poor – orange
-  if (pm25 <= 300) return [220,  28,  28,  180];   // Poor/V.Poor   – red
-  if (pm25 <= 400) return [153,   0,  76,  200];   // Very Poor     – dark rose
-  return               [110,   0,  30,  220];     // Severe+       – deep crimson
+  if (pm25 <= 30)  return [0,   210,   0,  145];  // Good
+  if (pm25 <= 60)  return [230, 230,   0,  155];  // Satisfactory
+  if (pm25 <= 90)  return [255, 126,   0,  170];  // Moderate
+  if (pm25 <= 120) return [220,  28,  28,  180];  // Poor
+  if (pm25 <= 250) return [153,   0,  76,  200];  // Very Poor
+  return               [110,   0,  30,  220];    // Severe+
 }
 
-// ── Simulate PBL height from step ────────────────────────────────────────────
-function pblFromStep(step) {
-  const diurnal = 1 + 0.28 * Math.sin((step % 24) / 24 * Math.PI * 2 - Math.PI / 2);
-  const plumeBoost = step >= 14 ? Math.min((step - 14) / 8, 1) * 110 : 0;
-  const pm25 = 380 * diurnal + plumeBoost;
-  return Math.max(120, 320 - (pm25 - 380) * 0.42);
-}
-
-// ── IDW interpolation grid ──────────────────────────────────────────────────────
-function buildGrid(step) {
-  const diurnal  = 1 + 0.25 * Math.sin((step % 24) / 24 * Math.PI * 2 - Math.PI / 2);
-  const plumeArr = step >= 14 ? Math.min((step - 14) / 8, 1) : 0;
-  const cells = [];
-
-  for (let r = 0; r < GRID_ROWS; r++) {
-    for (let c = 0; c < GRID_COLS; c++) {
-      const lon = BOUNDS.minLon + (c / GRID_COLS) * (BOUNDS.maxLon - BOUNDS.minLon);
-      const lat = BOUNDS.maxLat - (r / GRID_ROWS) * (BOUNDS.maxLat - BOUNDS.minLat);
-      let wSum = 0, vSum = 0;
-
-      for (const s of STATIONS) {
-        const d = Math.hypot(lat - s.lat, lon - s.lon) + 0.008;
-        const w = 1 / (d * d);
-        const plumeBoost = plumeArr * 120
-          * Math.max(0, (lat - 28.30) / 0.60)
-          * Math.max(0, (77.40 - lon) / 0.60);
-        wSum += w;
-        vSum += w * (s.pm25 * diurnal + plumeBoost);
-      }
-
-      const pm25 = vSum / wSum;
-      // Non-linear height: low AQI stays flat, severe pops up
-      const normPm25 = Math.min(pm25 / 400, 1);
-      const elevation = Math.pow(normPm25, 1.6) * 4500; // max ~4500m at severe
-      cells.push({ position: [lon, lat], pm25, elevation });
-    }
-  }
-  return { cells, plumeArr };
-}
+// ── Stubble plume arc paths (Punjab → Delhi) ──────────────────────────────────
+const PLUME_ARCS = [
+  { source: [74.9, 31.0], target: [76.9, 28.75] },
+  { source: [75.8, 30.2], target: [77.1, 28.72] },
+  { source: [76.3, 29.5], target: [77.3, 28.65] },
+];
 
 // ── Wind particle system ──────────────────────────────────────────────────────
-const N_PARTICLES = 260;
-function buildParticles(frame, plumeArr) {
-  const windAngle = (-45 - plumeArr * 20) * Math.PI / 180;
-  const speed = 0.008 + plumeArr * 0.006;
+const N_PARTICLES = 220;
+function buildParticles(frame, windAngleDeg = -45) {
+  const windAngle = windAngleDeg * Math.PI / 180;
+  const speed = 0.008;
   const t = frame * 0.012;
 
   return Array.from({ length: N_PARTICLES }, (_, i) => {
@@ -121,31 +86,63 @@ function buildParticles(frame, plumeArr) {
   });
 }
 
-// ── PBL contour ring ─────────────────────────────────────────────────────────
-function buildPBLRing(step) {
-  const pbl = pblFromStep(step);
-  const cx = 77.15, cy = 28.62;
-  const scale = 0.12 + pbl / 8000;
-  return Array.from({ length: 60 }, (_, i) => {
-    const rad = (i / 60) * Math.PI * 2;
-    return { position: [cx + scale * Math.cos(rad) * 1.3, cy + scale * Math.sin(rad)] };
-  });
-}
-
-// ── Stubble plume arcs ────────────────────────────────────────────────────────
-const PLUME_ARCS = [
-  { source: [74.9, 31.0], target: [76.9, 28.75] },
-  { source: [75.8, 30.2], target: [77.1, 28.72] },
-  { source: [76.3, 29.5], target: [77.3, 28.65] },
-];
-
 // ── Main component ────────────────────────────────────────────────────────────
+/**
+ * GridCanvas3D — 3D pollution map using Deck.gl + MapLibre.
+ *
+ * Props:
+ *   step      : Current forecast hour (0–71), used to fetch the correct grid step
+ *   layers    : Layer toggle flags { heatmap, particles, pbl, plume }
+ *   width/height: Canvas dimensions
+ *
+ * Data policy:
+ *   - Grid cells come from /api/v1/forecast/grid (real backend inference)
+ *   - Station markers use known CPCB lat/lon positions
+ *   - If the backend is unreachable, an empty grid is shown (not a fake one)
+ *   - SYNTHETIC label is shown when backend data_mode is 'synthetic'
+ */
 export default function GridCanvas3D({ step = 0, layers = {} }) {
   const { heatmap = true, particles = true, plume = true, pbl: pblLayer = true } = layers;
 
-  const frameRef   = useRef(0);
-  const [tick, setTick] = React.useState(0);
+  const frameRef = useRef(0);
+  const [tick, setTick] = useState(0);
 
+  // Backend grid state
+  const [gridCells,   setGridCells]   = useState([]);
+  const [gridMeta,    setGridMeta]    = useState(null);
+  const [gridLoading, setGridLoading] = useState(false);
+  const [gridError,   setGridError]   = useState(null);
+  const lastFetchedStep = useRef(-1);
+
+  // ── Fetch grid from backend when step changes ───────────────────────────
+  useEffect(() => {
+    // Debounce: only fetch if step has stabilised (avoid spamming during slider drag)
+    const id = setTimeout(async () => {
+      if (lastFetchedStep.current === step) return;
+      setGridLoading(true);
+      setGridError(null);
+      const { data, error } = await fetchForecastGrid(step);
+      setGridLoading(false);
+      if (error) {
+        setGridError(error);
+        setGridCells([]);
+        return;
+      }
+      lastFetchedStep.current = step;
+      setGridMeta(data?.meta ?? null);
+      // Convert GeoJSON features → deck.gl cell objects
+      const cells = (data?.features ?? []).map(f => ({
+        position: f.geometry.coordinates,  // [lon, lat]
+        pm25: f.properties?.pm25 ?? 0,
+        pbl:  f.properties?.pbl  ?? 0,
+      }));
+      setGridCells(cells);
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(id);
+  }, [step]);
+
+  // ── Animation loop (wind particles) ─────────────────────────────────────
   useEffect(() => {
     let raf;
     const animate = () => {
@@ -157,31 +154,57 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
     return () => cancelAnimationFrame(raf);
   }, [particles]);
 
-  const { cells, plumeArr } = useMemo(() => buildGrid(step), [step]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const particleData        = useMemo(() => buildParticles(frameRef.current, plumeArr), [tick]);
-  const pblRing             = useMemo(() => buildPBLRing(step), [step]);
+  const particleData = useMemo(() => buildParticles(frameRef.current), [tick]);
 
+  // ── Determine if data is synthetic ───────────────────────────────────────
+  const isSynthetic = !gridMeta || gridMeta.data_mode === 'synthetic' || !gridMeta.weights_loaded;
+
+  // ── Mean PM2.5 from grid for PBL ring scaling ────────────────────────────
+  const meanPm25 = gridCells.length > 0
+    ? gridCells.reduce((s, c) => s + c.pm25, 0) / gridCells.length
+    : 150;
+
+  const meanPbl = gridCells.length > 0
+    ? gridCells.reduce((s, c) => s + c.pbl, 0) / gridCells.length
+    : 500;
+
+  // PBL contour ring using actual mean PBL from grid
+  const pblRing = useMemo(() => {
+    const pbl = Math.max(50, meanPbl);
+    const cx = 77.20, cy = 28.59;
+    const scale = 0.06 + pbl / 12000;
+    return Array.from({ length: 60 }, (_, i) => {
+      const rad = (i / 60) * Math.PI * 2;
+      return { position: [cx + scale * Math.cos(rad) * 1.3, cy + scale * Math.sin(rad)] };
+    });
+  }, [meanPbl]);
+
+  // ── Deck.gl layers ───────────────────────────────────────────────────────
   const deckLayers = [
-    // ── 1. PM2.5 Column Grid — semi-transparent, non-linear height ──────────────
-    heatmap && new ColumnLayer({
+
+    // 1. PM2.5 grid columns — from backend GeoJSON
+    heatmap && gridCells.length > 0 && new ColumnLayer({
       id: 'pm25-grid',
-      data: cells,
+      data: gridCells,
       diskResolution: 6,
-      radius: 360,            // smaller radius = visible gaps between columns
+      radius: 420,
       extruded: true,
       pickable: true,
       elevationScale: 1,
-      opacity: 0.65,          // let basemap breathe through
+      opacity: 0.65,
       material: { ambient: 0.4, diffuse: 0.8, shininess: 16 },
       getPosition:  d => d.position,
       getFillColor: d => cpcbColor(d.pm25),
-      getElevation: d => d.elevation,
+      getElevation: d => {
+        const norm = Math.min(d.pm25 / 400, 1);
+        return Math.pow(norm, 1.6) * 4500;
+      },
       updateTriggers: { getElevation: [step], getFillColor: [step] },
       transitions:    { getElevation: 500, getFillColor: 500 },
     }),
 
-    // ── 2. Wind particles ────────────────────────────────────────────────
+    // 2. Wind particles
     particles && new ScatterplotLayer({
       id: 'wind-particles',
       data: particleData,
@@ -193,10 +216,10 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
       getRadius: 300,
     }),
 
-    // ── 3. CPCB station dots ──────────────────────────────────────────────
+    // 3. CPCB station markers (positions are real; PM2.5 from grid interpolation)
     new ScatterplotLayer({
       id: 'stations',
-      data: STATIONS,
+      data: STATION_POSITIONS,
       pickable: true,
       stroked: true,
       filled: true,
@@ -204,18 +227,27 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
       radiusMaxPixels: 14,
       lineWidthMinPixels: 2,
       getPosition:  d => [d.lon, d.lat],
-      getFillColor: d => cpcbColor(d.pm25),
+      // Find nearest grid cell for colour; fallback to grey if grid empty
+      getFillColor: d => {
+        if (gridCells.length === 0) return [120, 120, 120, 180];
+        const nearest = gridCells.reduce((best, c) => {
+          const dist = Math.hypot(c.position[0] - d.lon, c.position[1] - d.lat);
+          return dist < best.dist ? { dist, pm25: c.pm25 } : best;
+        }, { dist: Infinity, pm25: 0 });
+        return cpcbColor(nearest.pm25);
+      },
       getLineColor: [255, 255, 255, 200],
       getRadius: 700,
+      updateTriggers: { getFillColor: [gridCells] },
     }),
 
-    // ── 4. Station labels ────────────────────────────────────────────────
+    // 4. Station labels
     new TextLayer({
       id: 'station-labels',
-      data: STATIONS,
+      data: STATION_POSITIONS,
       pickable: false,
       getPosition:  d => [d.lon, d.lat, 1200],
-      getText:      d => `${d.name}  ${Math.round(d.pm25)}`,
+      getText:      d => d.name,
       getSize: 11,
       getColor: [220, 230, 240, 220],
       getTextAnchor: 'middle',
@@ -228,60 +260,63 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
       getBackgroundColor: [8, 14, 30, 200],
     }),
 
-    // ── 5. Stubble plume arcs — smoky orange→grey, semi-transparent ────────
-    // Two arc layers per plume path: outer glow (wider, dimmer) + core line
-    plume && plumeArr > 0 && new ArcLayer({
+    // 5. Stubble plume arcs — only shown when fires are active (FIRMS data pending)
+    plume && new ArcLayer({
       id: 'plume-glow',
       data: PLUME_ARCS,
       pickable: false,
       getSourcePosition: d => d.source,
       getTargetPosition: d => d.target,
-      getSourceColor: [255, 120,  20, Math.round(60 * plumeArr)],  // orange, faint
-      getTargetColor: [130, 130, 130, Math.round(30 * plumeArr)],  // grey, very faint
-      getWidth: 12 * plumeArr,
+      getSourceColor: [255, 120, 20, 40],
+      getTargetColor: [130, 130, 130, 20],
+      getWidth: 8,
       getHeight: 0.42,
       widthUnits: 'pixels',
     }),
-    plume && plumeArr > 0 && new ArcLayer({
+    plume && new ArcLayer({
       id: 'plume-core',
       data: PLUME_ARCS,
       pickable: false,
       getSourcePosition: d => d.source,
       getTargetPosition: d => d.target,
-      getSourceColor: [255, 160,  50, Math.round(200 * plumeArr)], // bright orange
-      getTargetColor: [160, 100,  80, Math.round(100 * plumeArr)], // smoky brown
-      getWidth: 3 * plumeArr,
+      getSourceColor: [255, 160, 50, 160],
+      getTargetColor: [160, 100, 80, 80],
+      getWidth: 2,
       getHeight: 0.42,
       widthUnits: 'pixels',
     }),
 
-    // ── 6. PBL contour ring ────────────────────────────────────────────────
+    // 6. PBL contour ring (radius driven by actual mean PBL from grid)
     pblLayer && new ScatterplotLayer({
       id: 'pbl-contour',
       data: pblRing,
       pickable: false,
-      opacity: 0.55,
+      opacity: 0.45,
       radiusMinPixels: 2,
       getPosition:  d => d.position,
-      getFillColor: [99, 102, 241, 170],
-      getRadius: 260,
+      getFillColor: [99, 102, 241, 150],
+      getRadius: 240,
+      updateTriggers: { data: [meanPbl] },
     }),
+
   ].filter(Boolean);
 
+  // ── Tooltip ──────────────────────────────────────────────────────────────
   const getTooltip = ({ object }) => {
     if (!object) return null;
     if (object.name) {
       return {
         html: `<div style="font:10px 'JetBrains Mono',monospace;background:#0D1424;border:1px solid #1E2D4A;padding:6px 10px;border-radius:4px">
-          <b style="color:#E2E8F0">${object.name}</b><br/>PM2.5: <b style="color:#EF4444">${Math.round(object.pm25)} µg/m³</b>
+          <b style="color:#E2E8F0">${object.name}</b><br/>CPCB Station
         </div>`,
         style: { background: 'none', border: 'none', padding: 0 },
       };
     }
-    if (object.pm25) {
+    if (object.pm25 !== undefined) {
       return {
         html: `<div style="font:10px 'JetBrains Mono',monospace;background:#0D1424;border:1px solid #1E2D4A;padding:4px 8px;border-radius:4px">
-          PM2.5: <b style="color:#EF4444">${Math.round(object.pm25)} µg/m³</b>
+          PM2.5: <b style="color:#EF4444">${Math.round(object.pm25)} µg/m³</b><br/>
+          PBL: <b style="color:#818CF8">${object.pbl ? Math.round(object.pbl) + ' m' : '—'}</b>
         </div>`,
         style: { background: 'none', border: 'none', padding: 0 },
       };
@@ -312,13 +347,12 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
           CPCB AQI  PM2.5 µg/m³
         </div>
         {[
-          ['Good',        '0–30',   '#00E400'],
-          ['Satisfactory','31–60',  '#FFFF00'],
+          ['Good',        '0–30',   '#00D200'],
+          ['Satisfactory','31–60',  '#E6E600'],
           ['Moderate',    '61–90',  '#FF7E00'],
-          ['Poor',        '91–120', '#FF0000'],
-          ['Very Poor',   '121–250','#99004C'],
-          ['Severe',      '251–380','#7E0023'],
-          ['Hazardous',   '381+',   '#5A0050'],
+          ['Poor',        '91–120', '#DC1C1C'],
+          ['Very Poor',   '121–250','#990040'],
+          ['Severe+',     '251+',   '#6E001E'],
         ].map(([label, range, color]) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
             <div style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
@@ -328,20 +362,34 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
         ))}
       </div>
 
-      {/* HUD */}
+      {/* Status HUD */}
       <div style={{
         position: 'absolute', top: 10, left: 10, zIndex: 10, pointerEvents: 'none',
         fontFamily: "'JetBrains Mono','Fira Code',monospace",
       }}>
-        <div style={{ color: 'rgba(34,197,94,0.85)', fontSize: 9, letterSpacing: 1 }}>
-          1km×1km NCR GRID · T+{step}h
-        </div>
-        <div style={{ color: 'rgba(148,163,184,0.65)', fontSize: 8, marginTop: 2 }}>
-          {GRID_COLS * GRID_ROWS} cells · IDW · Deck.gl + Maplibre
-        </div>
-        {plumeArr > 0 && (
-          <div style={{ color: 'rgba(251,146,60,0.9)', fontSize: 9, marginTop: 3 }}>
-            ⚡ PLUME {Math.round(plumeArr * 100)}%
+        {gridLoading && (
+          <div style={{ color: 'rgba(148,163,184,0.8)', fontSize: 9, letterSpacing: 1, marginBottom: 3 }}>
+            ⟳ Loading grid T+{step}h...
+          </div>
+        )}
+        {!gridLoading && gridCells.length > 0 && (
+          <div style={{ color: isSynthetic ? 'rgba(251,191,36,0.85)' : 'rgba(34,197,94,0.85)', fontSize: 9, letterSpacing: 1 }}>
+            {isSynthetic ? '⚠ SYNTHETIC' : '● LIVE'} · {gridCells.length} cells · T+{step}h
+          </div>
+        )}
+        {gridError && (
+          <div style={{ color: 'rgba(239,68,68,0.85)', fontSize: 9, letterSpacing: 1 }}>
+            ✗ Grid unavailable
+          </div>
+        )}
+        {!gridLoading && gridCells.length === 0 && !gridError && (
+          <div style={{ color: 'rgba(148,163,184,0.6)', fontSize: 9, letterSpacing: 1 }}>
+            Awaiting backend data...
+          </div>
+        )}
+        {gridMeta && (
+          <div style={{ color: 'rgba(148,163,184,0.55)', fontSize: 8, marginTop: 2 }}>
+            {gridMeta.model_ver} · {gridMeta.grid_shape?.[0]}×{gridMeta.grid_shape?.[1]} grid
           </div>
         )}
       </div>

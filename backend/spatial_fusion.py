@@ -248,18 +248,23 @@ class SpatialDataFusion:
             np.inf
         )
 
-        # PM2.5 contribution proxy: FRP × alignment / dist² (Gaussian decay)
+        # PM2.5 contribution proxy (dimensionless FRP-derived field).
+        # frp_aligned_proxy = FRP (MW) × alignment_factor × Gaussian_decay
+        # Units: proportional to MW, NOT µg/m³.
+        # This field serves as a smoke transport signal for the model;
+        # it cannot be interpreted as a physical PM2.5 concentration without
+        # an emission factor calibration (future work).
         sigma_km = 80.0
-        pm25_contrib = (fire_frp * np.maximum(alignment, 0)
-                        * np.exp(-0.5 * (dist_km / sigma_km) ** 2))
+        frp_aligned_proxy = (fire_frp * np.maximum(alignment, 0)
+                             * np.exp(-0.5 * (dist_km / sigma_km) ** 2))
 
-        # Interpolate FRP and PM2.5 contribution onto NCR grid
+        # Interpolate FRP and smoke proxy onto NCR grid
         fire_df = pd.DataFrame({
             "lat": fire_lats, "lon": fire_lons,
-            "frp": fire_frp, "pm25_proxy": pm25_contrib,
+            "frp": fire_frp, "frp_aligned_proxy": frp_aligned_proxy,
         })
-        frp_grid = self.idw_interpolate(fire_df, "frp")
-        smoke_grid = self.idw_interpolate(fire_df, "pm25_proxy")
+        frp_grid   = self.idw_interpolate(fire_df, "frp")
+        smoke_grid = self.idw_interpolate(fire_df, "frp_aligned_proxy")
 
         # Minimum arrival time field (select minimum across all fire sources)
         arrival_grid = np.full((self.grid.h, self.grid.w), np.inf, dtype=np.float32)
@@ -272,9 +277,9 @@ class SpatialDataFusion:
                 arrival_grid = np.where(arr_idw < arrival_grid, arr_idw, arrival_grid)
 
         return {
-            "frp_grid": frp_grid,
-            "plume_arrival": arrival_grid.astype(np.float32),
-            "smoke_intensity": smoke_grid.astype(np.float32),
+            "frp_grid":          frp_grid,
+            "plume_arrival":     arrival_grid.astype(np.float32),
+            "frp_aligned_proxy": smoke_grid.astype(np.float32),  # renamed from smoke_intensity
         }
 
     # ── Full Grid Tensor Builder ───────────────────────────────────────────────
@@ -317,8 +322,8 @@ class SpatialDataFusion:
             imd_grids.get("rh",        np.zeros((GRID_H, GRID_W), np.float32)),
             imd_grids.get("solar_irr", np.zeros((GRID_H, GRID_W), np.float32)),
             imd_grids.get("pbl",       np.zeros((GRID_H, GRID_W), np.float32)),
-            firms_transport.get("frp_grid",       np.zeros((GRID_H, GRID_W), np.float32)),
-            firms_transport.get("smoke_intensity", np.zeros((GRID_H, GRID_W), np.float32)),
+            firms_transport.get("frp_grid",          np.zeros((GRID_H, GRID_W), np.float32)),
+            firms_transport.get("frp_aligned_proxy", np.zeros((GRID_H, GRID_W), np.float32)),
         ]
         stack = np.stack(channels, axis=0)  # (12, H, W)
 
@@ -396,11 +401,36 @@ def fetch_live_cpcb_waqi_df(token: str) -> pd.DataFrame:
         geo = r["city"].get("geo", [0, 0])
         iaqi = r["iaqi"]
         
-        # Parse available pollutants; fallback to 0 or mock logic if missing
-        pm25 = iaqi.get("pm25", {}).get("v", 0)
-        pm10 = iaqi.get("pm10", {}).get("v", pm25 * 1.5)
-        o3 = iaqi.get("o3", {}).get("v", 40.0)
-        nox = iaqi.get("no2", {}).get("v", 50.0) # Using NO2 as proxy for NOx
+        # AQICN unit note:
+        # iaqi.pm25.v is the PM2.5 AQI sub-index (0–500 dimensionless),
+        # NOT a raw concentration in µg/m³.
+        # We apply an approximate inverse of the Indian CPCB PM2.5 breakpoints
+        # (piecewise linear) to recover a concentration estimate.
+        # This is an approximation; accuracy depends on local AQI standard used.
+        def aqi_to_pm25_approx(aqi_val: float) -> float:
+            """Approximate inversion of Indian CPCB AQI → PM2.5 µg/m³."""
+            # Breakpoints: (I_lo, I_hi, C_lo, C_hi)
+            bp = [
+                (0,   50,  0.0,  30.0),
+                (51,  100, 30.1, 60.0),
+                (101, 200, 60.1, 90.0),
+                (201, 300, 90.1, 120.0),
+                (301, 400, 120.1, 250.0),
+                (401, 500, 250.1, 350.0),
+            ]
+            for I_lo, I_hi, C_lo, C_hi in bp:
+                if I_lo <= aqi_val <= I_hi:
+                    return C_lo + (aqi_val - I_lo) * (C_hi - C_lo) / (I_hi - I_lo)
+            return 350.0  # above 500 AQI, cap at 350 µg/m³
+
+        pm25_aqi = float(iaqi.get("pm25", {}).get("v", 0))
+        pm25 = aqi_to_pm25_approx(pm25_aqi)   # convert AQI index → µg/m³
+
+        pm10_aqi = float(iaqi.get("pm10", {}).get("v", 0))
+        pm10 = pm25 * 1.5 if pm10_aqi == 0 else aqi_to_pm25_approx(pm10_aqi)
+
+        o3 = float(iaqi.get("o3", {}).get("v", 40.0))    # O3 AQI as proxy
+        nox = float(iaqi.get("no2", {}).get("v", 50.0))  # NO2 as NOx proxy
         
         records.append({
             "station_id": str(r.get("idx", "")),

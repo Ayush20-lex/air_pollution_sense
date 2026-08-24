@@ -178,15 +178,29 @@ class FeedbackCouplingModule(nn.Module):
     - Reduced solar heating → lower daytime PBL growth
     - Lower PBL → trapped pollutants → higher surface PM2.5
 
-    The module predicts DELTA fields (corrections), not absolute values, to
-    preserve numerical stability and allow residual learning.
+    Normalisation contract
+    ─────────────────────
+    All inputs and all outputs are in NORMALISED space (same scale used by
+    the autoregressive state tensor x_t throughout the model).
+    Physical-unit operations are performed internally; results are
+    re-normalised before being returned to the caller.
+
+    The caller must NOT pass physical-unit tensors to this module.
     """
 
     # Physical constants / empirical NCR calibration coefficients
-    AOD_PER_PM25        = 0.007   # AOD550 per µg/m³ PM2.5 (SAFAR calibration)
-    SOLAR_BETA          = -180.0  # W/m² reduction per unit AOD (max attenuation)
-    PBL_ALPHA           = -0.42   # m/W/m² PBL height sensitivity to solar
-    TEMP_GAMMA          = -0.018  # °C per W/m² solar reduction
+    AOD_PER_PM25    = 0.007    # AOD₅₅₀ per µg/m³ PM2.5  (SAFAR calibration)
+    SOLAR_BETA      = -180.0   # W/m² max attenuation per unit AOD
+    PBL_ALPHA       = -0.42    # m per W/m² solar change
+    TEMP_GAMMA      = -0.018   # °C per W/m² solar change
+
+    # Normalisation constants — MUST match api_server.py `_CHANNEL_NORMS` array
+    #   index: [0:pm25, 6:temp, 8:solar, 9:pbl]
+    #   norms = [500, 700, 120, 250, 20, 20, 40, 100, 1200, 3000, 200, 300]
+    PM25_NORM   = 500.0    # µg/m³
+    SOLAR_NORM  = 1200.0   # W/m²
+    PBL_NORM    = 3000.0   # m
+    TEMP_NORM   = 40.0     # °C  (norms[6])
 
     def __init__(self, hidden_dim: int = 64) -> None:
         super().__init__()
@@ -197,39 +211,53 @@ class FeedbackCouplingModule(nn.Module):
             nn.Conv2d(hidden_dim // 2, 2, kernel_size=1),
             nn.Tanh(),
         )
-        # Scale factors (initialised to match physical magnitude)
+        # Scale factors — initialised to physical magnitude; learnable
         self.solar_scale = nn.Parameter(torch.tensor([self.SOLAR_BETA]))
         self.pbl_scale   = nn.Parameter(torch.tensor([self.PBL_ALPHA]))
         self.temp_scale  = nn.Parameter(torch.tensor([self.TEMP_GAMMA]))
 
     def forward(
         self,
-        pm25_pred: Tensor,     # (B, H, W) — predicted PM2.5 at step t
-        solar_t: Tensor,       # (B, H, W) — current solar irradiance (W/m²)
-        pbl_t: Tensor,         # (B, H, W) — current PBL height (m)
+        pm25_pred: Tensor,   # (B, H, W) — predicted PM2.5, NORMALISED ≈ [0, 1]
+        solar_t: Tensor,     # (B, H, W) — current solar irradiance, NORMALISED ≈ [0, 1]
+        pbl_t: Tensor,       # (B, H, W) — current PBL height, NORMALISED ≈ [0, 1]
     ) -> tuple[Tensor, Tensor, Tensor]:
         """
+        All inputs must be in NORMALISED space (divide by the channel norm
+        constants above).  All returned tensors are also NORMALISED.
+
+        Internal computation is in physical units:
+            PM2.5: µg/m³  |  Solar: W/m²  |  PBL: m  |  Temp: °C
+
         Returns
         -------
-        (solar_next, pbl_next, temp_delta) — modified fields for step t+1.
-        All tensors shape (B, H, W).
+        (solar_next, pbl_next, delta_temp_norm) — all shape (B, H, W), NORMALISED.
         """
-        # Physics baseline
-        aod = pm25_pred * self.AOD_PER_PM25                     # Beer-Lambert AOD
-        aod_clamped = aod.clamp(0, 3.5)
+        # ── De-normalise PM2.5 → physical µg/m³ for AOD computation ───────────
+        pm25_phys = pm25_pred * self.PM25_NORM              # µg/m³  ∈ [0, 500]
+        aod = (pm25_phys * self.AOD_PER_PM25).clamp(0, 3.5) # AOD₅₅₀ ∈ [0, 3.5]
 
-        delta_solar_phys = self.solar_scale * torch.sigmoid(aod_clamped) - self.solar_scale * 0.5
-        delta_pbl_phys   = self.pbl_scale   * (-delta_solar_phys)          # PBL ∝ solar
-        delta_temp_phys  = self.temp_scale  * (-delta_solar_phys)
+        # ── Physics baseline — quantities in physical units ────────────────────
+        delta_solar_phys = self.solar_scale * torch.sigmoid(aod) - self.solar_scale * 0.5  # W/m²
+        delta_pbl_phys   = self.pbl_scale   * (-delta_solar_phys)   # m
+        delta_temp_phys  = self.temp_scale  * (-delta_solar_phys)   # °C
 
-        # Learned correction (2 outputs: Δsolar residual, ΔPBL residual)
-        feat = torch.stack([aod_clamped, pm25_pred / 500.0], dim=1)  # (B, 2, H, W)
-        correction = self.corrector(feat) * 10.0                      # bounded ±10
+        # ── Learned residual (inputs already in [0,1], output ±10 phys units) ──
+        feat = torch.stack([aod / 3.5, pm25_pred], dim=1)   # (B, 2, H, W)  ≈ [0,1]
+        correction = self.corrector(feat) * 10.0              # ±10 W/m² / m
 
-        solar_next = (solar_t + delta_solar_phys + correction[:, 0]).clamp(0, 1200)
-        pbl_next   = (pbl_t   + delta_pbl_phys   + correction[:, 1]).clamp(50, 3000)
+        # ── De-normalise state, apply deltas, clamp, re-normalise ─────────────
+        solar_phys = solar_t * self.SOLAR_NORM
+        pbl_phys   = pbl_t   * self.PBL_NORM
 
-        return solar_next, pbl_next, delta_temp_phys
+        solar_next = (solar_phys + delta_solar_phys + correction[:, 0]).clamp(0, self.SOLAR_NORM) / self.SOLAR_NORM
+        pbl_next   = (pbl_phys   + delta_pbl_phys   + correction[:, 1]).clamp(50, self.PBL_NORM)  / self.PBL_NORM
+
+        # Temperature delta returned in normalised units so it can be added
+        # directly to the normalised temperature channel of x_t
+        delta_temp_norm = delta_temp_phys / self.TEMP_NORM
+
+        return solar_next, pbl_next, delta_temp_norm
 
 
 # ── Full Forecaster ───────────────────────────────────────────────────────────
