@@ -1,0 +1,102 @@
+[
+  {
+    "channel": 0,
+    "name": "PM2.5",
+    "source": "OpenAQ",
+    "type": "observed",
+    "raw_unit": "ug/m3",
+    "processed_unit": "ug/m3"
+  },
+  {
+    "channel": 1,
+    "name": "PM10",
+    "source": "OpenAQ",
+    "type": "observed",
+    "raw_unit": "ug/m3",
+    "processed_unit": "ug/m3"
+  },
+  {
+    "channel": 2,
+    "name": "O3",
+    "source": "OpenAQ",
+    "type": "observed",
+    "raw_unit": "ug/m3",
+    "processed_unit": "ug/m3"
+  },
+  {
+    "channel": 3,
+    "name": "NOx",
+    "source": "OpenAQ",
+    "type": "observed",
+    "raw_unit": "ug/m3",
+    "processed_unit": "ug/m3"
+  },
+  {
+    "channel": 4,
+    "name": "U-wind",
+    "source": "ERA5",
+    "type": "observed",
+    "raw_unit": "m/s",
+    "processed_unit": "m/s"
+  },
+  {
+    "channel": 5,
+    "name": "V-wind",
+    "source": "ERA5",
+    "type": "observed",
+    "raw_unit": "m/s",
+    "processed_unit": "m/s"
+  },
+  {
+    "channel": 6,
+    "name": "Temperature",
+    "source": "ERA5",
+    "type": "derived",
+    "raw_unit": "K",
+    "processed_unit": "C",
+    "conversion": "K - 273.15"
+  },
+  {
+    "channel": 7,
+    "name": "Humidity",
+    "source": "ERA5",
+    "type": "derived",
+    "raw_unit": "N/A",
+    "processed_unit": "%",
+    "conversion": "Magnus formula from T2m and D2m"
+  },
+  {
+    "channel": 8,
+    "name": "Solar",
+    "source": "ERA5",
+    "type": "derived",
+    "raw_unit": "J/m2",
+    "processed_unit": "W/m2",
+    "conversion": "J/m2 / 3600"
+  },
+  {
+    "channel": 9,
+    "name": "PBL",
+    "source": "ERA5",
+    "type": "observed",
+    "raw_unit": "m",
+    "processed_unit": "m"
+  },
+  {
+    "channel": 10,
+    "name": "FRP",
+    "source": "FIRMS",
+    "type": "assumed",
+    "raw_unit": "MW",
+    "processed_unit": "MW",
+    "conversion": "Propagated: 2h persistence, 4h decay"
+  },
+  {
+    "channel": 11,
+    "name": "Smoke",
+    "source": "FIRMS",
+    "type": "derived",
+    "raw_unit": "N/A",
+    "processed_unit": "intensity proxy"
+  }
+]

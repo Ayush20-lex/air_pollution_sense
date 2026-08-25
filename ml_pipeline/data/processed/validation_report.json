@@ -1,0 +1,134 @@
+{
+  "dataset_shape": [
+    168,
+    12,
+    70,
+    80
+  ],
+  "total_hours": 168,
+  "complete_hours": 0,
+  "incomplete_hours": 168,
+  "valid_24_to_72_sample_possible": false,
+  "channels": {
+    "PM2.5": {
+      "source": "OpenAQ",
+      "type": "observed",
+      "raw_unit": "ug/m3",
+      "processed_unit": "ug/m3",
+      "min": 116.5,
+      "max": 590.0,
+      "mean": 286.1234436035156,
+      "nan_percentage": 3.571428571428571
+    },
+    "PM10": {
+      "source": "OpenAQ",
+      "type": "observed",
+      "raw_unit": "ug/m3",
+      "processed_unit": "ug/m3",
+      "min": null,
+      "max": null,
+      "mean": null,
+      "nan_percentage": 100.0
+    },
+    "O3": {
+      "source": "OpenAQ",
+      "type": "observed",
+      "raw_unit": "ug/m3",
+      "processed_unit": "ug/m3",
+      "min": null,
+      "max": null,
+      "mean": null,
+      "nan_percentage": 100.0
+    },
+    "NOx": {
+      "source": "OpenAQ",
+      "type": "observed",
+      "raw_unit": "ug/m3",
+      "processed_unit": "ug/m3",
+      "min": null,
+      "max": null,
+      "mean": null,
+      "nan_percentage": 100.0
+    },
+    "U-wind": {
+      "source": "ERA5",
+      "type": "observed",
+      "raw_unit": "m/s",
+      "processed_unit": "m/s",
+      "min": -2.904167890548706,
+      "max": 2.261538028717041,
+      "mean": 0.14493371546268463,
+      "nan_percentage": 0.0
+    },
+    "V-wind": {
+      "source": "ERA5",
+      "type": "observed",
+      "raw_unit": "m/s",
+      "processed_unit": "m/s",
+      "min": -3.0341413021087646,
+      "max": 2.423361301422119,
+      "mean": -0.8996716141700745,
+      "nan_percentage": 0.0
+    },
+    "Temperature": {
+      "source": "ERA5",
+      "type": "derived",
+      "raw_unit": "K",
+      "processed_unit": "C",
+      "min": 14.89584732055664,
+      "max": 32.17840576171875,
+      "mean": 23.414710998535156,
+      "nan_percentage": 0.0
+    },
+    "Humidity": {
+      "source": "ERA5",
+      "type": "derived",
+      "raw_unit": "N/A",
+      "processed_unit": "%",
+      "min": 28.420995712280273,
+      "max": 100.02236938476562,
+      "mean": 70.04435729980469,
+      "nan_percentage": 0.0
+    },
+    "Solar": {
+      "source": "ERA5",
+      "type": "derived",
+      "raw_unit": "J/m2",
+      "processed_unit": "W/m2",
+      "min": -0.0031901791226118803,
+      "max": 730.6983642578125,
+      "mean": 191.2561798095703,
+      "nan_percentage": 0.0
+    },
+    "PBL": {
+      "source": "ERA5",
+      "type": "observed",
+      "raw_unit": "m",
+      "processed_unit": "m",
+      "min": -67.20649719238281,
+      "max": 2489.1630859375,
+      "mean": 405.9124755859375,
+      "nan_percentage": 0.0
+    },
+    "FRP": {
+      "source": "FIRMS",
+      "type": "assumed",
+      "raw_unit": "MW",
+      "processed_unit": "MW",
+      "min": 0.0,
+      "max": 4.979763984680176,
+      "mean": 0.7000381350517273,
+      "nan_percentage": 0.0
+    },
+    "Smoke": {
+      "source": "FIRMS",
+      "type": "derived",
+      "raw_unit": "N/A",
+      "processed_unit": "intensity proxy",
+      "min": 0.0,
+      "max": 2.4392428398132324,
+      "mean": 0.1607307493686676,
+      "nan_percentage": 0.0
+    }
+  }
+}

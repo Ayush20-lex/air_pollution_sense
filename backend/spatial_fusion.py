@@ -118,8 +118,10 @@ class SpatialDataFusion:
         grid : float32 ndarray of shape (H, W).
         """
         obs = obs_df.dropna(subset=[lat_col, lon_col, value_col]).copy()
-        if len(obs) < 2:
+        if len(obs) == 0:
             return np.full((self.grid.h, self.grid.w), np.nan, dtype=np.float32)
+        if len(obs) == 1:
+            return np.full((self.grid.h, self.grid.w), obs[value_col].iloc[0], dtype=np.float32)
 
         src_e, src_n = _WGS84_TO_UTM43N.transform(obs[lon_col].values, obs[lat_col].values)
         src_xy = np.column_stack([src_e, src_n])
@@ -337,8 +339,6 @@ class SpatialDataFusion:
                     tree = cKDTree(np.column_stack([valid_y, valid_x]))
                     _, nn_idx = tree.query(np.column_stack([nan_y, nan_x]))
                     stack[c][nan_y, nan_x] = stack[c][valid_y[nn_idx], valid_x[nn_idx]]
-                else:
-                    stack[c] = 0.0
 
         return stack.astype(np.float32)
 
