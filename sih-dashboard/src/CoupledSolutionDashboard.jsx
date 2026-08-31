@@ -34,7 +34,7 @@ import { fetchDashboardData } from '@/lib/api'
 
 // ── Utility components ────────────────────────────────────────────────────────
 function Metric({ label, value, unit, trend, positive, className="" }) {
-  const hasValue = value !== null && value !== undefined && value !== 0
+  const hasValue = value !== null && value !== undefined && !Number.isNaN(value)
   return (
     <div className={`flex items-end justify-between gap-2 border-b border-border/40 pb-2 last:border-0 last:pb-0 ${className}`}>
       <div>
@@ -253,7 +253,7 @@ export default function CoupledSolutionDashboard() {
 
   // ── Derived values from real API data ────────────────────────────────────
   const current = forecastData
-    ? (forecastData.find(d => d.hour === activeHour) ?? forecastData[0])
+    ? (forecastData[activeHour] ?? forecastData[0])
     : {}
 
   const sounding = forecastData ? forecastData.filter((_, i) => i % 2 === 0) : []
@@ -329,7 +329,7 @@ export default function CoupledSolutionDashboard() {
         <div className="flex w-full flex-col gap-4 lg:w-[320px] shrink-0 overflow-y-auto pr-1 lg:pr-0">
           
           {/* Hero: Current AQI */}
-          <Card className="border-border/30 bg-background/50 p-5 shadow-sm backdrop-blur-md">
+          <Card className="border-border/30 bg-background/50 p-5 shadow-sm backdrop-blur-md overflow-visible">
             <div className="mb-2 flex items-center justify-between">
               <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/80">Regional AQI Peak</p>
               {grapStage !== null && (
@@ -338,9 +338,9 @@ export default function CoupledSolutionDashboard() {
                 </Badge>
               )}
             </div>
-            <div className="mt-1">
-              <h2 className="font-mono text-5xl font-light tracking-tighter text-foreground">{aqiScore ?? '—'}</h2>
-              <p className="mt-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
+            <div className="flex flex-col">
+              <h2 className="font-mono text-6xl font-light tracking-tighter text-foreground leading-normal -mt-2">{aqiScore ?? '—'}</h2>
+              <p className="font-mono text-[10px] leading-relaxed text-muted-foreground -mt-1">
                 {grapCategory ?? 'Evaluating conditions...'}
               </p>
             </div>

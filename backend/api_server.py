@@ -203,7 +203,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -256,6 +256,23 @@ def _cache_get(key: str, ttl: int) -> Any | None:
 
 def _cache_set(key: str, value: Any) -> None:
     _state.cache[key] = (time.time(), value)
+
+
+_inference_lock = asyncio.Lock()
+
+async def get_forecast_tensor() -> tuple[torch.Tensor, bool]:
+    cfg = get_settings()
+    cache_key = "global_forecast_tensor"
+    
+    async with _inference_lock:
+        cached = _cache_get(cache_key, cfg.cache_ttl_s)
+        if cached is not None:
+            return cached
+            
+        loop = asyncio.get_event_loop()
+        pred, is_synthetic = await loop.run_in_executor(None, _generate_forecast_tensor)
+        _cache_set(cache_key, (pred, is_synthetic))
+        return pred, is_synthetic
 
 
 def _generate_forecast_tensor() -> tuple[torch.Tensor, bool]:
@@ -448,8 +465,7 @@ async def forecast_grid(
     if not ch_list:
         raise HTTPException(400, "Invalid channel indices")
 
-    loop = asyncio.get_event_loop()
-    pred, is_synthetic = await loop.run_in_executor(None, _generate_forecast_tensor)
+    pred, is_synthetic = await get_forecast_tensor()
 
     now = datetime.now(timezone.utc)
     meta = ForecastMeta(
@@ -492,8 +508,7 @@ async def forecast_station(
     if cached:
         return cached
 
-    loop = asyncio.get_event_loop()
-    pred, _is_synthetic = await loop.run_in_executor(None, _generate_forecast_tensor)   # (1, 72, 12, 70, 80)
+    pred, _is_synthetic = await get_forecast_tensor()   # (1, 72, 12, 70, 80)
 
     # Bilinear grid lookup
     lat_vec = np.linspace(NCR_LAT_MIN, NCR_LAT_MAX, GRID_H)
@@ -544,8 +559,7 @@ async def alerts_inversion(
     if cached:
         return cached
 
-    loop = asyncio.get_event_loop()
-    pred, _is_synthetic = await loop.run_in_executor(None, _generate_forecast_tensor)   # (1, 72, 12, 70, 80)
+    pred, _is_synthetic = await get_forecast_tensor()   # (1, 72, 12, 70, 80)
 
     # Take worst-case step (max PM2.5 over forecast horizon)
     pm25_max = pred[0, :, CH_PM25].max(dim=0).values   # (H, W) normalised
@@ -623,8 +637,7 @@ async def policy_grap():
     if cached:
         return cached
 
-    loop = asyncio.get_event_loop()
-    pred, _is_synthetic = await loop.run_in_executor(None, _generate_forecast_tensor)   # (1, 72, 12, 70, 80)
+    pred, _is_synthetic = await get_forecast_tensor()   # (1, 72, 12, 70, 80)
     
     # Evaluate worst-case PM2.5 across the entire grid and all 72 hours
     # pred shape: (1, 72, 12, 70, 80)
@@ -662,7 +675,7 @@ async def ws_live(websocket: WebSocket):
     await websocket.accept()
     step = 0
     try:
-        pred, _is_synthetic = await asyncio.get_event_loop().run_in_executor(None, _generate_forecast_tensor)
+        pred, _is_synthetic = await get_forecast_tensor()
         while True:
             frame = pred[0, step % N_STEPS]
             pm25_mean = round(float(frame[CH_PM25].mean()) * 500, 1)
