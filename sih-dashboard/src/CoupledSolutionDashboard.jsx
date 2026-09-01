@@ -35,7 +35,7 @@ import { fetchDashboardData } from '@/lib/api'
 
 // ── Utility components ────────────────────────────────────────────────────────
 function Metric({ label, value, unit, trend, positive, className="" }) {
-  const hasValue = value !== null && value !== undefined && !Number.isNaN(value)
+  const hasValue = value !== null && value !== undefined && value !== 0
   return (
     <div className={`flex items-end justify-between gap-2 border-b border-border/40 pb-2 last:border-0 last:pb-0 ${className}`}>
       <div>
@@ -262,7 +262,7 @@ export default function CoupledSolutionDashboard() {
 
   // ── Derived values from real API data ────────────────────────────────────
   const current = forecastData
-    ? (forecastData[activeHour] ?? forecastData[0])
+    ? (forecastData.find(d => d.hour === activeHour) ?? forecastData[0])
     : {}
 
   const sounding = forecastData ? forecastData.filter((_, i) => i % 2 === 0) : []
@@ -330,76 +330,82 @@ export default function CoupledSolutionDashboard() {
         </div>
       </header>
 
-      {/* ── Main Workspace Grid ── */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 lg:flex-row lg:p-4">
+      {/* ── Main Workspace ── */}
+      <div className="relative flex min-h-0 flex-1">
+        
+        {/* Full-bleed absolute background map */}
+        <SimulationMap activeHour={activeHour} gridData={gridData} />
 
-        {/* LEFT COLUMN: Current Risk & Forecast Trajectory */}
-        <div className="pointer-events-auto flex w-full flex-col gap-4 shrink-0 lg:h-full lg:w-[320px] lg:overflow-y-auto lg:pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Floating Sidebars Layer */}
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col lg:flex-row justify-between p-4 gap-4 overflow-y-auto lg:overflow-hidden">
+          
+          {/* LEFT COLUMN: Current Risk & Forecast Trajectory */}
+          <div className="pointer-events-auto flex w-full flex-col gap-4 shrink-0 lg:h-full lg:w-[320px] lg:overflow-y-auto lg:pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             
-          {/* Hero: Current AQI */}
-          <Card className="glass-panel p-5">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/80">Regional AQI Peak</p>
-              {grapStage !== null && (
-                <Badge variant="outline" className="severity-badge h-5 px-1.5 font-mono text-[8px] text-orange-400 border-orange-500/30 bg-orange-500/10">
-                  GRAP {grapStage}
-                </Badge>
-              )}
-            </div>
-            <div className="mt-1">
-              <h2 className="font-mono text-5xl font-light tracking-tighter text-foreground">{aqiScore ?? '—'}</h2>
-              <p className="mt-2 font-sans text-[10px] leading-relaxed text-muted-foreground">
-                {grapCategory ?? 'Evaluating conditions...'}
-              </p>
-            </div>
-          </Card>
-
-          {/* Current Key Telemetry */}
-          <Card className="glass-panel shrink-0 p-4">
-            <PanelTitle icon={CloudRain} meta={`T+${activeHour}H`}>Conditions</PanelTitle>
-            <div className="flex flex-col gap-2">
-              <Metric label="PM2.5 Avg"     value={current.pm25}  unit="µg/m³" />
-              <Metric label="PBL Height"    value={current.pbl}   unit="m"     />
-              <Metric label="Temperature"   value={current.temp}  unit="°C"    />
-              <Metric label="Solar Irr."    value={current.solar} unit="W/m²"  />
-            </div>
-          </Card>
-
-          {/* Forecast Chart */}
-          <Card className="glass-panel flex flex-1 flex-col p-4 min-h-[260px]">
-            <PanelTitle icon={Activity} meta="72H PROJECTION">Trajectory</PanelTitle>
-            <div className="mb-3 flex items-center justify-between rounded border border-red-500/20 bg-red-500/10 px-2 py-1.5 shadow-[0_0_15px_rgba(248,113,113,0.1)]">
-              <span className="font-mono text-[9px] text-red-300 uppercase tracking-wider">Peak Expected</span>
-              <span className="font-mono text-[10px] text-red-400 font-bold">{peakPm25} µg/m³ @ T+{peakHour}h</span>
-            </div>
-            <div className="flex-1">
-              <AtmosphericChart activeHour={activeHour} data={sounding} />
-            </div>
-          </Card>
-        </div>
-
-        {/* RIGHT COLUMN: Drivers & Status */}
-        <div className="pointer-events-auto flex w-full flex-col gap-4 shrink-0 mt-4 lg:mt-0 lg:ml-auto lg:h-full lg:w-[320px] lg:overflow-y-auto lg:pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            
-          {/* Explanation Engine */}
-          <Card className="glass-panel p-4">
-            <PanelTitle icon={Info} meta="AUTO-ANALYSIS">Why is it changing?</PanelTitle>
-            <div className="space-y-3">
-              <div className="rounded border border-primary/20 bg-primary/5 p-2.5">
-                <p className="font-mono text-[9px] uppercase tracking-wider text-primary mb-1">Two-Way Coupling</p>
-                <p className="text-[10px] leading-relaxed text-muted-foreground font-sans">
-                  The model dynamically predicts how aerosol load (PM2.5) suppresses incoming solar irradiance (W/m²), which in turn lowers the Planetary Boundary Layer (PBL), trapping more pollution in a feedback loop.
+            {/* Hero: Current AQI */}
+            <Card className="glass-panel p-5">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/80">Regional AQI Peak</p>
+                {grapStage !== null && (
+                  <Badge variant="outline" className="severity-badge h-5 px-1.5 font-mono text-[8px] text-orange-400 border-orange-500/30 bg-orange-500/10">
+                    GRAP {grapStage}
+                  </Badge>
+                )}
+              </div>
+              <div className="mt-1">
+                <h2 className="font-mono text-5xl font-light tracking-tighter text-foreground">{aqiScore ?? '—'}</h2>
+                <p className="mt-2 font-sans text-[10px] leading-relaxed text-muted-foreground">
+                  {grapCategory ?? 'Evaluating conditions...'}
                 </p>
               </div>
-              {mainInversion && mainInversion.isi_score > 0.75 && (
-                <div className="rounded border border-red-500/20 bg-red-500/5 p-2.5">
-                  <p className="font-mono text-[9px] uppercase tracking-wider text-red-400 mb-1">Inversion Trap</p>
+            </Card>
+
+            {/* Current Key Telemetry */}
+            <Card className="glass-panel shrink-0 p-4">
+              <PanelTitle icon={CloudRain} meta={`T+${activeHour}H`}>Conditions</PanelTitle>
+              <div className="flex flex-col gap-2">
+                <Metric label="PM2.5 Avg"     value={current.pm25}  unit="µg/m³" />
+                <Metric label="PBL Height"    value={current.pbl}   unit="m"     />
+                <Metric label="Temperature"   value={current.temp}  unit="°C"    />
+                <Metric label="Solar Irr."    value={current.solar} unit="W/m²"  />
+              </div>
+            </Card>
+
+            {/* Forecast Chart */}
+            <Card className="glass-panel flex flex-1 flex-col p-4 min-h-[260px]">
+              <PanelTitle icon={Activity} meta="72H PROJECTION">Trajectory</PanelTitle>
+              <div className="mb-3 flex items-center justify-between rounded border border-red-500/20 bg-red-500/10 px-2 py-1.5 shadow-[0_0_15px_rgba(248,113,113,0.1)]">
+                <span className="font-mono text-[9px] text-red-300 uppercase tracking-wider">Peak Expected</span>
+                <span className="font-mono text-[10px] text-red-400 font-bold">{peakPm25} µg/m³ @ T+{peakHour}h</span>
+              </div>
+              <div className="flex-1">
+                <AtmosphericChart activeHour={activeHour} data={sounding} />
+              </div>
+            </Card>
+          </div>
+
+          {/* RIGHT COLUMN: Drivers & Status */}
+          <div className="pointer-events-auto flex w-full flex-col gap-4 shrink-0 mt-4 lg:mt-0 lg:ml-auto lg:h-full lg:w-[320px] lg:overflow-y-auto lg:pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            
+            {/* Explanation Engine */}
+            <Card className="glass-panel p-4">
+              <PanelTitle icon={Info} meta="AUTO-ANALYSIS">Why is it changing?</PanelTitle>
+              <div className="space-y-3">
+                <div className="rounded border border-primary/20 bg-primary/5 p-2.5">
+                  <p className="font-mono text-[9px] uppercase tracking-wider text-primary mb-1">Two-Way Coupling</p>
                   <p className="text-[10px] leading-relaxed text-muted-foreground font-sans">
-                    Critical inversion conditions detected (ISI: {mainInversion.isi_score.toFixed(2)}). Low PBL and stagnation are severely restricting atmospheric ventilation.
+                    The model dynamically predicts how aerosol load (PM2.5) suppresses incoming solar irradiance (W/m²), which in turn lowers the Planetary Boundary Layer (PBL), trapping more pollution in a feedback loop.
                   </p>
                 </div>
-              )}
-            </div>
+                {mainInversion && mainInversion.isi_score > 0.75 && (
+                  <div className="rounded border border-red-500/20 bg-red-500/5 p-2.5">
+                    <p className="font-mono text-[9px] uppercase tracking-wider text-red-400 mb-1">Inversion Trap</p>
+                    <p className="text-[10px] leading-relaxed text-muted-foreground font-sans">
+                      Critical inversion conditions detected (ISI: {mainInversion.isi_score.toFixed(2)}). Low PBL and stagnation are severely restricting atmospheric ventilation.
+                    </p>
+                  </div>
+                )}
+              </div>
             </Card>
 
             {/* Inversion Alerts */}
