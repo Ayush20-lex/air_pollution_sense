@@ -4,6 +4,7 @@ import {
   ColumnLayer, ScatterplotLayer, ArcLayer, TextLayer, BitmapLayer
 } from '@deck.gl/layers';
 import { TileLayer } from '@deck.gl/geo-layers';
+import { ScenegraphLayer } from '@deck.gl/mesh-layers';
 import { _GlobeView as GlobeView, LightingEffect, AmbientLight, DirectionalLight } from '@deck.gl/core';
 import { fetchForecastGrid } from '@/lib/api';
 
@@ -89,15 +90,68 @@ export default function CinematicGlobe({ step = 0, layers = {} }) {
   const lastFetchedStep = useRef(-1);
   const [viewState, setViewState] = useState(INITIAL_VIEW);
 
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanPulse, setScanPulse] = useState(0);
+  const [scanPhase, setScanPhase] = useState('IDLE'); // 'IDLE', 'CHASE', 'DIVING', 'RESOLVED'
+  const [satPosition, setSatPosition] = useState([0, DELHI_COORDS.lat, 800000]);
+  const orbitRef = useRef(null);
+
+  useEffect(() => {
+    let startTime = Date.now();
+    
+    const animate = () => {
+      const now = Date.now();
+      
+      // Satellite continuous orbit
+      const lon = ((now % 30000) / 30000) * 360 - 180;
+      setSatPosition([lon, DELHI_COORDS.lat, 800000]);
+
+      if (isScanning) {
+        const elapsed = (now - startTime) % 2000;
+        setScanPulse(elapsed / 2000);
+      }
+      orbitRef.current = requestAnimationFrame(animate);
+    };
+
+    orbitRef.current = requestAnimationFrame(animate);
+    
+    return () => {
+      if (orbitRef.current) cancelAnimationFrame(orbitRef.current);
+    };
+  }, [isScanning, scanPhase]);
+
   const handleScanNcr = () => {
+    setIsScanning(true);
+    setScanPhase('CHASE');
+    
+    // Step 1 (Chase): Move camera
     setViewState({
       longitude: DELHI_COORDS.lng,
-      latitude: DELHI_COORDS.lat,
-      zoom: 10.2,
-      pitch: 0, 
+      latitude: DELHI_COORDS.lat - 5,
+      zoom: 3.5,
+      pitch: 80, 
       bearing: 0,
-      transitionDuration: 4000
+      transitionDuration: 2000
     });
+
+    // Step 3 (The Dive): 1500ms delay after the 2000ms chase transition
+    setTimeout(() => {
+      setScanPhase('DIVING');
+      setViewState({
+        longitude: DELHI_COORDS.lng,
+        latitude: DELHI_COORDS.lat,
+        zoom: 11,
+        pitch: 60,
+        bearing: 0,
+        transitionDuration: 4000
+      });
+
+      // Step 4 (The Reveal): Triggered when dive completes
+      setTimeout(() => {
+        setScanPhase('RESOLVED');
+        setIsScanning(false);
+      }, 4000);
+    }, 3500);
   };
 
   useEffect(() => {
@@ -160,6 +214,7 @@ export default function CinematicGlobe({ step = 0, layers = {} }) {
       minZoom: 0,
       maxZoom: 19,
       tileSize: 256,
+      maxCacheSize: 500,
       renderSubLayers: props => {
         const { boundingBox } = props.tile;
         return new BitmapLayer(props, {
@@ -177,6 +232,7 @@ export default function CinematicGlobe({ step = 0, layers = {} }) {
       minZoom: 0,
       maxZoom: 19,
       tileSize: 256,
+      maxCacheSize: 500,
       renderSubLayers: props => {
         const { boundingBox } = props.tile;
         return new BitmapLayer(props, {
@@ -187,8 +243,36 @@ export default function CinematicGlobe({ step = 0, layers = {} }) {
       }
     }),
 
-    // 1. PM2.5 heatmap columns
-    heatmap && gridCells.length > 0 && new ColumnLayer({
+    new ScenegraphLayer({
+      id: 'orbiting-satellite',
+      data: [{ position: satPosition, orientation: [0, 0, 90] }],
+      scenegraph: '/satellite.glb',
+      getPosition: d => d.position,
+      getOrientation: d => d.orientation,
+      sizeScale: 150000, 
+      _lighting: 'pbr',
+      pickable: false
+    }),
+
+    isScanning && new ScatterplotLayer({
+      id: 'radar-scan-sweep',
+      data: [DELHI_COORDS],
+      pickable: false,
+      opacity: 1 - scanPulse,
+      stroked: true,
+      filled: true,
+      radiusScale: scanPulse * 150000,
+      radiusMinPixels: 1,
+      radiusMaxPixels: 1000,
+      lineWidthMinPixels: 3,
+      getPosition: d => [d.lng, d.lat, 100],
+      getFillColor: [56, 189, 248, 40],
+      getLineColor: [56, 189, 248, 255],
+      getRadius: 1,
+    }),
+
+    // 1. PM2.5 heatmap columns (Only reveal if not diving/chasing)
+    heatmap && (scanPhase === 'IDLE' || scanPhase === 'RESOLVED') && gridCells.length > 0 && new ColumnLayer({
       id: 'pm25-grid',
       data: gridCells,
       diskResolution: 6,
@@ -338,7 +422,29 @@ export default function CinematicGlobe({ step = 0, layers = {} }) {
         }}
       />
 
-      {/* Cinematic UI Overlay */}
+      {/* Cinematic HUD Overlay */}
+      {scanPhase !== 'IDLE' && (
+        <div style={{
+          position: 'absolute', top: '120px', left: '50%', transform: 'translateX(-50%)',
+          zIndex: 50, padding: '16px 32px', borderRadius: '8px',
+          background: 'rgba(13, 20, 36, 0.65)', backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          color: scanPhase === 'RESOLVED' ? '#4ade80' : '#f87171',
+          fontFamily: 'monospace', letterSpacing: '0.1em', textAlign: 'center',
+          animation: scanPhase === 'CHASE' ? 'pulse 1s infinite alternate' : 'none'
+        }}>
+          {scanPhase === 'CHASE' || scanPhase === 'DIVING' ? (
+            <>
+              <div style={{ marginBottom: '8px', fontWeight: 'bold' }}>⌖ [INSAT-3D IMAGER ACTIVE]</div>
+              <div>ACQUIRING AEROSOL OPTICAL DEPTH (650nm)</div>
+            </>
+          ) : (
+            <div style={{ fontWeight: 'bold' }}>LOCAL FORECAST COUPLED</div>
+          )}
+        </div>
+      )}
+
+      {/* Cinematic UI Controls */}
       <div style={{ position: 'absolute', bottom: '80px', left: '50%', transform: 'translateX(-50%)', zIndex: 50 }}>
         <button 
           onClick={handleScanNcr}
