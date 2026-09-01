@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 # Local modules
-from .spatial_fusion import (
+from spatial_fusion import (
     SpatialDataFusion,
     GridSpec,
     generate_mock_cpcb_df,
@@ -41,13 +41,13 @@ from .spatial_fusion import (
     NCR_LAT_MIN, NCR_LAT_MAX, NCR_LON_MIN, NCR_LON_MAX,
     GRID_H, GRID_W,
 )
-from .coupled_model import (
+from coupled_model import (
     AirPollutionCoupledForecaster,
     N_CHANNELS, N_STEPS,
     CH_PM25, CH_PBL, CH_SOLAR, CH_TEMP, CH_UWIND, CH_VWIND,
 )
-from .physics_loss import compute_isi
-from .grap_policy import calculate_indian_aqi_pm25, evaluate_grap_stage
+from physics_loss import compute_isi
+from grap_policy import calculate_indian_aqi_pm25, evaluate_grap_stage
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────

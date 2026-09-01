@@ -1,29 +1,23 @@
 import React, { useMemo, useEffect, useRef, useState } from 'react';
 import DeckGL from '@deck.gl/react';
 import {
-  ColumnLayer, ScatterplotLayer, ArcLayer, TextLayer
+  ColumnLayer, ScatterplotLayer, ArcLayer, TextLayer, BitmapLayer
 } from '@deck.gl/layers';
-import { LightingEffect, AmbientLight, DirectionalLight } from '@deck.gl/core';
-import Map from 'react-map-gl/maplibre';
-import 'maplibre-gl/dist/maplibre-gl.css';
+import { TileLayer } from '@deck.gl/geo-layers';
+import { _GlobeView as GlobeView, LightingEffect, AmbientLight, DirectionalLight } from '@deck.gl/core';
 import { fetchForecastGrid } from '@/lib/api';
 
-// ── Free basemap (no token needed) ───────────────────────────────────────────
-const MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
-
-// ── Delhi NCR bounds ─────────────────────────────────────────────────────────
+const DELHI_COORDS = { lat: 28.6139, lng: 77.2090 };
 const BOUNDS = { minLon: 76.80, maxLon: 77.60, minLat: 28.20, maxLat: 28.90 };
 
 const INITIAL_VIEW = {
-  longitude: 77.2090,
-  latitude:  28.5900,
-  zoom:      10.2,
-  pitch:     38,
-  bearing:   -8,
+  longitude: 0,
+  latitude: 0,
+  zoom: 1.0,
+  pitch: 0,
+  bearing: 0,
 };
 
-// ── Known CPCB monitoring stations (positions are real; PM2.5 values from backend) ──
-// These are used as station markers. Values are populated from backend when available.
 const STATION_POSITIONS = [
   { name: "Anand Vihar",     lat: 28.6469, lon: 77.3160 },
   { name: "ITO",             lat: 28.6312, lon: 77.2410 },
@@ -37,7 +31,6 @@ const STATION_POSITIONS = [
   { name: "Ghaziabad",       lat: 28.6692, lon: 77.4538 },
 ];
 
-// ── Deck.gl lighting ─────────────────────────────────────────────────────────
 const LIGHTING = new LightingEffect({
   ambientLight:     new AmbientLight({ color: [255,255,255], intensity: 0.9 }),
   directionalLight: new DirectionalLight({
@@ -46,24 +39,21 @@ const LIGHTING = new LightingEffect({
   }),
 });
 
-// ── CPCB AQI colour scale ─────────────────────────────────────────────────────
 function cpcbColor(pm25) {
-  if (pm25 <= 30)  return [0,   210,   0,  145];  // Good
-  if (pm25 <= 60)  return [230, 230,   0,  155];  // Satisfactory
-  if (pm25 <= 90)  return [255, 126,   0,  170];  // Moderate
-  if (pm25 <= 120) return [220,  28,  28,  180];  // Poor
-  if (pm25 <= 250) return [153,   0,  76,  200];  // Very Poor
-  return               [110,   0,  30,  220];    // Severe+
+  if (pm25 <= 30)  return [0,   210,   0,  145];
+  if (pm25 <= 60)  return [230, 230,   0,  155];
+  if (pm25 <= 90)  return [255, 126,   0,  170];
+  if (pm25 <= 120) return [220,  28,  28,  180];
+  if (pm25 <= 250) return [153,   0,  76,  200];
+  return               [110,   0,  30,  220];
 }
 
-// ── Stubble plume arc paths (Punjab → Delhi) ──────────────────────────────────
 const PLUME_ARCS = [
   { source: [74.9, 31.0], target: [76.9, 28.75] },
   { source: [75.8, 30.2], target: [77.1, 28.72] },
   { source: [76.3, 29.5], target: [77.3, 28.65] },
 ];
 
-// ── Wind particle system ──────────────────────────────────────────────────────
 const N_PARTICLES = 220;
 function buildParticles(frame, windAngleDeg = -45) {
   const windAngle = windAngleDeg * Math.PI / 180;
@@ -86,37 +76,31 @@ function buildParticles(frame, windAngleDeg = -45) {
   });
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-/**
- * GridCanvas3D — 3D pollution map using Deck.gl + MapLibre.
- *
- * Props:
- *   step      : Current forecast hour (0–71), used to fetch the correct grid step
- *   layers    : Layer toggle flags { heatmap, particles, pbl, plume }
- *   width/height: Canvas dimensions
- *
- * Data policy:
- *   - Grid cells come from /api/v1/forecast/grid (real backend inference)
- *   - Station markers use known CPCB lat/lon positions
- *   - If the backend is unreachable, an empty grid is shown (not a fake one)
- *   - SYNTHETIC label is shown when backend data_mode is 'synthetic'
- */
-export default function GridCanvas3D({ step = 0, layers = {} }) {
+export default function CinematicGlobe({ step = 0, layers = {} }) {
   const { heatmap = true, particles = true, plume = true, pbl: pblLayer = true } = layers;
-
+  
   const frameRef = useRef(0);
   const [tick, setTick] = useState(0);
 
-  // Backend grid state
   const [gridCells,   setGridCells]   = useState([]);
   const [gridMeta,    setGridMeta]    = useState(null);
   const [gridLoading, setGridLoading] = useState(false);
   const [gridError,   setGridError]   = useState(null);
   const lastFetchedStep = useRef(-1);
+  const [viewState, setViewState] = useState(INITIAL_VIEW);
 
-  // ── Fetch grid from backend when step changes ───────────────────────────
+  const handleScanNcr = () => {
+    setViewState({
+      longitude: DELHI_COORDS.lng,
+      latitude: DELHI_COORDS.lat,
+      zoom: 10.2,
+      pitch: 0, 
+      bearing: 0,
+      transitionDuration: 4000
+    });
+  };
+
   useEffect(() => {
-    // Debounce: only fetch if step has stabilised (avoid spamming during slider drag)
     const id = setTimeout(async () => {
       if (lastFetchedStep.current === step) return;
       setGridLoading(true);
@@ -130,19 +114,17 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
       }
       lastFetchedStep.current = step;
       setGridMeta(data?.meta ?? null);
-      // Convert GeoJSON features → deck.gl cell objects
       const cells = (data?.features ?? []).map(f => ({
-        position: f.geometry.coordinates,  // [lon, lat]
+        position: f.geometry.coordinates,
         pm25: f.properties?.pm25 ?? 0,
         pbl:  f.properties?.pbl  ?? 0,
       }));
       setGridCells(cells);
-    }, 300); // 300ms debounce
+    }, 300);
 
     return () => clearTimeout(id);
   }, [step]);
 
-  // ── Animation loop (wind particles) ─────────────────────────────────────
   useEffect(() => {
     let raf;
     const animate = () => {
@@ -154,22 +136,12 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
     return () => cancelAnimationFrame(raf);
   }, [particles]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const particleData = useMemo(() => buildParticles(frameRef.current), [tick]);
-
-  // ── Determine if data is synthetic ───────────────────────────────────────
-  const isSynthetic = !gridMeta || gridMeta.data_mode === 'synthetic' || !gridMeta.weights_loaded;
-
-  // ── Mean PM2.5 from grid for PBL ring scaling ────────────────────────────
-  const meanPm25 = gridCells.length > 0
-    ? gridCells.reduce((s, c) => s + c.pm25, 0) / gridCells.length
-    : 150;
 
   const meanPbl = gridCells.length > 0
     ? gridCells.reduce((s, c) => s + c.pbl, 0) / gridCells.length
     : 500;
 
-  // PBL contour ring using actual mean PBL from grid
   const pblRing = useMemo(() => {
     const pbl = Math.max(50, meanPbl);
     const cx = 77.20, cy = 28.59;
@@ -180,10 +152,42 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
     });
   }, [meanPbl]);
 
-  // ── Deck.gl layers ───────────────────────────────────────────────────────
   const deckLayers = [
+    // 0. Base Map (Satellite Tiles mapped onto Globe)
+    new TileLayer({
+      id: 'satellite-tiles',
+      data: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      minZoom: 0,
+      maxZoom: 19,
+      tileSize: 256,
+      renderSubLayers: props => {
+        const { boundingBox } = props.tile;
+        return new BitmapLayer(props, {
+          data: null,
+          image: props.data,
+          bounds: [boundingBox[0][0], boundingBox[0][1], boundingBox[1][0], boundingBox[1][1]]
+        });
+      }
+    }),
 
-    // 1. PM2.5 grid columns — from backend GeoJSON
+    // 0.5. Base Map Labels (Places, boundaries)
+    new TileLayer({
+      id: 'label-tiles',
+      data: 'https://a.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}@2x.png',
+      minZoom: 0,
+      maxZoom: 19,
+      tileSize: 256,
+      renderSubLayers: props => {
+        const { boundingBox } = props.tile;
+        return new BitmapLayer(props, {
+          data: null,
+          image: props.data,
+          bounds: [boundingBox[0][0], boundingBox[0][1], boundingBox[1][0], boundingBox[1][1]]
+        });
+      }
+    }),
+
+    // 1. PM2.5 heatmap columns
     heatmap && gridCells.length > 0 && new ColumnLayer({
       id: 'pm25-grid',
       data: gridCells,
@@ -204,7 +208,6 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
       transitions:    { getElevation: 500, getFillColor: 500 },
     }),
 
-    // 2. Wind particles
     particles && new ScatterplotLayer({
       id: 'wind-particles',
       data: particleData,
@@ -216,7 +219,6 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
       getRadius: 300,
     }),
 
-    // 3. CPCB station markers (positions are real; PM2.5 from grid interpolation)
     new ScatterplotLayer({
       id: 'stations',
       data: STATION_POSITIONS,
@@ -227,7 +229,6 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
       radiusMaxPixels: 14,
       lineWidthMinPixels: 2,
       getPosition:  d => [d.lon, d.lat],
-      // Find nearest grid cell for colour; fallback to grey if grid empty
       getFillColor: d => {
         if (gridCells.length === 0) return [120, 120, 120, 180];
         const nearest = gridCells.reduce((best, c) => {
@@ -241,7 +242,6 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
       updateTriggers: { getFillColor: [gridCells] },
     }),
 
-    // 4. Station labels
     new TextLayer({
       id: 'station-labels',
       data: STATION_POSITIONS,
@@ -252,7 +252,7 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
       getColor: [220, 230, 240, 220],
       getTextAnchor: 'middle',
       getAlignmentBaseline: 'top',
-      fontFamily: 'JetBrains Mono, Fira Code, monospace',
+      fontFamily: 'monospace',
       outlineWidth: 3,
       outlineColor: [0, 0, 0, 255],
       background: true,
@@ -260,7 +260,6 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
       getBackgroundColor: [8, 14, 30, 200],
     }),
 
-    // 5. Stubble plume arcs — only shown when fires are active (FIRMS data pending)
     plume && new ArcLayer({
       id: 'plume-glow',
       data: PLUME_ARCS,
@@ -286,7 +285,6 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
       widthUnits: 'pixels',
     }),
 
-    // 6. PBL contour ring (radius driven by actual mean PBL from grid)
     pblLayer && new ScatterplotLayer({
       id: 'pbl-contour',
       data: pblRing,
@@ -301,12 +299,11 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
 
   ].filter(Boolean);
 
-  // ── Tooltip ──────────────────────────────────────────────────────────────
   const getTooltip = ({ object }) => {
     if (!object) return null;
     if (object.name) {
       return {
-        html: `<div style="font:10px 'JetBrains Mono',monospace;background:#0D1424;border:1px solid #1E2D4A;padding:6px 10px;border-radius:4px">
+        html: `<div style="font:10px monospace;background:#0D1424;border:1px solid #1E2D4A;padding:6px 10px;border-radius:4px">
           <b style="color:#E2E8F0">${object.name}</b><br/>CPCB Station
         </div>`,
         style: { background: 'none', border: 'none', padding: 0 },
@@ -314,7 +311,7 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
     }
     if (object.pm25 !== undefined) {
       return {
-        html: `<div style="font:10px 'JetBrains Mono',monospace;background:#0D1424;border:1px solid #1E2D4A;padding:4px 8px;border-radius:4px">
+        html: `<div style="font:10px monospace;background:#0D1424;border:1px solid #1E2D4A;padding:4px 8px;border-radius:4px">
           PM2.5: <b style="color:#EF4444">${Math.round(object.pm25)} µg/m³</b><br/>
           PBL: <b style="color:#818CF8">${object.pbl ? Math.round(object.pbl) + ' m' : '—'}</b>
         </div>`,
@@ -325,74 +322,54 @@ export default function GridCanvas3D({ step = 0, layers = {} }) {
   };
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#020617' }}>
+      
       <DeckGL
-        initialViewState={INITIAL_VIEW}
+        views={new GlobeView()}
+        viewState={viewState}
+        onViewStateChange={e => setViewState(e.viewState)}
         controller={{ scrollZoom: true, dragPan: true, dragRotate: true, doubleClickZoom: true }}
         layers={deckLayers}
         effects={[LIGHTING]}
         getTooltip={getTooltip}
-      >
-        <Map mapStyle={MAP_STYLE} attributionControl={false} />
-      </DeckGL>
+        parameters={{
+          cull: true,
+          clearColor: [2, 6, 23, 255] // Dark space background (#020617)
+        }}
+      />
 
-      {/* AQI Legend */}
-      <div style={{
-        position: 'absolute', bottom: 14, right: 14, zIndex: 10,
-        background: 'rgba(9,13,22,0.93)', border: '1px solid #1E2D4A',
-        borderRadius: 6, padding: '8px 12px',
-        fontFamily: "'JetBrains Mono','Fira Code',monospace",
-      }}>
-        <div style={{ color: '#64748B', marginBottom: 5, fontSize: 8, letterSpacing: 1 }}>
-          CPCB AQI  PM2.5 µg/m³
-        </div>
-        {[
-          ['Good',        '0–30',   '#00D200'],
-          ['Satisfactory','31–60',  '#E6E600'],
-          ['Moderate',    '61–90',  '#FF7E00'],
-          ['Poor',        '91–120', '#DC1C1C'],
-          ['Very Poor',   '121–250','#990040'],
-          ['Severe+',     '251+',   '#6E001E'],
-        ].map(([label, range, color]) => (
-          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
-            <span style={{ color: '#94A3B8', fontSize: 9 }}>{label}</span>
-            <span style={{ color: '#475569', fontSize: 8, marginLeft: 'auto', paddingLeft: 8 }}>{range}</span>
-          </div>
-        ))}
+      {/* Cinematic UI Overlay */}
+      <div style={{ position: 'absolute', bottom: '80px', left: '50%', transform: 'translateX(-50%)', zIndex: 50 }}>
+        <button 
+          onClick={handleScanNcr}
+          style={{
+            padding: '16px 32px',
+            backgroundColor: 'rgba(56, 189, 248, 0.15)',
+            border: '1px solid rgba(56, 189, 248, 0.5)',
+            color: '#38bdf8',
+            fontSize: '14px',
+            fontFamily: 'monospace',
+            letterSpacing: '0.2em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+            backdropFilter: 'blur(8px)',
+            borderRadius: '4px',
+            boxShadow: '0 0 20px rgba(56, 189, 248, 0.2)',
+            transition: 'all 0.2s ease-in-out'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(56, 189, 248, 0.25)';
+            e.currentTarget.style.boxShadow = '0 0 30px rgba(56, 189, 248, 0.4)';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(56, 189, 248, 0.15)';
+            e.currentTarget.style.boxShadow = '0 0 20px rgba(56, 189, 248, 0.2)';
+          }}
+        >
+          Scan NCR
+        </button>
       </div>
 
-      {/* Status HUD */}
-      <div style={{
-        position: 'absolute', top: 10, left: 10, zIndex: 10, pointerEvents: 'none',
-        fontFamily: "'JetBrains Mono','Fira Code',monospace",
-      }}>
-        {gridLoading && (
-          <div style={{ color: 'rgba(148,163,184,0.8)', fontSize: 9, letterSpacing: 1, marginBottom: 3 }}>
-            ⟳ Loading grid T+{step}h...
-          </div>
-        )}
-        {!gridLoading && gridCells.length > 0 && (
-          <div style={{ color: isSynthetic ? 'rgba(251,191,36,0.85)' : 'rgba(34,197,94,0.85)', fontSize: 9, letterSpacing: 1 }}>
-            {isSynthetic ? '⚠ SYNTHETIC' : '● LIVE'} · {gridCells.length} cells · T+{step}h
-          </div>
-        )}
-        {gridError && (
-          <div style={{ color: 'rgba(239,68,68,0.85)', fontSize: 9, letterSpacing: 1 }}>
-            ✗ Grid unavailable
-          </div>
-        )}
-        {!gridLoading && gridCells.length === 0 && !gridError && (
-          <div style={{ color: 'rgba(148,163,184,0.6)', fontSize: 9, letterSpacing: 1 }}>
-            Awaiting backend data...
-          </div>
-        )}
-        {gridMeta && (
-          <div style={{ color: 'rgba(148,163,184,0.55)', fontSize: 8, marginTop: 2 }}>
-            {gridMeta.model_ver} · {gridMeta.grid_shape?.[0]}×{gridMeta.grid_shape?.[1]} grid
-          </div>
-        )}
-      </div>
     </div>
   );
 }
