@@ -62,3 +62,15 @@ venv.bak/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Fetched datasets — regenerate with ml_pipeline/scripts/10-12 rather than
+# committing them (raw/ is ~27 MB of Parquet across ~720 files).
+ml_pipeline/data/raw/observations/
+ml_pipeline/data/raw/forecast/
+ml_pipeline/data/raw/stations/
+
+# Screen recordings / large media
+*.mp4
+
+# Third-party skills installed by `npx skills add` — per-machine, not project code
+.claude/skills/
