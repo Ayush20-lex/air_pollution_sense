@@ -1,36 +1,49 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
 
-import { cn } from "@/lib/utils"
+import * as React from 'react';
+import { cn } from '@/lib/utils';
 
-const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-  {
-    variants: {
-      variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
-        secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        destructive:
-          "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
-        outline: "text-foreground",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-)
-
-export interface BadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof badgeVariants> {}
-
-function Badge({ className, variant, ...props }: BadgeProps) {
+/** Small mono status chip. Pass an explicit `color` for AQI/alert semantics. */
+export function Badge({
+  children,
+  color,
+  className,
+  dot = false,
+  pulse = false,
+}: {
+  children: React.ReactNode;
+  color?: string;
+  className?: string;
+  dot?: boolean;
+  pulse?: boolean;
+}) {
   return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
-  )
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-2xs font-medium uppercase tracking-[0.14em]',
+        !color && 'border-hairline bg-elevated/60 text-muted',
+        className,
+      )}
+      style={
+        color
+          ? { borderColor: `${color}55`, background: `${color}1A`, color }
+          : undefined
+      }
+    >
+      {dot && (
+        <span className="relative flex h-1.5 w-1.5">
+          {pulse && (
+            <span
+              className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+              style={{ background: color ?? 'currentColor' }}
+            />
+          )}
+          <span
+            className="relative inline-flex h-1.5 w-1.5 rounded-full"
+            style={{ background: color ?? 'currentColor' }}
+          />
+        </span>
+      )}
+      {children}
+    </span>
+  );
 }
-
-export { Badge, badgeVariants }

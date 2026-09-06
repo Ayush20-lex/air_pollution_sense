@@ -1,248 +1,326 @@
-@import "tailwindcss";
+/* Hallmark · audit pass: gates 1, 4, 5, 6, 7, 10, 11, 13, 14, 15, 17, 22,
+ * 26, 27, 33, 40, 41, 45, 48, 50 closed
+ * pre-emit critique: P4 H4 E4 S5 R4 V3
+ * contrast: pass (40-41) · tokens: pass (48) · mobile: pass (34, 49-51)
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --bg: #09090b;
-  --panel: #141416;
-  --border: #27272a;
-  --text: #fafafa;
-  --text-dim: #a1a1aa;
-  --danger: #ef4444;
-  --warn: #f59e0b;
-  --accent: #e5e5e5;
+@layer base {
+  /* next/font/google used to inject these two; the families are loaded from a
+     stylesheet link in index.html and bound to Tailwind's font-sans/font-mono
+     via tailwind.config.ts. */
+  :root {
+    --font-sans: 'IBM Plex Sans';
+    --font-mono: 'JetBrains Mono';
+  }
+
+  /* ---- Light theme (default) : clean slate ---- */
+  :root {
+    --as-base: 248 250 252;        /* #F8FAFC */
+    --as-surface: 252 253 255;
+    --as-elevated: 241 245 249;
+    --as-hairline: 203 213 225;
+    --as-ink: 15 23 42;
+    --as-muted: 71 85 105;
+    --as-faint: 100 116 139;
+    --as-accent: 2 132 199;        /* sky-600 */
+    --as-glass: 255 255 255 / 0.8;
+    --as-grid: 15 23 42 / 0.05;
+    --as-map-tiles: 1;
+    color-scheme: light;
+  }
+
+  /* ---- Dark theme : deep onyx ---- */
+  .dark {
+    --as-base: 11 15 23;           /* #0B0F17 */
+    --as-surface: 18 24 38;
+    --as-elevated: 26 34 52;
+    --as-hairline: 42 54 78;
+    --as-ink: 226 236 250;
+    --as-muted: 148 168 196;
+    --as-faint: 96 116 146;
+    --as-accent: 34 211 238;       /* cyan-400 */
+    --as-glass: 18 24 38 / 0.7;
+    --as-grid: 130 190 255 / 0.06;
+    color-scheme: dark;
+  }
+
+  * {
+    @apply border-hairline;
+  }
+
+  html,
+  body {
+    @apply min-h-full;
+    /* clip, never hidden: hidden on the root creates a scroll container */
+    overflow-x: clip;
+  }
+
+  body {
+    @apply bg-base text-ink antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+    overscroll-behavior: none;
+  }
+
+  ::selection {
+    background: rgb(var(--as-accent) / 0.3);
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--as-hairline) / 0.9);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--as-accent) / 0.6);
+  }
 }
 
-html { scroll-behavior: smooth; }
-body { 
-  margin: 0;
-  overflow-x: hidden; 
-  font-family: 'IBM Plex Sans', sans-serif; 
-  background-color: var(--bg);
-  color: var(--text);
-  font-weight: 300;
-  -webkit-font-smoothing: antialiased;
+@layer components {
+  /* Glassmorphic panel — the core surface of the whole console. */
+  .glass {
+    background: rgb(var(--as-glass));
+    @apply rounded-xl border border-hairline/70 backdrop-blur-xl;
+    box-shadow: var(--as-shadow, 0 12px 32px -18px rgb(15 23 42 / 0.25));
+  }
+  .dark .glass {
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.04),
+      0 18px 50px -20px rgb(0 0 0 / 0.6);
+  }
+
+  .panel-title {
+    @apply flex items-center gap-2 font-mono text-2xs uppercase tracking-[0.18em] text-faint;
+  }
+
+  .hud-label {
+    @apply font-mono text-2xs uppercase tracking-[0.22em] text-faint;
+  }
+
+  .hud-value {
+    @apply font-mono text-2xl font-semibold tabular-nums tracking-tight text-ink;
+  }
+
+  /* Faint technical grid used behind the intro canvas and the map. */
+  .grid-bg {
+    background-image:
+      linear-gradient(rgb(var(--as-grid)) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--as-grid)) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  /* Deck focus for the forecast panel row.
+     Adapted from the DisplayCards stacked-deck effect: the hover lift, border
+     brighten and sibling recede are kept, the skew / [grid-area:stack] / fixed
+     h-36 / grayscale are not — those collapse four readable panels into one
+     clipped pile and hide the alert colours.
+     Severity never dims: anything marked [data-severity] is excluded from the
+     recede, so an EMERGENCY still reads while another card is hovered. */
+  .panel-deck > * {
+    /* The lift uses `translate`, not `transform`: these panels are framer
+       motion.divs whose entrance animation writes an inline `transform`, and an
+       inline style beats a stylesheet rule. `translate` is a separate property,
+       so it composes with framer's transform instead of losing to it. */
+    translate: 0 0;
+    transition:
+      translate 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .panel-deck > * :where(.panel-title, .hud-label, p, dt, dd, .deck-fade) {
+    transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Siblings of the hovered card recede — surfaces and neutral text only. */
+  .panel-deck:has(> *:hover) > *:not(:hover)
+    :where(.panel-title, .hud-label, p, dt, dd, .deck-fade):not([data-severity]) {
+    opacity: 0.42;
+  }
+
+  .panel-deck:has(> *:hover) > *:not(:hover) {
+    border-color: rgb(var(--as-hairline) / 0.35);
+  }
+
+  /* The hovered card gains presence rather than merely staying put. */
+  .panel-deck > *:hover {
+    translate: 0 -6px;
+    border-color: rgb(var(--as-accent) / 0.45);
+    box-shadow:
+      0 0 0 1px rgb(var(--as-accent) / 0.22),
+      0 26px 60px -28px rgb(0 0 0 / 0.7);
+  }
+
+  .radial-vignette {
+    background: radial-gradient(
+      ellipse 80% 60% at 50% 45%,
+      transparent 0%,
+      rgb(var(--as-base) / 0.75) 100%
+    );
+  }
+
 }
 
-/* 3D Scene and Scroll */
-#canvas-wrap {
-  position: fixed; inset: 0; z-index: 0; cursor: grab;
-}
-#canvas-wrap.dragging { cursor: grabbing; }
-
-.hero-pin { height: 250vh; position: relative; z-index: 1; }
-.hero-stage {
-  position: sticky; top: 0; height: 100vh; padding: 0 5vw;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; pointer-events: none;
-}
-.hero-copy, .stat-row { opacity: 0; /* GSAP controls */ }
-
-.title { 
-  font-family: 'Newsreader', serif;
-  font-size: clamp(3.5rem, 6vw, 6.5rem); 
-  font-weight: 300; 
-  margin: 0; 
-  letter-spacing: -0.02em; 
-  color: var(--text); 
-  line-height: 1.1;
-}
-.sub { 
-  font-size: 16px; 
-  color: var(--text-dim); 
-  max-width: 580px; 
-  margin: 24px auto 0; 
-  line-height: 1.6; 
-  font-weight: 400;
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
-.stat-row { display: flex; gap: 48px; margin-top: 56px; justify-content: center; }
-.stat .num { 
-  font-family: 'Newsreader', serif;
-  font-size: 40px; 
-  font-weight: 300; 
-  color: var(--text); 
-  line-height: 1;
+/* ---- Leaflet overrides: strip default chrome, retheme controls ---- */
+.leaflet-container {
+  background: rgb(var(--as-elevated)) !important;
+  font-family: inherit;
+  outline: none;
 }
-.stat .lbl { 
-  font-size: 10px; 
-  letter-spacing: 0.1em; 
-  color: var(--text-dim); 
-  margin-top: 8px; 
-  text-transform: uppercase;
-  font-weight: 500;
+.leaflet-control-attribution {
+  background: rgb(var(--as-surface) / 0.7) !important;
+  color: rgb(var(--as-faint)) !important;
+  font-size: 9px !important;
+  backdrop-filter: blur(8px);
+}
+.leaflet-control-attribution a {
+  color: rgb(var(--as-muted)) !important;
+}
+.leaflet-control-zoom a {
+  background: rgb(var(--as-surface) / 0.85) !important;
+  color: rgb(var(--as-ink)) !important;
+  border-color: rgb(var(--as-hairline)) !important;
+  backdrop-filter: blur(8px);
+}
+.leaflet-control-zoom a:hover {
+  background: rgb(var(--as-elevated)) !important;
+}
+/* Basemap treatment: mute in light, invert to an onyx cartography in dark. */
+.leaflet-tile-pane {
+  filter: saturate(0.3) brightness(1.02) contrast(0.92);
+}
+.dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(185deg) brightness(0.78) contrast(1.08) saturate(0.32);
+}
+.as-pin-wrap {
+  background: transparent !important;
+  border: none !important;
 }
 
-.zone-tag { 
-  position: absolute; 
-  padding: 8px 14px; 
-  background: var(--bg); 
-  border: 1px solid var(--border); 
-  color: var(--text-dim); 
-  font-size: 11px; 
-  letter-spacing: 0.05em; 
-  border-radius: 0; 
-  opacity: 0;
+/* ---- Custom Leaflet district pins ---- */
+.as-pin {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  width: 86px;
+  height: 48px;
+  pointer-events: auto;
 }
-.zone-tag::before {
-  content: '';
-  display: block;
-  width: 6px;
-  height: 6px;
-  background: var(--danger);
-  border-radius: 50%;
+.as-pin-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 9px 4px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--pin) 60%, transparent);
+  background: rgb(var(--as-surface) / 0.86);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 18px -8px rgb(0 0 0 / 0.6);
+  transition: transform 0.18s ease;
+  cursor: pointer;
 }
-.zone-tag.warn::before { background: var(--warn); }
-#tag-central { top: 48%; left: 55%; transform: translate(-50%, -50%); }
-#tag-north { top: 38%; left: 45%; }
-
-.scroll-hint { 
-  position: absolute; bottom: 48px; left: 50%; transform: translateX(-50%); 
-  font-size: 11px; letter-spacing: 0.15em; color: var(--text-dim); 
+.as-pin:hover .as-pin-body {
+  transform: translateY(-3px);
+}
+.as-pin-selected {
+  border-color: var(--pin) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pin) 45%, transparent),
+    0 10px 26px -8px color-mix(in srgb, var(--pin) 70%, transparent) !important;
+}
+.as-pin-aqi {
+  font-family: var(--font-mono), monospace;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--pin);
+  font-variant-numeric: tabular-nums;
+}
+.as-pin-name {
+  font-family: var(--font-mono), monospace;
+  font-size: 8px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  animation: pulse 2s infinite; 
+  color: rgb(var(--as-muted));
+  white-space: nowrap;
 }
-@keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.8; } }
-
-.dash {
-  position: relative; z-index: 2; padding: 120px 5vw 160px; min-height: 100vh;
-  display: flex; flex-direction: column; justify-content: center;
-  pointer-events: none;
+.as-pin-stem {
+  width: 1px;
+  height: 12px;
+  background: linear-gradient(to bottom, var(--pin), transparent);
 }
-.dash * { pointer-events: auto; }
-
-.dash-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 48px; border-bottom: 1px solid var(--border); padding-bottom: 24px; flex-wrap: wrap; gap: 20px;}
-.dash-head h2 { font-family: 'Newsreader', serif; font-size: 28px; font-weight: 300; margin: 0; color: var(--text); letter-spacing: -0.01em;}
-.dash-head .tag { font-size: 11px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;}
-.drag-hint { font-size: 11px; color: var(--text-dim); letter-spacing: 0.05em; opacity: 0; display: flex; align-items: center; gap: 8px;}
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
-
-.particle-tooltip {
-  position: fixed;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  padding: 12px 16px;
-  color: var(--text-dim);
-  font-size: 11px;
-  line-height: 1.5;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.2s;
-  z-index: 100;
-  transform: translate(0, 0);
-  border-radius: 2px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.as-pin-ring {
+  position: absolute;
+  top: 4px;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid var(--alert);
+  opacity: 0.7;
+  animation: as-ping 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
-.particle-tooltip b {
-  color: var(--text);
-  font-weight: 500;
-  display: block;
-  margin-bottom: 4px;
+@keyframes as-ping {
+  0% { transform: scale(0.5); opacity: 0.75; }
+  80%, 100% { transform: scale(1.5); opacity: 0; }
 }
 
-.panel {
-  background: var(--panel); border: 1px solid var(--border); border-radius: 2px; padding: 24px;
-  opacity: 0; transform: translateY(15px);
+/* Leaflet tooltip retheme */
+.leaflet-tooltip.as-tip {
+  background: rgb(var(--as-surface) / 0.94) !important;
+  border: 1px solid rgb(var(--as-hairline)) !important;
+  color: rgb(var(--as-ink)) !important;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+  box-shadow: 0 12px 30px -14px rgb(0 0 0 / 0.7);
+  backdrop-filter: blur(12px);
 }
-.panel h3 { font-size: 10px; letter-spacing: 0.1em; color: var(--text-dim); font-weight: 500; margin: 0 0 24px 0; display: flex; justify-content: space-between; text-transform: uppercase; }
-.metric-row { display:flex; justify-content:space-between; align-items:baseline; padding:12px 0; border-bottom: 1px solid rgba(255,255,255,0.03); font-size:13px; font-weight: 400;}
-.metric-row:last-child { border-bottom:none; padding-bottom: 0;}
-.metric-row .val { font-family: 'Newsreader', serif; font-size: 22px; color: var(--text); font-weight: 300; }
-.metric-row .unit { font-size:11px; color:var(--text-dim); margin-left:6px; font-weight: 400;}
-
-.chart-wrap { position:relative; height:140px; margin-top:2px; }
-.chart-wrap canvas { width:100%; height:100%; display:block; }
-.chart-axis { display:flex; justify-content:space-between; margin-top:12px; font-size:10px; color:var(--text-dim); }
-.chart-peak { position:absolute; top:0; right:0; font-size:10px; color:var(--text); letter-spacing:0.05em; font-weight: 400;}
-.legend-row { display:flex; gap:20px; margin-top:16px; font-size:11px; color:var(--text-dim); font-weight: 400;}
-.legend-row span { display:flex; align-items:center; gap:8px; }
-.dot { width:8px; height:8px; display:inline-block; border-radius: 50%; }
-
-.note { font-size: 13px; line-height: 1.6; color: var(--text-dim); border-left: 2px solid var(--border); padding-left: 16px; margin-top: 16px; font-weight: 400;}
-.note b { color: var(--text); font-weight: 500; display: block; margin-bottom: 4px;}
-.note.danger { border-color: var(--danger); }
-.note.danger b { color: var(--danger); }
-
-.cta-row { margin-top: 80px; display: flex; justify-content: flex-end; opacity: 0; }
-.btn { 
-  background: var(--text); color: var(--bg); padding: 14px 32px; 
-  font-size: 11px; letter-spacing: 0.1em; font-weight: 500; 
-  text-decoration: none; border-radius: 0px; transition: opacity 0.2s; 
-  display: inline-block; cursor: pointer; border: none; text-transform: uppercase;
-}
-.btn:hover { opacity: 0.85; }
-
-/* Dashboard Overlay Application */
-#appView {
-  position: fixed; inset: 0; z-index: 200; opacity: 0; pointer-events: none;
-  display: flex; flex-direction: column; transition: opacity 0.5s ease;
-  background: var(--bg);
-}
-#appView.open { opacity: 1; pointer-events: auto; }
-
-
-
-.app-topbar {
-  display: flex; align-items: center; gap: 24px; padding: 20px 32px;
-  border-bottom: 1px solid var(--border); background: var(--panel);
-}
-.app-back { color: var(--text-dim); cursor: pointer; font-size: 18px; transition: color 0.2s; }
-.app-back:hover { color: var(--text); }
-.app-logo { font-family: 'Newsreader', serif; font-size: 18px; color: var(--text); font-weight: 400; }
-.app-sub { font-size: 11px; color: var(--text-dim); letter-spacing: 0.1em; padding-left: 24px; border-left: 1px solid var(--border); text-transform: uppercase;}
-.app-right { margin-left: auto; display: flex; align-items: center; gap: 24px; font-size: 11px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;}
-.badge-demo { padding: 4px 0; color: var(--text-dim); display: flex; align-items: center; gap: 8px;}
-.badge-demo::before { content: ''; width: 6px; height: 6px; background: var(--warn); border-radius: 50%; }
-
-.app-body { flex: 1; display: grid; grid-template-columns: 320px 1fr 320px; gap: 24px; padding: 24px 32px; overflow-y: auto; min-height: 0; }
-.app-col { display: flex; flex-direction: column; gap: 24px; }
-
-.dash-panel, .dash-anim {
-  opacity: 0;
-  transform: translateY(15px);
-  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-#appView.open .dash-panel,
-#appView.open .dash-anim {
-  opacity: 1;
-  transform: translateY(0);
+.leaflet-tooltip.as-tip::before {
+  border-top-color: rgb(var(--as-hairline)) !important;
 }
 
-.app-center { display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 12px 0 24px; }
-.mode-row { display: flex; gap: 24px; border-bottom: 1px solid var(--border); width: 100%; justify-content: center;}
-.mode-pill { padding: 12px 4px; color: var(--text-dim); font-size: 11px; letter-spacing: 0.1em; cursor: pointer; text-transform: uppercase; font-weight: 500; margin-bottom: -1px; border-bottom: 1px solid transparent; transition: color 0.2s, border-color 0.2s;}
-.mode-pill.active { color: var(--text); border-bottom-color: var(--text); }
-.mode-pill:hover:not(.active) { color: var(--text); }
-
-.status-pill {
-  font-size: 12px; color: var(--text); letter-spacing: 0.1em; text-transform: uppercase;
-  display: flex; align-items: center; gap: 10px; font-weight: 400;
-}
-.status-pill::before { content: ''; width: 8px; height: 8px; background: #22c55e; border-radius: 50%; }
-
-.lineage-line { font-size: 11px; color: var(--text-dim); display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.03); text-transform: uppercase;}
-.lineage-line:last-child { border-bottom: none; padding-bottom: 0;}
-.lineage-line b { color: var(--text); font-weight: 400; }
-
-.app-timeline { border-top: 1px solid var(--border); padding: 20px 32px 24px; background: var(--panel); }
-.tl-top { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-bottom: 16px; text-transform: uppercase;}
-.tl-top .now { color: var(--text); font-weight: 500;}
-.tl-controls { display: flex; align-items: center; gap: 24px; }
-.tl-btn { width: 32px; height: 32px; color: var(--text-dim); display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; transition: color 0.2s;}
-.tl-btn:hover { color: var(--text); }
-.tl-btn.play { color: var(--text); font-size: 16px; }
-.tl-track { flex: 1; height: 2px; background: var(--border); position: relative; }
-.tl-fill { position: absolute; left: 0; top: 0; height: 100%; width: 38%; background: var(--text); }
-.tl-fill::after { content: ''; position: absolute; right: 0; top: 50%; transform: translate(50%, -50%); width: 8px; height: 8px; background: var(--text); border-radius: 50%; }
-.tl-ticks { display: flex; justify-content: space-between; margin-top: 12px; font-size: 10px; color: var(--text-dim); }
-.tl-speed { display: flex; gap: 12px; margin-left: 24px; font-size: 11px; color: var(--text-dim); }
-.tl-speed span { cursor: pointer; transition: color 0.2s; }
-.tl-speed span.active { color: var(--text); font-weight: 500; border-bottom: 1px solid var(--text); padding-bottom: 2px;}
-
-@media (max-width: 1024px) { 
-  .app-body { grid-template-columns: 1fr; } 
-  .mode-row { justify-content: flex-start; overflow-x: auto; padding-bottom: 4px; }
+/* ---- Reduced motion -------------------------------------------------
+   Gate 27: every transform/animation needs a fallback. Framer Motion is
+   handled separately by <MotionConfig reducedMotion="user">, and the intro
+   canvas drops to an on-demand frameloop. ------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .as-pin-ring {
+    display: none;
+  }
+  .as-pin:hover .as-pin-body {
+    transform: none;
+  }
 }

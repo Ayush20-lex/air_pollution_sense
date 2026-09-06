@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "airsense-ncr",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "airsense-ncr"],
+      "port": 3000
+    },
+    {
+      "name": "sih-dashboard",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "sih-dashboard"],
+      "port": 5173
+    }
+  ]
+}

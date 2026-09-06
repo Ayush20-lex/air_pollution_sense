@@ -1,13 +1,31 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>sih-dashboard</title>
+
+    <title>AirSense NCR — Coupled Forecasting System</title>
+    <meta
+      name="description"
+      content="Two-way coupled meteorology-chemistry air quality forecasting console for the Delhi NCR region. Problem Statement ID26082 — NCMRWF / Ministry of Earth Sciences."
+    />
+    <meta name="application-name" content="AirSense NCR" />
+    <meta name="keywords" content="AQI, PM2.5, WRF-Chem, NCMRWF, Delhi NCR, forecasting" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F8FAFC" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0B0F17" />
+
+    <!-- Replaces next/font/google. The families and weights match app/layout.tsx;
+         index.css binds them to --font-sans / --font-mono. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
   </head>
-  <body>
+  <body class="min-h-dvh bg-base font-sans text-ink">
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
