@@ -68,6 +68,8 @@ Thumbs.db
 ml_pipeline/data/raw/observations/
 ml_pipeline/data/raw/forecast/
 ml_pipeline/data/raw/stations/
+# Derived AQI series — regenerate with ml_pipeline/scripts/13_compute_station_aqi.py
+ml_pipeline/data/processed/station_aqi_*.parquet
 
 # Screen recordings / large media
 *.mp4

@@ -48,9 +48,18 @@ DATA_DIR = REPO_ROOT / "ml_pipeline" / "data"
 GRID_DEF = DATA_DIR / "metadata" / "grid_definition.json"
 OUT_PATH = DATA_DIR / "raw" / "stations" / "catalog.json"
 
-# Pollutants the 12-channel model consumes, plus surface met variables that let
-# us measure forecast bias in the meteorology directly at the station.
-POLLUTANTS = ["pm25", "pm10", "o3", "no2", "nox"]
+# The CPCB National AQI is the max over eight pollutant sub-indices (see
+# backend/aqi_cpcb.py). Six of the eight are carried by this network:
+#
+#   pm25 101 sensors   no2 100   pm10 100   o3 99   co 99   so2 85
+#   nh3    0 sensors   pb    0
+#
+# NH3 and Pb are not redistributed through OpenAQ at all — they need the CPCB
+# CCR portal, which is captcha-gated. Their absence is not a blocker: the
+# standard requires at least three pollutants with PM2.5 or PM10 among them,
+# so six clears it comfortably. `nox` is kept for the model's NOx channel; the
+# AQI itself indexes NO2.
+POLLUTANTS = ["pm25", "pm10", "o3", "no2", "nox", "co", "so2"]
 MET = ["temperature", "relativehumidity", "wind_speed", "wind_direction"]
 
 # The CAMS reanalysis that Open-Meteo serves — the forecast we bias-correct —
