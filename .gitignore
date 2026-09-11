@@ -85,3 +85,6 @@ ml_pipeline/data/processed/baseline_corrections.json
 
 # Third-party skills installed by `npx skills add` — per-machine, not project code
 .claude/skills/
+
+# Training output: checkpoints are 13 MB each and regenerable from script 16.
+backend/weights/
