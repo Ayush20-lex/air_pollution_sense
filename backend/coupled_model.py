@@ -20,6 +20,12 @@ GRID_H      = 70
 GRID_W      = 80
 N_STEPS     = 72    # forecast horizon (hours)
 
+#: Largest change the residual head may make to a channel in one hour, in
+#: normalised units. 0.5 is 500 ug/m3 on the PM2.5 scale - far beyond any
+#: real hourly change (~22), so it never binds in practice; it exists to keep
+#: a 72-step rollout from running away.
+MAX_STEP_DELTA = 0.5
+
 # Channel indices
 CH_PM25     = 0
 CH_PM10     = 1
@@ -398,7 +404,7 @@ class AirPollutionCoupledForecaster(nn.Module):
     3. Spatial attention gate (Local Features)
     4. DynamicGraphConvolution (Local tiles + coarse global routing)
     5. FeedbackCouplingModule: injects physics-corrected solar/PBL at each step
-    6. Decoder: hidden_dim → N_CHANNELS (1×1 conv)
+    6. Decoder: hidden_dim → N_CHANNELS (1×1 conv), applied as a residual
 
     Parameters
     ----------
@@ -406,6 +412,9 @@ class AirPollutionCoupledForecaster(nn.Module):
     hidden_dim : ConvLSTM hidden state depth (64 default, 128 for high-res).
     n_steps : Autoregressive rollout steps (72 = 72h forecast).
     teacher_force_ratio : During training, fraction of steps to use GT input.
+    residual : Predict each frame as the previous frame plus a bounded delta
+        (default). The absolute-output path is kept: pass False for the
+        original sigmoid decoder. Both share one state_dict.
     graph_window : Tile edge for the graph layer's local attention, in grid
         cells. The default 10 tiles the 70x80 domain exactly (7x8 tiles) and
         is what makes the rollout trainable on a consumer card. Pass None to
@@ -420,12 +429,14 @@ class AirPollutionCoupledForecaster(nn.Module):
         n_steps: int = N_STEPS,
         teacher_force_ratio: float = 0.5,
         graph_window: int | None = 10,
+        residual: bool = True,
     ) -> None:
         super().__init__()
         self.n_steps = n_steps
         self.hidden_dim = hidden_dim
         self.teacher_force_ratio = teacher_force_ratio
         self.graph_window = graph_window
+        self.residual = residual
 
         self.input_proj = nn.Sequential(
             nn.Conv2d(in_channels, hidden_dim, kernel_size=1, bias=False),
@@ -441,21 +452,41 @@ class AirPollutionCoupledForecaster(nn.Module):
         )
         self.feedback     = FeedbackCouplingModule(hidden_dim)
 
+        # The head emits raw scores; forward() turns them into a frame. The
+        # Sigmoid that used to sit here carried no parameters, so both modes
+        # produce identical state_dict keys and shapes.
         self.decoder = nn.Sequential(
             nn.Conv2d(hidden_dim, hidden_dim // 2, kernel_size=3, padding=1),
             nn.GELU(),
             nn.Conv2d(hidden_dim // 2, in_channels, kernel_size=1),
-            nn.Sigmoid(),
         )
 
         self._init_weights()
 
     def _init_weights(self) -> None:
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-                if m.bias is not None:
-                    nn.init.zeros_(m.bias)
+        """Initialise this module's own convolutions, and only those.
+
+        A blanket self.modules() sweep reached into the ConvLSTM cells and
+        overwrote the orthogonal initialisation they set for their fused gate
+        convolution - kaiming-for-ReLU is the wrong distribution for weights
+        feeding sigmoid and tanh gates, and pushes them toward saturation.
+        The cells had it right; the parent was undoing it.
+        """
+        for block in (self.input_proj, self.decoder):
+            for m in block.modules():
+                if isinstance(m, nn.Conv2d):
+                    nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
+
+        if self.residual:
+            # Start every delta at exactly zero, so an untrained rollout
+            # reproduces its own input: a persistence forecast. That is the
+            # floor this model should improve on, not the place it starts
+            # climbing towards.
+            head = [m for m in self.decoder.modules() if isinstance(m, nn.Conv2d)][-1]
+            nn.init.zeros_(head.weight)
+            nn.init.zeros_(head.bias)
 
     def forward(
         self,
@@ -502,7 +533,16 @@ class AirPollutionCoupledForecaster(nn.Module):
             h_attn = self.spatial_attn(h2)
             h_gnn  = self.gnn(h_attn)
 
-            pred_t = self.decoder(h_gnn)       # (B, C, H, W)
+            raw = self.decoder(h_gnn)          # (B, C, H, W)
+            if self.residual:
+                # Predict the change, not the field. At t+1 the atmosphere is
+                # mostly what it was at t, so asking the decoder to repaint all
+                # twelve channels from a hidden state every hour throws away
+                # the strongest signal available and leaves the output with no
+                # anchor for absolute level.
+                pred_t = torch.clamp(x_t + MAX_STEP_DELTA * torch.tanh(raw), 0.0, 1.0)
+            else:
+                pred_t = torch.sigmoid(raw)
 
             # ── Two-way feedback coupling ────────────────────────────────────
             pm25_pred = pred_t[:, CH_PM25]

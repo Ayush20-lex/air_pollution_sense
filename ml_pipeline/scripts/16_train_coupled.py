@@ -252,6 +252,9 @@ def main() -> int:
                    help='1 is the only size that fits 6 GB at horizon 72')
     p.add_argument('--lr', type=float, default=3e-4)
     p.add_argument('--hidden-dim', type=int, default=64)
+    p.add_argument('--no-residual', action='store_true',
+                   help='use the original absolute-output decoder instead of '
+                        'predicting each frame as the previous one plus a delta')
     p.add_argument('--graph-window', type=int, default=10,
                    help='0 restores the original all-pairs attention')
     p.add_argument('--val-fraction', type=float, default=0.15)
@@ -321,6 +324,7 @@ def main() -> int:
         hidden_dim=args.hidden_dim,
         n_steps=args.horizon,
         graph_window=args.graph_window or None,
+        residual=not args.no_residual,
     ).to(device)
 
     # physics_loss defaults predate channel_spec; feed it the live scales so its
@@ -351,7 +355,8 @@ def main() -> int:
     print(f'  windows     {len(train_starts)} train / {len(val_starts)} val '
           f'(context {args.context} h, horizon {args.horizon} h, stride {args.stride})')
     print(f'  model       {n_params:,} params, hidden {args.hidden_dim}, '
-          f'graph window {args.graph_window or "all-pairs"}')
+          f'graph window {args.graph_window or "all-pairs"}, '
+          f'head {"absolute" if args.no_residual else "residual"}')
     print(f'  device      {device}  amp={args.amp}')
     print('=' * 70)
 
