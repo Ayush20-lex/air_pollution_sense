@@ -240,7 +240,14 @@ def main() -> int:
     p.add_argument('--stride', type=int, default=3,
                    help='hours between window starts; 1 is every hour (default 3, '
                         'since adjacent windows share 95 of 96 hours)')
-    p.add_argument('--epochs', type=int, default=30)
+    p.add_argument('--epochs', type=int, default=30,
+                   help='total epochs in the PLAN. Drives the cosine LR curve and '
+                        'the teacher-forcing decay, so it must stay the same '
+                        'across every chunk of a split run.')
+    p.add_argument('--stop-after', type=int, default=0,
+                   help='train at most this many epochs this invocation, then '
+                        'save and exit (0 = run to --epochs). Splits a long run '
+                        'across sessions without distorting either schedule.')
     p.add_argument('--batch-size', type=int, default=1,
                    help='1 is the only size that fits 6 GB at horizon 72')
     p.add_argument('--lr', type=float, default=3e-4)
@@ -348,6 +355,7 @@ def main() -> int:
     print(f'  device      {device}  amp={args.amp}')
     print('=' * 70)
 
+    trained_this_run = 0
     for epoch in range(start_epoch, args.epochs):
         model.train()
         model.teacher_force_ratio = teacher_forcing_ratio(
@@ -440,6 +448,16 @@ def main() -> int:
             # Bare state_dict, which is what api_server loads with weights_only.
             torch.save(model.state_dict(), out_dir / 'forecaster_v1.pt')
             print(f'            new best {best:.2f} ug/m3 -> forecaster_v1.pt')
+
+        trained_this_run += 1
+        if args.stop_after and trained_this_run >= args.stop_after and epoch + 1 < args.epochs:
+            print('-' * 70)
+            print(f'  stopped after {trained_this_run} epochs; {args.epochs - epoch - 1} '
+                  f'of the {args.epochs}-epoch plan remain.')
+            print('  The laptop is free now. Resume with:')
+            print(f'    python ml_pipeline/scripts/16_train_coupled.py --epochs {args.epochs} '
+                  f'--stop-after {args.stop_after} --resume "{out_dir / "last.pt"}"')
+            break
 
     print('=' * 70)
     print(f'  best val PM2.5 RMSE  {best:.2f} ug/m3')
