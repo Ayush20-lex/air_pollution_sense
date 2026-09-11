@@ -126,43 +126,168 @@ class DynamicGraphConvolution(nn.Module):
     Native PyTorch GNN layer. Treats the spatial grid as N nodes and dynamically
     computes graph edges based on feature similarity (e.g., routing pollutants
     along wind vectors or linking similar pollution hotspots).
+
+    Two attention topologies, one set of weights
+    -------------------------------------------
+    ``window=None`` is the original all-pairs topology: every node scores every
+    other node, so on the d03 grid N = 70*80 = 5600 and the score matrix holds
+    5600**2 = 31.4M entries per sample per step. The rollout runs this 72 times
+    and autograd keeps every one of those matrices alive for the backward pass.
+    That single tensor is what puts training out of reach of a 6 GB card, and it
+    is the largest term in step time.
+
+    ``window=w`` replaces it with the topology the physics actually asks for:
+
+      local   dense attention inside each w x w tile. Advection between
+              neighbouring cells is a short-range effect; this resolves it
+              exactly, at full grid resolution.
+      global  dense attention on an average-pooled coarse grid, bilinearly
+              upsampled back. Long-range transport - Punjab stubble smoke
+              crossing the domain on a north-westerly - is a smooth, large-scale
+              signal that survives pooling, so the layer keeps the global
+              routing role it was built for.
+
+    At w=10 that is 56 tiles of 100 nodes (560K scores) plus a 14x16 coarse grid
+    (50K): ~51x fewer than 31.4M, with the long-range path intact.
+
+    Both topologies use the *same* query/key/value/out_proj/norm weights. The
+    flag picks a computation path, not a different network, so the two produce
+    identical ``state_dict`` keys and shapes, and a checkpoint trained under one
+    loads into the other without surgery.
+
+    Parameters
+    ----------
+    window : tile edge in cells, or None for the original all-pairs path.
+    coarse : downsampling stride for the global branch (H//coarse x W//coarse).
     """
-    def __init__(self, in_channels: int, out_channels: int, k_neighbors: int = 16) -> None:
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        k_neighbors: int = 16,
+        window: int | None = None,
+        coarse: int = 5,
+    ) -> None:
         super().__init__()
         self.k_neighbors = k_neighbors
+        self.window = window
+        self.coarse = coarse
         self.query = nn.Conv2d(in_channels, in_channels // 2, kernel_size=1)
         self.key   = nn.Conv2d(in_channels, in_channels // 2, kernel_size=1)
         self.value = nn.Conv2d(in_channels, out_channels, kernel_size=1)
-        
+
         self.out_proj = nn.Conv2d(out_channels, out_channels, kernel_size=1)
         self.norm = nn.GroupNorm(8, out_channels)
 
-    def forward(self, x: Tensor) -> Tensor:
-        B, C, H, W = x.shape
-        N = H * W
+    # -- attention primitive --------------------------------------------------
 
-        # Q, K: (B, C//2, N)
-        Q = self.query(x).view(B, -1, N)
-        K = self.key(x).view(B, -1, N)
+    def _attend(
+        self,
+        Q: Tensor,                        # (b, d, N) queries
+        K: Tensor,                        # (b, d, M) keys
+        V: Tensor,                        # (b, c, M) values
+        key_valid: Tensor | None = None,  # (b, M) bool; None = every key real
+    ) -> Tensor:
+        """
+        Top-k sparsified attention, returning (b, c, N).
 
-        # Pairwise node similarity (B, N, N)
+        This is the original layer's body unchanged; only the node sets handed
+        to it differ between the two topologies.
+        """
         scale = math.sqrt(Q.shape[1])
-        attn = torch.bmm(Q.transpose(1, 2), K) / scale
+        attn = torch.bmm(Q.transpose(1, 2), K) / scale            # (b, N, M)
+
+        if key_valid is not None:
+            attn = attn.masked_fill(~key_valid.unsqueeze(1), float('-inf'))
 
         # Sparsify graph edges by keeping only top-k neighbors
-        topk_vals, topk_idx = torch.topk(attn, k=self.k_neighbors, dim=-1)
+        k = min(self.k_neighbors, attn.shape[-1])
+        topk_vals, topk_idx = torch.topk(attn, k=k, dim=-1)
         mask = torch.full_like(attn, float('-inf'))
         mask.scatter_(-1, topk_idx, topk_vals)
         attn_weights = F.softmax(mask, dim=-1)
 
         # Message passing: V * A^T
-        V = self.value(x).view(B, -1, N)
-        out = torch.bmm(V, attn_weights.transpose(1, 2)).view(B, -1, H, W)
+        return torch.bmm(V, attn_weights.transpose(1, 2))         # (b, c, N)
+
+    # -- windowed topology ----------------------------------------------------
+
+    @staticmethod
+    def _partition(t: Tensor, w: int) -> Tensor:
+        """(B, C, H, W), H and W multiples of w  ->  (B*nh*nw, C, w*w)."""
+        B, C, H, W = t.shape
+        nh, nw = H // w, W // w
+        t = t.view(B, C, nh, w, nw, w).permute(0, 2, 4, 1, 3, 5)
+        return t.reshape(B * nh * nw, C, w * w)
+
+    @staticmethod
+    def _unpartition(t: Tensor, w: int, B: int, nh: int, nw: int) -> Tensor:
+        """(B*nh*nw, C, w*w)  ->  (B, C, nh*w, nw*w)."""
+        C = t.shape[1]
+        t = t.view(B, nh, nw, C, w, w).permute(0, 3, 1, 4, 2, 5)
+        return t.reshape(B, C, nh * w, nw * w)
+
+    def _local_attention(self, Q: Tensor, K: Tensor, V: Tensor) -> Tensor:
+        """Dense attention inside each tile, at full grid resolution."""
+        w = self.window
+        B, _, H, W = Q.shape
+        ph, pw = (-H) % w, (-W) % w
+
+        valid = None
+        if ph or pw:
+            # Padding invents cells outside the domain. They must not be
+            # attended to, or an edge tile would route pollutant mass into grid
+            # cells that do not exist. Every tile still holds at least one real
+            # cell - the pad is always narrower than one tile - so no query is
+            # left with an all -inf row.
+            m = F.pad(Q.new_ones(1, 1, H, W), (0, pw, 0, ph))
+            valid = self._partition(m, w).squeeze(1).bool().repeat(B, 1)
+
+            Q = F.pad(Q, (0, pw, 0, ph))
+            K = F.pad(K, (0, pw, 0, ph))
+            V = F.pad(V, (0, pw, 0, ph))
+
+        nh, nw = (H + ph) // w, (W + pw) // w
+
+        out = self._attend(
+            self._partition(Q, w),
+            self._partition(K, w),
+            self._partition(V, w),
+            key_valid=valid,
+        )
+        out = self._unpartition(out, w, B, nh, nw)
+        return out[:, :, :H, :W]
+
+    def _global_attention(self, Q: Tensor, K: Tensor, V: Tensor) -> Tensor:
+        """All-pairs attention on a pooled grid, upsampled back to full size."""
+        B, _, H, W = Q.shape
+        s = max(1, self.coarse)
+        gh, gw = max(1, H // s), max(1, W // s)
+
+        out = self._attend(
+            F.adaptive_avg_pool2d(Q, (gh, gw)).flatten(2),
+            F.adaptive_avg_pool2d(K, (gh, gw)).flatten(2),
+            F.adaptive_avg_pool2d(V, (gh, gw)).flatten(2),
+        ).view(B, -1, gh, gw)
+
+        return F.interpolate(out, size=(H, W), mode='bilinear', align_corners=False)
+
+    def forward(self, x: Tensor) -> Tensor:
+        B, _, H, W = x.shape
+
+        Q = self.query(x)
+        K = self.key(x)
+        V = self.value(x)
+
+        if self.window is None:
+            out = self._attend(Q.flatten(2), K.flatten(2), V.flatten(2)).view(B, -1, H, W)
+        else:
+            out = self._local_attention(Q, K, V) + self._global_attention(Q, K, V)
 
         # Output projection and residual
         out = self.out_proj(out)
-        return F.gelu(self.norm(out + self.value(x)))
-
+        return F.gelu(self.norm(out + V))
 
 
 # ── Physics Feedback Coupling Module ─────────────────────────────────────────
@@ -271,7 +396,7 @@ class AirPollutionCoupledForecaster(nn.Module):
     1. Input projection: 12 channels → hidden_dim (1×1 conv)
     2. Two stacked CoupledConvLSTMCells (encoder depth)
     3. Spatial attention gate (Local Features)
-    4. DynamicGraphConvolution (Global Routing)
+    4. DynamicGraphConvolution (Local tiles + coarse global routing)
     5. FeedbackCouplingModule: injects physics-corrected solar/PBL at each step
     6. Decoder: hidden_dim → N_CHANNELS (1×1 conv)
 
@@ -281,6 +406,11 @@ class AirPollutionCoupledForecaster(nn.Module):
     hidden_dim : ConvLSTM hidden state depth (64 default, 128 for high-res).
     n_steps : Autoregressive rollout steps (72 = 72h forecast).
     teacher_force_ratio : During training, fraction of steps to use GT input.
+    graph_window : Tile edge for the graph layer's local attention, in grid
+        cells. The default 10 tiles the 70x80 domain exactly (7x8 tiles) and
+        is what makes the rollout trainable on a consumer card. Pass None to
+        restore the original all-pairs attention - same weights, same output
+        shape, ~51x the score matrix. See DynamicGraphConvolution.
     """
 
     def __init__(
@@ -289,11 +419,13 @@ class AirPollutionCoupledForecaster(nn.Module):
         hidden_dim: int = 64,
         n_steps: int = N_STEPS,
         teacher_force_ratio: float = 0.5,
+        graph_window: int | None = 10,
     ) -> None:
         super().__init__()
         self.n_steps = n_steps
         self.hidden_dim = hidden_dim
         self.teacher_force_ratio = teacher_force_ratio
+        self.graph_window = graph_window
 
         self.input_proj = nn.Sequential(
             nn.Conv2d(in_channels, hidden_dim, kernel_size=1, bias=False),
@@ -304,7 +436,9 @@ class AirPollutionCoupledForecaster(nn.Module):
         self.cell2 = CoupledConvLSTMCell(hidden_dim, hidden_dim, kernel_size=5)
 
         self.spatial_attn = SpatialAttention(hidden_dim)
-        self.gnn          = DynamicGraphConvolution(hidden_dim, hidden_dim, k_neighbors=16)
+        self.gnn          = DynamicGraphConvolution(
+            hidden_dim, hidden_dim, k_neighbors=16, window=graph_window,
+        )
         self.feedback     = FeedbackCouplingModule(hidden_dim)
 
         self.decoder = nn.Sequential(
