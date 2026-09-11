@@ -10,6 +10,7 @@ import { AnalysisCard, TelemetryStat } from './TelemetryOverlay';
 import { ScrollPanels, ScrollSectionHead } from './ScrollPanels';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Badge } from '@/components/ui/badge';
+import { SourceBadge } from '@/components/ui/source-badge';
 import { aqiColor } from '@/lib/aqi';
 import { DISTRICTS, MODEL_META } from '@/lib/data';
 import { SEVERITY } from '@/lib/tokens';
@@ -234,7 +235,7 @@ export function IntroScreen() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <Badge className="hidden sm:inline-flex">Demo / Synthetic</Badge>
+          <SourceBadge className="hidden sm:inline-flex" />
           <Badge color={SEVERITY.good} dot className="hidden md:inline-flex">
             {MODEL_META.cycle} cycle
           </Badge>

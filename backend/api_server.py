@@ -712,6 +712,134 @@ async def policy_grap():
     return response
 
 
+# ── Dashboard frames ──────────────────────────────────────────────────────────
+
+#: The five NCR districts the console plots, mirroring DISTRICTS in the
+#: frontend's lib/data.ts. Kept here so one request returns everything the UI
+#: needs; sampling the grid per district per channel over the station endpoint
+#: would take 35 round trips to draw a single frame.
+_FRAME_DISTRICTS = [
+    {"id": "delhi",     "lat": 28.6139, "lon": 77.2090},
+    {"id": "noida",     "lat": 28.5355, "lon": 77.3910},
+    {"id": "gurgaon",   "lat": 28.4595, "lon": 77.0266},
+    {"id": "faridabad", "lat": 28.4089, "lon": 77.3178},
+    {"id": "ghaziabad", "lat": 28.6692, "lon": 77.4538},
+]
+
+
+def _alert_level(pm25: float, inversion: float) -> str:
+    """Mirrors alertLevel() in the frontend's lib/aqi.ts so badges agree."""
+    score = pm25 / 120.0 + inversion * 0.75
+    if score > 1.65:
+        return "EMERGENCY"
+    if score > 1.20:
+        return "WARNING"
+    if score > 0.80:
+        return "ADVISORY"
+    return "NOMINAL"
+
+
+@app.get("/api/v1/forecast/frames")
+async def forecast_frames():
+    """
+    The 72-hour forecast already shaped as the console's `Frame[]`.
+
+    lib/data.ts builds this shape synthetically via buildForecast(); this returns
+    the same shape from the forecast tensor so the frontend can swap the source
+    without touching any panel, chart or map code. Field names match `Frame` and
+    `CellSample` exactly.
+    """
+    cfg = get_settings()
+    cache_key = "dashboard:frames"
+    cached = _cache_get(cache_key, cfg.cache_ttl_s)
+    if cached is not None:
+        return cached
+
+    pred, is_synthetic = await get_forecast_tensor()     # (1, 72, 12, 70, 80)
+    arr = pred[0].numpy()
+
+    lat_vec = np.linspace(NCR_LAT_MIN, NCR_LAT_MAX, GRID_H)
+    lon_vec = np.linspace(NCR_LON_MIN, NCR_LON_MAX, GRID_W)
+    norms = _CHANNEL_NORMS
+
+    cells = []
+    for d in _FRAME_DISTRICTS:
+        hi = int(np.clip(np.searchsorted(lat_vec, d["lat"]), 0, GRID_H - 1))
+        wi = int(np.clip(np.searchsorted(lon_vec, d["lon"]), 0, GRID_W - 1))
+        cells.append((d["id"], hi, wi))
+
+    meta = _state.forecast_meta or {}
+    # Frame 0 is the origin hour; lead h is frame h.
+    origin = meta.get("origin")
+    base = datetime.fromisoformat(origin) if origin else datetime.now(timezone.utc)
+
+    frames = []
+    for t in range(N_STEPS):
+        valid = base + timedelta(hours=t)
+        local = valid + timedelta(hours=5, minutes=30)      # IST
+        districts, pm_all, pbl_all, temp_all, solar_all, wind_all, inv_all = {}, [], [], [], [], [], []
+
+        for did, hi, wi in cells:
+            f = arr[t, :, hi, wi] * norms
+            pm25, o3, nox = float(f[0]), float(f[2]), float(f[3])
+            u, v = float(f[4]), float(f[5])
+            temp, solar, pbl = float(f[6]), float(f[8]), float(f[9])
+            wind = float(np.hypot(u, v))
+            wind_dir = float((np.degrees(np.arctan2(-u, -v)) + 360.0) % 360.0)
+            # Same proxy the console uses: a shallow layer with weak ventilation
+            # traps pollution. 1 at a fully collapsed layer, 0 at 1000 m.
+            inversion = float(np.clip(1.0 - pbl / 1000.0, 0.0, 1.0))
+
+            districts[did] = {
+                "districtId": did,
+                "pm25": round(pm25, 1),
+                "aqi": calculate_indian_aqi_pm25(pm25),
+                "pbl": round(pbl, 1),
+                "temp": round(temp, 1),
+                "solar": round(solar, 1),
+                "windSpeed": round(wind, 2),
+                "windDir": round(wind_dir, 1),
+                "o3": round(o3, 1),
+                "nox": round(nox, 1),
+                "inversion": round(inversion, 3),
+                "alert": _alert_level(pm25, inversion),
+            }
+            pm_all.append(pm25); pbl_all.append(pbl); temp_all.append(temp)
+            solar_all.append(solar); wind_all.append(wind); inv_all.append(inversion)
+
+        avg_pm = float(np.mean(pm_all))
+        avg_inv = float(np.mean(inv_all))
+        frames.append({
+            "hour": t,
+            "label": ("NOW" if t == 0 else f"+{t}h"),
+            "localHour": local.hour,
+            "districts": districts,
+            "avgPm25": round(avg_pm, 1),
+            "avgAqi": calculate_indian_aqi_pm25(avg_pm),
+            "avgPbl": round(float(np.mean(pbl_all))),
+            "avgTemp": round(float(np.mean(temp_all)), 1),
+            "avgSolar": round(float(np.mean(solar_all))),
+            "avgWind": round(float(np.mean(wind_all)), 1),
+            "inversionIndex": round(avg_inv, 2),
+            "alert": _alert_level(avg_pm, avg_inv),
+            "validTime": valid.isoformat(),
+        })
+
+    payload = {
+        "frames": frames,
+        "source": {
+            "engine": (
+                "coupled_model" if _state.weights_loaded
+                else "blend_baseline" if _state.forecast_meta else "untrained_model"
+            ),
+            "is_synthetic": bool(is_synthetic),
+            **meta,
+        },
+    }
+    _cache_set(cache_key, payload)
+    return payload
+
+
 # ── WebSocket Live Push ────────────────────────────────────────────────────────
 
 @app.websocket("/ws/live")

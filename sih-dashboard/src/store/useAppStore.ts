@@ -9,6 +9,11 @@ import {
   type Interventions,
   type Pollutant,
 } from '@/lib/data';
+import {
+  applyInterventionRatio,
+  fetchLiveForecast,
+  type ForecastSource,
+} from '@/lib/forecastApi';
 
 export type Screen = 'intro' | 'transition' | 'dashboard';
 export type MapLayer = 'heatmap' | 'wind' | 'plume' | 'pins';
@@ -27,6 +32,16 @@ type AppState = {
   hour: number;
   pollutant: Pollutant;
   selectedDistrict: string | null;
+
+  /* --- data provenance ---
+     `liveFrames` holds the unmodified backend forecast. `frames` may be a
+     what-if variant of it, so the baseline is kept separately rather than
+     recomputed. `source` is null until the backend answers, and stays null if
+     it never does — the console then runs on the synthetic generator. */
+  liveFrames: Frame[] | null;
+  source: ForecastSource | null;
+  loadingLive: boolean;
+  loadLiveForecast: () => Promise<void>;
 
   setIntervention: (key: keyof Interventions, value: number) => void;
   resetInterventions: () => void;
@@ -65,15 +80,49 @@ export const useAppStore = create<AppState>((set, get) => ({
   pollutant: 'PM2.5',
   selectedDistrict: null,
 
+  liveFrames: null,
+  source: null,
+  loadingLive: false,
+
+  loadLiveForecast: async () => {
+    if (get().loadingLive) return;
+    set({ loadingLive: true });
+    const live = await fetchLiveForecast();
+    if (!live) {
+      // Backend unreachable. Keep the synthetic frames already in place.
+      set({ loadingLive: false });
+      return;
+    }
+    const { interventions } = get();
+    const active =
+      interventions === DEFAULT_INTERVENTIONS
+        ? live.frames
+        : applyInterventionRatio(live.frames, interventions);
+    set({
+      liveFrames: live.frames,
+      source: live.source,
+      frames: active,
+      loadingLive: false,
+    });
+  },
+
   setIntervention: (key, value) => {
     const interventions = { ...get().interventions, [key]: value };
-    set({ interventions, frames: buildForecast(interventions) });
+    const { liveFrames } = get();
+    set({
+      interventions,
+      frames: liveFrames
+        ? applyInterventionRatio(liveFrames, interventions)
+        : buildForecast(interventions),
+    });
   },
-  resetInterventions: () =>
+  resetInterventions: () => {
+    const { liveFrames } = get();
     set({
       interventions: DEFAULT_INTERVENTIONS,
-      frames: buildForecast(DEFAULT_INTERVENTIONS),
-    }),
+      frames: liveFrames ?? buildForecast(DEFAULT_INTERVENTIONS),
+    });
+  },
 
   setHour: (h) => set({ hour: Math.max(0, Math.min(FORECAST_HOURS, Math.round(h))) }),
   stepHour: (delta) => {

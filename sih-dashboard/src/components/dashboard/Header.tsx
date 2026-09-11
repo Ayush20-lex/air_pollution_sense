@@ -3,6 +3,7 @@ import * as React from 'react';
 import { motion } from 'framer-motion';
 import { ChevronLeft, Satellite, SlidersHorizontal } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { SourceBadge } from '@/components/ui/source-badge';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Hint } from '@/components/ui/tooltip';
@@ -62,9 +63,7 @@ export function Header() {
 
       {/* --- status cluster -------------------------------------------- */}
       <div className="flex items-center gap-2">
-        <Badge color={SEVERITY.moderate} className="hidden sm:inline-flex">
-          Demo / Synthetic
-        </Badge>
+        <SourceBadge className="hidden sm:inline-flex" />
         <div className="hidden items-center gap-1.5 rounded-md border border-hairline bg-elevated/60 px-2 py-1 md:flex">
           <span className="size-1.5 animate-pulse rounded-full bg-good" />
           <span className="font-mono text-2xs tabular-nums text-ink">{clock}</span>

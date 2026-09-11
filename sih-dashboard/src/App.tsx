@@ -42,6 +42,14 @@ function BootSplash() {
 
 function Page() {
   const screen = useAppStore((s) => s.screen);
+  const loadLiveForecast = useAppStore((s) => s.loadLiveForecast);
+
+  // Pull the backend forecast once on mount. It replaces the synthetic frames
+  // if it arrives; if the backend is down the console carries on with them, so
+  // there is no loading gate in front of the UI.
+  React.useEffect(() => {
+    void loadLiveForecast();
+  }, [loadLiveForecast]);
 
   // The intro is a scroll track, so the page must scroll while it is up; the
   // dashboard is a fixed-height console, so it locks scrolling again.
