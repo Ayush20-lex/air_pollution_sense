@@ -74,6 +74,8 @@ ml_pipeline/data/raw/forecast/
 ml_pipeline/data/raw/stations/
 # Derived AQI series — regenerate with ml_pipeline/scripts/13_compute_station_aqi.py
 ml_pipeline/data/processed/station_aqi_*.parquet
+ml_pipeline/data/processed/gridded_dataset.npy
+ml_pipeline/data/processed/gridded_dataset_manifest.json
 # Baseline scores - regenerate with 14_baselines.py
 ml_pipeline/data/processed/baselines_*.csv
 ml_pipeline/data/processed/baseline_corrections.json
