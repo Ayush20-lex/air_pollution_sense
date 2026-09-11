@@ -416,6 +416,13 @@ def main() -> int:
                          round(model.teacher_force_ratio, 3),
                          round(sched.get_last_lr()[0], 8), round(dt, 1)])
 
+        # Decide the new best BEFORE writing last.pt. Saving the pre-update
+        # value leaves the checkpoint one epoch stale, and a resumed run then
+        # accepts a worse epoch as an improvement and overwrites good weights.
+        improved = bool(metrics) and rmse == rmse and rmse < best
+        if improved:
+            best = rmse
+
         ckpt = {
             'model': model.state_dict(),
             'optimizer': opt.state_dict(),
@@ -428,9 +435,7 @@ def main() -> int:
         }
         torch.save(ckpt, out_dir / 'last.pt')
 
-        if metrics and rmse == rmse and rmse < best:
-            best = rmse
-            ckpt['best_rmse'] = best
+        if improved:
             torch.save(ckpt, out_dir / 'best.pt')
             # Bare state_dict, which is what api_server loads with weights_only.
             torch.save(model.state_dict(), out_dir / 'forecaster_v1.pt')
