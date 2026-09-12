@@ -1,6 +1,5 @@
 
 import * as React from 'react';
-import { motion } from 'framer-motion';
 import {
   Activity,
   ArrowLeftRight,
@@ -12,6 +11,7 @@ import {
   Wind,
 } from 'lucide-react';
 import { MetricCard } from './MetricCard';
+import { RollingNumber } from '@/components/ui/rolling-number';
 import { Panel, PanelBody, PanelHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrajectoryChart } from '@/components/charts/TrajectoryChart';
@@ -29,12 +29,24 @@ export function LeftPanel() {
   const selected = useAppStore((s) => s.selectedDistrict);
   const selectDistrict = useAppStore((s) => s.selectDistrict);
 
+  const playing = useAppStore((s) => s.playing);
+  const speed = useAppStore((s) => s.speed);
+
   const sample = selected ? frame.districts[selected] : null;
   const pm = sample ? sample.pm25 : frame.avgPm25;
+  const aqi = sample ? sample.aqi : frame.avgAqi;
   const pbl = sample ? sample.pbl : frame.avgPbl;
   const temp = sample ? sample.temp : frame.avgTemp;
   const solar = sample ? sample.solar : frame.avgSolar;
   const band = bandForPm25(pm);
+
+  // The roll has to settle before the next forecast hour arrives or the number
+  // never lands on a real value. Playback ticks every 900/speed ms, so take 70%
+  // of that as headroom; the bounds stop 0.5x feeling sluggish and 2x feeling
+  // clipped. When paused the user is scrubbing, so a fixed duration is fine.
+  const rollMs = playing
+    ? Math.min(700, Math.max(180, (900 / speed) * 0.7))
+    : 450;
 
   // Trend versus the previous forecast hour.
   const prev = frames[Math.max(0, hour - 1)];
@@ -65,16 +77,14 @@ export function LeftPanel() {
           <div className="flex items-end justify-between gap-3">
             <div>
               <div className="hud-label">Air quality index</div>
-              <motion.div
-                key={`${pm}-${selected}`}
-                initial={{ opacity: 0.4, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="font-mono text-5xl font-bold leading-none tabular-nums"
-                style={{ color: band.color }}
-              >
-                {sample ? sample.aqi : frame.avgAqi}
-              </motion.div>
+              <RollingNumber
+                value={aqi}
+                durationMs={rollMs}
+                digits={3}
+                color={band.color}
+                label={`Air quality index ${aqi}, ${band.label}`}
+                className="font-mono text-5xl font-bold"
+              />
               <div className="mt-1 font-mono text-2xs uppercase tracking-[0.18em]" style={{ color: band.color }}>
                 {band.label}
               </div>
