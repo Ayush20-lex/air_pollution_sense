@@ -1,0 +1,287 @@
+/**
+ * AIR AQI Sense — public terminal surface.
+ *
+ * Everything here is scoped under `.terminal-root` (or `.term-map` for the
+ * Leaflet instance) so the console at `/` keeps its own light/dark treatment
+ * untouched. This surface is deliberately dark-only.
+ */
+
+.terminal-root {
+  background: #040e1a;
+  color: #f1f5f9;
+  color-scheme: dark;
+}
+
+.terminal-root ::selection {
+  background: #10b981;
+  color: #00422b;
+}
+
+.terminal-root ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.terminal-root ::-webkit-scrollbar-track {
+  background: #040e1a;
+}
+.terminal-root ::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+.terminal-root ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* ---- Core panel: frosted glass with an inset top highlight ---- */
+.telemetry-card {
+  background: rgb(14 26 42 / 0.75);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgb(51 65 85 / 0.65);
+  box-shadow:
+    0 10px 30px -10px rgb(0 0 0 / 0.5),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.05);
+}
+
+/* Severity-driven focus, not a selection state. */
+.telemetry-card-focus {
+  border: 1px solid rgb(249 115 22 / 0.5);
+  box-shadow:
+    0 0 25px -5px rgb(249 115 22 / 0.2),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.08);
+}
+
+.pulse-live {
+  box-shadow: 0 0 0 0 rgb(78 222 163 / 0.8);
+  animation: term-pulse-ring 2s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+@keyframes term-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(78 222 163 / 0.8);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgb(78 222 163 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(78 222 163 / 0);
+  }
+}
+
+/* ---- Pollutant card hover drawer (progressive disclosure) ---- */
+.pollutant-card .pollutant-graph-overlay {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.pollutant-card:hover .pollutant-graph-overlay,
+.pollutant-card:focus-within .pollutant-graph-overlay {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ---- Leaflet, scoped to the terminal map only ------------------------
+   The global rules in globals.css paint Leaflet from the `--as-*` console
+   palette; this surface needs its own navy treatment. --------------- */
+.term-map .leaflet-container {
+  background: #04101d !important;
+  font-family: var(--font-body), sans-serif;
+}
+.term-map .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(188deg) brightness(0.58) contrast(1.08) saturate(0.55);
+}
+.dark .term-map .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(188deg) brightness(0.58) contrast(1.08) saturate(0.55);
+}
+.term-map .leaflet-control-attribution {
+  background: rgb(1 15 31 / 0.82) !important;
+  color: #64748b !important;
+  font-family: var(--font-mono), monospace !important;
+  font-size: 9px !important;
+  padding: 2px 6px !important;
+  border-top-left-radius: 6px;
+}
+.term-map .leaflet-control-attribution a {
+  color: #7bd0ff !important;
+}
+
+/* Dispersion overlay: a light blur feathers the gradient seams so the field
+   reads as atmosphere rather than a rendered image, and `screen` keeps the
+   road network and labels legible through the colour. */
+.term-map .term-heat {
+  /* Feathers the gradient seams so the field reads as atmosphere rather than a
+     rendered image. Normal alpha compositing, not `screen`: screen blending
+     washes the deep crimson cores out to nothing against a dark basemap, and
+     the ramp already carries its own per-stop opacity to keep roads legible. */
+  filter: blur(7px) saturate(1.06);
+  pointer-events: none;
+}
+
+/* Iso-contour labels: a small mono chip sitting on the line it names. */
+.term-contour-label {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgb(1 15 31 / 0.82);
+  border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
+  color: var(--c);
+  font-family: var(--font-mono), monospace;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* Wind streamlines: the dash runs downwind at a slower cadence than the source
+   ribbons, so the two read as different systems rather than competing arrows.
+   dashoffset equals the full 10+14 pattern, so each cycle loops seamlessly. */
+.term-stream {
+  stroke-dasharray: 10 14;
+  animation-name: term-stream-flow;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.term-stream-a {
+  animation-duration: 2.9s;
+}
+.term-stream-b {
+  animation-duration: 3.7s;
+}
+.term-stream-c {
+  animation-duration: 4.6s;
+}
+@keyframes term-stream-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+/* Transport ribbons: the dash runs downwind, so direction reads without an
+   arrowhead cluttering the basin. */
+.term-ribbon {
+  stroke-dasharray: 13 11;
+  animation: term-ribbon-flow 1.9s linear infinite;
+}
+@keyframes term-ribbon-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.term-ribbon-label {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgb(1 15 31 / 0.85);
+  border: 1px solid color-mix(in srgb, var(--c) 50%, transparent);
+  color: var(--c);
+  font-family: var(--font-mono), monospace;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-ribbon {
+    animation: none;
+  }
+  /* Solid strokes still show the flow pattern without any motion. */
+  .term-stream {
+    animation: none;
+    stroke-dasharray: none;
+  }
+}
+
+/* Station pins — same class contract as the console's district pins, but
+   painted from the terminal palette. */
+.term-map .as-pin-body {
+  background: rgb(1 15 31 / 0.88);
+  border: 1px solid var(--pin);
+  box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.8);
+}
+.term-map .as-pin-selected {
+  border-width: 2px !important;
+  background: rgb(1 15 31 / 0.96);
+  box-shadow: 0 0 16px -2px var(--pin) !important;
+}
+.term-map .as-pin-name {
+  color: #cbd5e1;
+  max-width: 78px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.term-map .leaflet-tooltip.as-tip {
+  background: rgb(14 26 42 / 0.94) !important;
+  border: 1px solid rgb(51 65 85 / 0.8) !important;
+  color: #e2e8f0 !important;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.7);
+}
+.term-map .leaflet-tooltip.as-tip::before {
+  border-top-color: rgb(51 65 85 / 0.8) !important;
+}
+
+/* ---- Odometer readout ----
+   Each digit is a 0-9 strip sliding under a 1em window, so a digit change
+   scrolls through the values between. `em` units keep it tied to whatever
+   font-size the call site sets. */
+.term-odo {
+  display: inline-flex;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.term-odo-col {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+}
+.term-odo-strip {
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.term-odo-strip > span {
+  display: block;
+  height: 1em;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-odo-strip {
+    transition: none;
+  }
+}
+
+/* ---- Timeline scrubber ---- */
+.tele-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: #1c2b3c;
+  outline: none;
+}
+.tele-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #4edea3;
+  border: 2px solid #010f1f;
+  cursor: pointer;
+}
+.tele-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #4edea3;
+  border: 2px solid #010f1f;
+  cursor: pointer;
+}
+.tele-range:focus-visible {
+  box-shadow: 0 0 0 2px rgb(78 222 163 / 0.5);
+}

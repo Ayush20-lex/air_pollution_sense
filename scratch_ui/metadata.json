@@ -1,0 +1,6 @@
+{
+  "name": "AirSense Coupled Solutions",
+  "description": "Coupled Solution Dashboard and Cinematic Globe for AirSense",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
