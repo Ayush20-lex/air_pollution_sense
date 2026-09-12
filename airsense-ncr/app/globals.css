@@ -1,0 +1,329 @@
+/* Hallmark · audit pass: gates 1, 4, 5, 6, 7, 10, 11, 13, 14, 15, 17, 22,
+ * 26, 27, 33, 40, 41, 45, 48, 50 closed
+ * pre-emit critique: P4 H4 E4 S5 R4 V3
+ * contrast: pass (40-41) · tokens: pass (48) · mobile: pass (34, 49-51)
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ---- Light theme (default) : clean slate ---- */
+  :root {
+    --as-base: 248 250 252;        /* #F8FAFC */
+    --as-surface: 252 253 255;
+    --as-elevated: 241 245 249;
+    --as-hairline: 203 213 225;
+    --as-ink: 15 23 42;
+    --as-muted: 71 85 105;
+    --as-faint: 100 116 139;
+    --as-accent: 2 132 199;        /* sky-600 */
+    --as-glass: 255 255 255 / 0.8;
+    --as-grid: 15 23 42 / 0.05;
+    --as-map-tiles: 1;
+    color-scheme: light;
+  }
+
+  /* ---- Dark theme : deep onyx ---- */
+  .dark {
+    --as-base: 11 15 23;           /* #0B0F17 */
+    --as-surface: 18 24 38;
+    --as-elevated: 26 34 52;
+    --as-hairline: 42 54 78;
+    --as-ink: 226 236 250;
+    --as-muted: 148 168 196;
+    --as-faint: 96 116 146;
+    --as-accent: 34 211 238;       /* cyan-400 */
+    --as-glass: 18 24 38 / 0.7;
+    --as-grid: 130 190 255 / 0.06;
+    color-scheme: dark;
+  }
+
+  * {
+    @apply border-hairline;
+  }
+
+  html,
+  body {
+    @apply min-h-full;
+    /* clip, never hidden: hidden on the root creates a scroll container */
+    overflow-x: clip;
+  }
+
+  body {
+    @apply bg-base text-ink antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+    overscroll-behavior: none;
+  }
+
+  ::selection {
+    background: rgb(var(--as-accent) / 0.3);
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--as-hairline) / 0.9);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--as-accent) / 0.6);
+  }
+}
+
+@layer components {
+  /* Glassmorphic panel — the core surface of the whole console. */
+  .glass {
+    background: rgb(var(--as-glass));
+    @apply rounded-xl border border-hairline/70 backdrop-blur-xl;
+    box-shadow: var(--as-shadow, 0 12px 32px -18px rgb(15 23 42 / 0.25));
+  }
+  .dark .glass {
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.04),
+      0 18px 50px -20px rgb(0 0 0 / 0.6);
+  }
+
+  /* Interactive lift for the intro's panels. Separate from `.glass` so static
+     surfaces (the console's fixed cockpit panels) never pick up hover state. */
+  .glass-hover {
+    position: relative;
+    isolation: isolate;
+    transition:
+      transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.28s ease,
+      box-shadow 0.28s ease;
+  }
+  .glass-hover::after {
+    /* accent wash that blooms from the top edge on hover */
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      160deg,
+      rgb(var(--as-accent) / 0.14),
+      transparent 55%
+    );
+    opacity: 0;
+    transition: opacity 0.28s ease;
+    pointer-events: none;
+    z-index: -1;
+  }
+  .glass-hover:hover,
+  .glass-hover:focus-within {
+    transform: translateY(-4px);
+    border-color: rgb(var(--as-accent) / 0.45);
+    box-shadow:
+      0 0 0 1px rgb(var(--as-accent) / 0.18),
+      0 20px 44px -24px rgb(var(--as-accent) / 0.55),
+      0 12px 32px -18px rgb(15 23 42 / 0.25);
+  }
+  .dark .glass-hover:hover,
+  .dark .glass-hover:focus-within {
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.07),
+      0 0 0 1px rgb(var(--as-accent) / 0.22),
+      0 24px 52px -24px rgb(var(--as-accent) / 0.5),
+      0 18px 50px -20px rgb(0 0 0 / 0.6);
+  }
+  .glass-hover:hover::after,
+  .glass-hover:focus-within::after {
+    opacity: 1;
+  }
+
+  .panel-title {
+    @apply flex items-center gap-2 font-mono text-2xs uppercase tracking-[0.18em] text-faint;
+  }
+
+  .hud-label {
+    @apply font-mono text-2xs uppercase tracking-[0.22em] text-faint;
+  }
+
+  .hud-value {
+    @apply font-mono text-2xl font-semibold tabular-nums tracking-tight text-ink;
+  }
+
+  /* Faint technical grid used behind the intro canvas and the map. */
+  .grid-bg {
+    background-image:
+      linear-gradient(rgb(var(--as-grid)) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--as-grid)) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .radial-vignette {
+    background: radial-gradient(
+      ellipse 80% 60% at 50% 45%,
+      transparent 0%,
+      rgb(var(--as-base) / 0.75) 100%
+    );
+  }
+
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* ---- Leaflet overrides: strip default chrome, retheme controls ---- */
+.leaflet-container {
+  background: rgb(var(--as-elevated)) !important;
+  font-family: inherit;
+  outline: none;
+}
+.leaflet-control-attribution {
+  background: rgb(var(--as-surface) / 0.7) !important;
+  color: rgb(var(--as-faint)) !important;
+  font-size: 9px !important;
+  backdrop-filter: blur(8px);
+}
+.leaflet-control-attribution a {
+  color: rgb(var(--as-muted)) !important;
+}
+.leaflet-control-zoom a {
+  background: rgb(var(--as-surface) / 0.85) !important;
+  color: rgb(var(--as-ink)) !important;
+  border-color: rgb(var(--as-hairline)) !important;
+  backdrop-filter: blur(8px);
+}
+.leaflet-control-zoom a:hover {
+  background: rgb(var(--as-elevated)) !important;
+}
+/* Basemap treatment: mute in light, invert to an onyx cartography in dark. */
+.leaflet-tile-pane {
+  filter: saturate(0.3) brightness(1.02) contrast(0.92);
+}
+.dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(185deg) brightness(0.78) contrast(1.08) saturate(0.32);
+}
+.as-pin-wrap {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* ---- Custom Leaflet district pins ---- */
+.as-pin {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 86px;
+  height: 48px;
+  pointer-events: auto;
+}
+.as-pin-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 9px 4px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--pin) 60%, transparent);
+  background: rgb(var(--as-surface) / 0.86);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 18px -8px rgb(0 0 0 / 0.6);
+  transition: transform 0.18s ease;
+  cursor: pointer;
+}
+.as-pin:hover .as-pin-body {
+  transform: translateY(-3px);
+}
+.as-pin-selected {
+  border-color: var(--pin) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pin) 45%, transparent),
+    0 10px 26px -8px color-mix(in srgb, var(--pin) 70%, transparent) !important;
+}
+.as-pin-aqi {
+  font-family: var(--font-mono), monospace;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--pin);
+  font-variant-numeric: tabular-nums;
+}
+.as-pin-name {
+  font-family: var(--font-mono), monospace;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(var(--as-muted));
+  white-space: nowrap;
+}
+.as-pin-stem {
+  width: 1px;
+  height: 12px;
+  background: linear-gradient(to bottom, var(--pin), transparent);
+}
+.as-pin-ring {
+  position: absolute;
+  top: 4px;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid var(--alert);
+  opacity: 0.7;
+  animation: as-ping 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes as-ping {
+  0% { transform: scale(0.5); opacity: 0.75; }
+  80%, 100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* Leaflet tooltip retheme */
+.leaflet-tooltip.as-tip {
+  background: rgb(var(--as-surface) / 0.94) !important;
+  border: 1px solid rgb(var(--as-hairline)) !important;
+  color: rgb(var(--as-ink)) !important;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+  box-shadow: 0 12px 30px -14px rgb(0 0 0 / 0.7);
+  backdrop-filter: blur(12px);
+}
+.leaflet-tooltip.as-tip::before {
+  border-top-color: rgb(var(--as-hairline)) !important;
+}
+
+/* ---- Reduced motion -------------------------------------------------
+   Gate 27: every transform/animation needs a fallback. Framer Motion is
+   handled separately by <MotionConfig reducedMotion="user">, and the intro
+   canvas drops to an on-demand frameloop. ------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .as-pin-ring {
+    display: none;
+  }
+  .as-pin:hover .as-pin-body {
+    transform: none;
+  }
+  /* keep the accent wash as the hover affordance, drop the lift */
+  .glass-hover:hover,
+  .glass-hover:focus-within {
+    transform: none;
+  }
+}
