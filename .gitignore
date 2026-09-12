@@ -76,6 +76,8 @@ ml_pipeline/data/raw/stations/
 ml_pipeline/data/processed/station_aqi_*.parquet
 ml_pipeline/data/processed/gridded_dataset.npy
 ml_pipeline/data/processed/gridded_dataset_manifest.json
+ml_pipeline/data/processed/spatial_validation.json
+ml_pipeline/data/processed/spatial_validation_by_station.csv
 # Baseline scores - regenerate with 14_baselines.py
 ml_pipeline/data/processed/baselines_*.csv
 ml_pipeline/data/processed/baseline_corrections.json
