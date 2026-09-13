@@ -37,12 +37,33 @@ type TerminalState = {
 
   query: string;
   setQuery: (q: string) => void;
+
+  /**
+   * Bumped to re-anchor the 24-frame window on the current wall clock.
+   *
+   * The frames are built by `buildFrames(now)` and owned by GeoMapView, but
+   * the control that rebuilds them lives in the shell, so the signal has to be
+   * shared. GeoMapView rebuilds whenever this changes.
+   */
+  refreshedAt: number;
+  refresh: () => void;
+
+  /** Restores layers, field, playback and frame position to their defaults. */
+  resetView: () => void;
+};
+
+const DEFAULT_LAYERS: Record<TerminalLayer, boolean> = {
+  heatmap: true,
+  contours: true,
+  tracks: true,
+  wind: true,
+  pins: true,
 };
 
 const LAST_FRAME = FRAME_COUNT - 1;
 
 export const useTerminalStore = create<TerminalState>((set, get) => ({
-  layers: { heatmap: true, contours: true, tracks: true, wind: true, pins: true },
+  layers: { ...DEFAULT_LAYERS },
   toggleLayer: (l) => set((s) => ({ layers: { ...s.layers, [l]: !s.layers[l] } })),
 
   field: 'PM2.5',
@@ -64,4 +85,18 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
   query: '',
   setQuery: (query) => set({ query }),
+
+  refreshedAt: 0,
+  refresh: () => set({ refreshedAt: Date.now() }),
+
+  resetView: () =>
+    set({
+      layers: { ...DEFAULT_LAYERS },
+      field: 'PM2.5',
+      frameIndex: LAST_FRAME,
+      playing: false,
+      rate: 1,
+      selectedId: MASTER_STATION.id,
+      query: '',
+    }),
 }));

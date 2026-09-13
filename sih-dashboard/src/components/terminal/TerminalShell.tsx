@@ -18,10 +18,12 @@ import {
   Table2,
 } from 'lucide-react';
 import { CERTIFICATIONS, HUB, LOCATIONS } from '@/lib/terminal/content';
+import { STATIONS } from '@/lib/terminal/stations';
 import { TerminalEnter } from './TerminalEnter';
 import { cn } from '@/lib/utils';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { CommandPalette } from '@/components/ui/command-palette';
+import { toast } from 'sonner';
 
 /**
  * Sidebar + header + footer chrome shared by every terminal page.
@@ -132,13 +134,12 @@ function TerminalSidebar() {
         </nav>
 
         <div className="pt-2">
-          <button
-            type="button"
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-term-outline-variant/70 bg-term-surface-high px-3 py-2 font-mono text-xs uppercase tracking-wider text-slate-200 transition-all hover:border-term-primary/50 hover:bg-term-surface-highest"
-          >
-            <SlidersHorizontal className="size-3.5 text-term-primary" />
-            Calibrate Mesh Array
-          </button>
+          {/* Was "Calibrate Mesh Array", which did nothing — there is no array to
+              calibrate and no calibration to run. Renamed to what a control in
+              this position can honestly do: put the map's layers, field,
+              playback and selection back to their defaults, which is otherwise
+              eight separate clicks. */}
+          <ResetViewButton />
         </div>
       </div>
 
@@ -307,8 +308,18 @@ function LiveClock() {
   );
 }
 
+/**
+ * Re-anchors the mesh on the current wall clock.
+ *
+ * This used to spin for 800ms and do nothing — the README called it theatre.
+ * It now bumps refreshedAt, which rebuilds the 24-frame window in GeoMapView
+ * against `new Date()`, so the readings genuinely advance as the demo runs.
+ * The spinner is kept, but it now covers real work instead of standing in for
+ * it, and the toast reports what actually happened.
+ */
 function RefreshButton() {
   const [spinning, setSpinning] = React.useState(false);
+  const refresh = useTerminalStore((s) => s.refresh);
 
   React.useEffect(() => {
     if (!spinning) return;
@@ -316,12 +327,27 @@ function RefreshButton() {
     return () => clearTimeout(id);
   }, [spinning]);
 
+  const onRefresh = () => {
+    setSpinning(true);
+    refresh();
+
+    // The toast names the hour the window is anchored to, which is what makes
+    // the action checkable. buildFrames buckets by hour, so two refreshes
+    // inside the same hour correctly produce identical readings — without the
+    // anchor stated, that stability is indistinguishable from a dead button.
+    const hour = String(new Date().getHours()).padStart(2, '0');
+    toast.success('Mesh re-sampled', {
+      id: 'mesh-refresh',
+      description: `${STATIONS.length} nodes anchored on ${hour}:00 IST. Readings are hourly, so they hold within the hour.`,
+    });
+  };
+
   return (
     <button
       type="button"
-      title="Refresh live data"
-      aria-label="Refresh live data"
-      onClick={() => setSpinning(true)}
+      title="Re-sample the mesh on the current hour"
+      aria-label="Re-sample the mesh"
+      onClick={onRefresh}
       className="group flex size-9 items-center justify-center rounded-lg border border-term-outline bg-term-surface-c text-term-primary transition-colors hover:bg-term-surface-high"
     >
       <RefreshCw
@@ -330,6 +356,27 @@ function RefreshButton() {
           spinning ? 'animate-spin' : 'group-hover:rotate-180',
         )}
       />
+    </button>
+  );
+}
+
+function ResetViewButton() {
+  const resetView = useTerminalStore((s) => s.resetView);
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        resetView();
+        toast('Mesh view reset', {
+          id: 'mesh-reset',
+          description: 'Layers, field, playback and selection restored to defaults.',
+        });
+      }}
+      className="flex w-full items-center justify-center gap-2 rounded-lg border border-term-outline-variant/70 bg-term-surface-high px-3 py-2 font-mono text-xs uppercase tracking-wider text-slate-200 transition-all hover:border-term-primary/50 hover:bg-term-surface-highest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60"
+    >
+      <SlidersHorizontal className="size-3.5 text-term-primary" />
+      Reset Mesh View
     </button>
   );
 }

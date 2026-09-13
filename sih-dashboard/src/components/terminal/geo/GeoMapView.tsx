@@ -9,10 +9,16 @@ import { STATIONS, stationById } from '@/lib/terminal/stations';
 import { useTerminalStore } from '@/store/useTerminalStore';
 
 export function GeoMapView() {
-  // Frames are built once on mount. Building them during render would give the
-  // server and the client different wall clocks and break hydration.
+  // Built in an effect rather than during render: buildFrames reads the wall
+  // clock, and a render-time read makes the value differ between the first
+  // paint and any replay of that render.
+  //
+  // Rebuilt when the shell's refresh control bumps refreshedAt, which
+  // re-anchors the 24-hour window on the current time — so the readings
+  // actually move rather than the button merely spinning.
+  const refreshedAt = useTerminalStore((s) => s.refreshedAt);
   const [frames, setFrames] = React.useState<TerminalFrame[] | null>(null);
-  React.useEffect(() => setFrames(buildFrames()), []);
+  React.useEffect(() => setFrames(buildFrames()), [refreshedAt]);
 
   const frameIndex = useTerminalStore((s) => s.frameIndex);
   const select = useTerminalStore((s) => s.select);
