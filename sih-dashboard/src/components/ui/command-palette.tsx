@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from 'next-themes';
@@ -249,10 +250,18 @@ export function CommandPalette() {
         </kbd>
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-[12vh]"
+      {/* Portalled to <body> deliberately. The intro mounts this inside a
+          motion.header, and framer writes a transform there for the entrance
+          animation — which does two things to a fixed child: it positions it
+          against the header instead of the viewport, and it traps it in the
+          header's z-20 stacking context, so `z-[100]` only ever means "100
+          within the header". The overlay rendered *under* the telemetry panels
+          and the hero heading. A portal escapes both. */}
+      {createPortal(
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-[12vh]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -341,9 +350,11 @@ export function CommandPalette() {
                 </span>
               </div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </>
   );
 }
