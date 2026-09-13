@@ -101,52 +101,52 @@
       0 18px 50px -20px rgb(0 0 0 / 0.6);
   }
 
-  /* Interactive lift for the intro's panels. Separate from `.glass` so static
-     surfaces (the console's fixed cockpit panels) never pick up hover state. */
+  /* Hover treatment for the intro's panels. Separate from `.glass` so static
+     surfaces (the console's fixed cockpit panels) never pick up hover state.
+
+     Deliberately not a glass bloom: no accent wash, no coloured glow. A panel
+     under the cursor lifts a little and its shadow deepens, which is what a
+     raised surface actually does. The accent stays reserved for state that
+     means something, so hover cannot be mistaken for a reading.
+
+     `translate`, not `transform`: these panels are motion.div and framer
+     writes an inline transform for the rise entrance, which beats anything a
+     stylesheet sets. The standalone property composes with it instead. */
   .glass-hover {
     position: relative;
-    isolation: isolate;
     transition:
-      transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-color 0.28s ease,
-      box-shadow 0.28s ease;
+      translate 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      border-color 180ms ease,
+      box-shadow 180ms ease;
   }
-  .glass-hover::after {
-    /* accent wash that blooms from the top edge on hover */
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(
-      160deg,
-      rgb(var(--as-accent) / 0.14),
-      transparent 55%
-    );
-    opacity: 0;
-    transition: opacity 0.28s ease;
-    pointer-events: none;
-    z-index: -1;
-  }
-  .glass-hover:hover,
+
+  /* Keyboard focus always gets the treatment; pointer hover is gated so a tap
+     on a touch screen does not stick in a hover state. */
   .glass-hover:focus-within {
-    transform: translateY(-4px);
-    border-color: rgb(var(--as-accent) / 0.45);
-    box-shadow:
-      0 0 0 1px rgb(var(--as-accent) / 0.18),
-      0 20px 44px -24px rgb(var(--as-accent) / 0.55),
-      0 12px 32px -18px rgb(15 23 42 / 0.25);
+    translate: 0 -2px;
+    border-color: rgb(var(--as-hairline));
+    box-shadow: 0 14px 30px -20px rgb(15 23 42 / 0.35);
   }
-  .dark .glass-hover:hover,
+  @media (hover: hover) and (pointer: fine) {
+    .glass-hover:hover {
+      translate: 0 -2px;
+      border-color: rgb(var(--as-hairline));
+      box-shadow: 0 14px 30px -20px rgb(15 23 42 / 0.35);
+    }
+  }
   .dark .glass-hover:focus-within {
+    border-color: rgb(255 255 255 / 0.14);
     box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.07),
-      0 0 0 1px rgb(var(--as-accent) / 0.22),
-      0 24px 52px -24px rgb(var(--as-accent) / 0.5),
-      0 18px 50px -20px rgb(0 0 0 / 0.6);
+      inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+      0 20px 44px -22px rgb(0 0 0 / 0.7);
   }
-  .glass-hover:hover::after,
-  .glass-hover:focus-within::after {
-    opacity: 1;
+  @media (hover: hover) and (pointer: fine) {
+    .dark .glass-hover:hover {
+      border-color: rgb(255 255 255 / 0.14);
+      box-shadow:
+        inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+        0 20px 44px -22px rgb(0 0 0 / 0.7);
+    }
   }
 
   .panel-title {
@@ -361,10 +361,10 @@
    handled separately by <MotionConfig reducedMotion="user">, and the intro
    canvas drops to an on-demand frameloop. ------------------------------ */
 @media (prefers-reduced-motion: reduce) {
-  /* keep the accent wash as the hover affordance, drop the lift */
+  /* keep the shadow and border as the hover affordance, drop the movement */
   .glass-hover:hover,
   .glass-hover:focus-within {
-    transform: none;
+    translate: none;
   }
   *,
   *::before,
