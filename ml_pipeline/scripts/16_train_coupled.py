@@ -152,15 +152,23 @@ class GriddedWindows(torch.utils.data.Dataset):
     keeps the option open for a longer archive and costs nothing here.
     """
 
-    def __init__(self, path: Path, windows: WindowSet) -> None:
+    def __init__(self, path: Path, windows: WindowSet, in_memory: bool = False) -> None:
         self.path = path
         self.w = windows
+        self.in_memory = in_memory
         self._mm: np.ndarray | None = None
 
     def _array(self) -> np.ndarray:
         # Opened lazily so each dataloader worker gets its own handle.
         if self._mm is None:
-            self._mm = np.load(self.path, mmap_mode='r')
+            if self.in_memory:
+                # The dataset lives under OneDrive here, and random access to a
+                # 1.7 GB map goes through the sync layer: step time drifted from
+                # 1.43 to 2.29 s over one epoch before the run died. float16
+                # holds the whole record in under 2 GB, so read it once.
+                self._mm = np.load(self.path)
+            else:
+                self._mm = np.load(self.path, mmap_mode='r')
         return self._mm
 
     def __len__(self) -> int:
@@ -295,6 +303,8 @@ def main() -> int:
     p.add_argument('--amp', action='store_true', help='fp16 autocast')
     p.add_argument('--grad-clip', type=float, default=1.0)
     p.add_argument('--workers', type=int, default=0)
+    p.add_argument('--in-memory', action='store_true',
+                   help='read the whole dataset into RAM instead of memory-mapping it')
     p.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
     p.add_argument('--out', default=str(DEFAULT_OUT))
     p.add_argument('--resume', default='', help='checkpoint to continue from')
@@ -348,15 +358,22 @@ def main() -> int:
         print('no training windows; lower --context/--horizon or --stride')
         return 1
 
-    train_ds = GriddedWindows(DATASET, WindowSet(train_starts, args.context, args.horizon, 'train'))
-    val_ds = GriddedWindows(DATASET, WindowSet(val_starts, args.context, args.horizon, 'val'))
+    train_ds = GriddedWindows(DATASET, WindowSet(train_starts, args.context, args.horizon, 'train'),
+                              in_memory=args.in_memory)
+    val_ds = GriddedWindows(DATASET, WindowSet(val_starts, args.context, args.horizon, 'val'),
+                            in_memory=args.in_memory)
 
+    # Pinned host memory exists so a worker can prefetch into it while the GPU
+    # runs. With no workers there is nothing to overlap, and on a 1.7 GB dataset
+    # the pinned allocator accumulated until it failed outright 65 minutes into
+    # a run - so only pin when it can actually help.
+    pin = device.type == 'cuda' and args.workers > 0
     train_loader = torch.utils.data.DataLoader(
         train_ds, batch_size=args.batch_size, shuffle=True,
-        num_workers=args.workers, pin_memory=device.type == 'cuda', drop_last=False)
+        num_workers=args.workers, pin_memory=pin, drop_last=False)
     val_loader = torch.utils.data.DataLoader(
         val_ds, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=device.type == 'cuda')
+        num_workers=args.workers, pin_memory=pin)
 
     model = AirPollutionCoupledForecaster(
         in_channels=N_CHANNELS,
