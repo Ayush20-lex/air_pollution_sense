@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useLocation } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowLeft,
   Bell,
   ChevronDown,
   Clock,
@@ -67,6 +68,18 @@ function TerminalSidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 z-50 hidden h-full w-64 flex-col justify-between border-r border-term-outline-variant/60 bg-term-surface-lowest p-4 shadow-2xl md:flex">
       <div className="space-y-6">
+        {/* Back to the landing track. Sits above the brand rather than beside
+            it: the terminal is a destination reached from the intro, so the
+            way out belongs at the top of the rail, not folded into the
+            identity block. */}
+        <Link
+          to="/"
+          className="group -mb-2 flex w-fit items-center gap-2 rounded-lg px-2 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-term-ink-variant transition-colors hover:bg-term-surface-high hover:text-term-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60"
+        >
+          <ArrowLeft className="size-3.5 transition-transform duration-200 ease-out group-hover:-translate-x-0.5" />
+          Back
+        </Link>
+
         {/* brand */}
         <div className="flex items-center gap-3 px-2 py-1">
           <div className="relative flex size-10 items-center justify-center rounded-xl border border-term-primary/40 bg-term-surface-high text-term-primary shadow-[0_0_20px_rgba(78,222,163,0.3)]">
@@ -179,6 +192,16 @@ function TerminalHeader() {
   return (
     <header className="sticky top-0 z-40 flex w-full items-center justify-between gap-4 border-b border-term-outline-variant/60 bg-term-surface-lowest/90 px-5 py-3 backdrop-blur-xl lg:px-8">
       <div className="flex flex-1 items-center gap-4">
+        {/* The sidebar carrying the other Back control is hidden below md, so
+            without this a phone has no way out of the terminal. */}
+        <Link
+          to="/"
+          aria-label="Back to overview"
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-term-outline bg-term-surface-high text-term-ink-variant transition-colors hover:border-term-primary/50 hover:text-term-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60 md:hidden"
+        >
+          <ArrowLeft className="size-4" />
+        </Link>
+
         <div className="relative min-w-[260px] sm:min-w-[310px]">
           <MapPin className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-term-primary" />
           <select
