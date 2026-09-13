@@ -1,6 +1,6 @@
 import * as React from 'react';
 import dynamic from '@/lib/dynamic';
-import { motion, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
+import { motion, useMotionValue, useMotionValueEvent, useReducedMotion, useTransform } from 'framer-motion';
 import { ChevronDown, Cpu, Gauge, Satellite, Wind } from 'lucide-react';
 import { ScanButton } from './ScanButton';
 import { ScanTransition } from './ScanTransition';
@@ -28,6 +28,36 @@ const ParticleField = dynamic(
     ),
   },
 );
+
+/**
+ * Stand-in for the aerosol field under prefers-reduced-motion.
+ *
+ * The field itself already honoured the setting by freezing its loop, but only
+ * after the chunk had downloaded and a WebGL context had been created — three
+ * plus the renderer is ~884 kB (235 kB gzipped), the largest chunk in the
+ * build, spent on a still image for someone who asked for less motion.
+ *
+ * This paints the same idea in CSS: a loaded core thinning outward, with the
+ * horizon line the field draws as a ring. No canvas, no import.
+ */
+function StaticField() {
+  return (
+    <div aria-hidden className="absolute inset-0 overflow-hidden">
+      <div
+        className="absolute left-1/2 top-[40%] size-[min(78vw,44rem)] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        style={{
+          background:
+            'radial-gradient(circle, rgb(var(--as-accent) / 0.30) 0%, rgb(var(--as-accent) / 0.14) 34%, rgb(var(--as-accent) / 0.05) 55%, transparent 72%)',
+          filter: 'blur(22px)',
+        }}
+      />
+      <div
+        className="absolute left-1/2 top-[40%] size-[min(58vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-full border"
+        style={{ borderColor: 'rgb(var(--as-accent) / 0.22)' }}
+      />
+    </div>
+  );
+}
 
 export function IntroScreen() {
   const screen = useAppStore((s) => s.screen);
@@ -65,6 +95,8 @@ export function IntroScreen() {
   // concentration band, which suited the old flat scatter — the field is now a
   // Fibonacci shell whose loaded patches are distributed over a sphere, so
   // height alone no longer names a concentration.
+  const prefersReduced = useReducedMotion();
+
   const [probe, setProbe] = React.useState<Probe | null>(null);
   const stageRef = React.useRef<HTMLDivElement>(null);
 
@@ -211,7 +243,13 @@ export function IntroScreen() {
       {/* --- background layers ------------------------------------------- */}
       <div className="absolute inset-0 grid-bg opacity-70" />
       <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 70% 55% at 50% 40%, rgb(var(--as-accent) / 0.10), transparent 70%)' }} />
-      <ParticleField dispersing={scanning} progress={progress} />
+      {/* Reduced motion skips the import entirely rather than loading three to
+          render a frozen frame. */}
+      {prefersReduced ? (
+        <StaticField />
+      ) : (
+        <ParticleField dispersing={scanning} progress={progress} />
+      )}
       <div className="pointer-events-none absolute inset-0 radial-vignette" />
       {/* bottom scrim keeps the headline and CTA legible over the haze */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-base via-base/80 to-transparent" />
