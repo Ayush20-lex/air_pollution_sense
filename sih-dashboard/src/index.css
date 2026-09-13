@@ -7,6 +7,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Registered custom properties for the scan button's conic shine. Angles and
+   percentages can only be *animated* if the browser knows their type; declared
+   with plain `--x: 0deg` they are strings and jump rather than sweep.
+   Unsupported browsers (Firefox < 128) fall back to a static border, which is
+   why nothing here is load-bearing for legibility. */
+@property --shine-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@property --shine-offset {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@property --shine-spread {
+  syntax: "<percentage>";
+  initial-value: 5%;
+  inherits: false;
+}
+@property --shine-tint {
+  syntax: "<color>";
+  initial-value: rgb(255 255 255);
+  inherits: false;
+}
+
 @layer base {
   /* next/font/google used to inject these two; the families are loaded from a
      stylesheet link in index.html and bound to Tailwind's font-sans/font-mono
@@ -89,6 +115,86 @@
 }
 
 @layer components {
+  /* Conic shine for the intro's primary CTA.
+     Adapted from the "shiny-cta" pattern; the original shipped as a Next.js
+     styled-jsx block, which does nothing in Vite except leak its rules
+     globally, so the rules live here instead. Colours come from --as-accent
+     rather than the original's hardcoded blue, and type/size stay with the
+     button's Tailwind classes so it still matches the console.
+
+     The travelling border is a conic-gradient painted into border-box, with a
+     flat fill over padding-box covering the middle — which is why the element
+     needs a transparent 1px border for the gradient to show through. */
+  .shiny-cta {
+    isolation: isolate;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid transparent;
+    background:
+      linear-gradient(
+          rgb(var(--as-base) / 0.72),
+          rgb(var(--as-base) / 0.72)
+        )
+        padding-box,
+      conic-gradient(
+          from calc(var(--shine-angle) - var(--shine-offset)),
+          transparent,
+          rgb(var(--as-accent) / 0.9) var(--shine-spread),
+          var(--shine-tint) calc(var(--shine-spread) * 2),
+          rgb(var(--as-accent) / 0.9) calc(var(--shine-spread) * 3),
+          transparent calc(var(--shine-spread) * 4)
+        )
+        border-box;
+    box-shadow: inset 0 0 0 1px rgb(var(--as-accent) / 0.12);
+    transition: 800ms cubic-bezier(0.25, 1, 0.5, 1);
+    transition-property: --shine-offset, --shine-spread, --shine-tint;
+    animation: shine-sweep 3s linear infinite;
+  }
+
+  /* Inner shimmer. Sits behind the label via z-index, which works because the
+     button isolates: -1 stays inside this element instead of dropping behind
+     the particle canvas. */
+  .shiny-cta::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset-inline-start: 50%;
+    inset-block-start: 50%;
+    translate: -50% -50%;
+    z-index: -1;
+    width: 100%;
+    aspect-ratio: 1;
+    background: linear-gradient(
+      -50deg,
+      transparent,
+      rgb(var(--as-accent) / 0.8),
+      transparent
+    );
+    mask-image: radial-gradient(circle at bottom, transparent 40%, black);
+    opacity: 0.55;
+    animation: shine-shimmer 7.5s linear infinite paused;
+  }
+
+  .shiny-cta:is(:hover, :focus-visible) {
+    --shine-spread: 20%;
+    --shine-offset: 95deg;
+    --shine-tint: rgb(var(--as-ink));
+  }
+  .shiny-cta:is(:hover, :focus-visible)::after {
+    animation-play-state: running;
+  }
+
+  @keyframes shine-sweep {
+    to {
+      --shine-angle: 360deg;
+    }
+  }
+  @keyframes shine-shimmer {
+    to {
+      rotate: 360deg;
+    }
+  }
+
   /* Glassmorphic panel — the core surface of the whole console. */
   .glass {
     background: rgb(var(--as-glass));
