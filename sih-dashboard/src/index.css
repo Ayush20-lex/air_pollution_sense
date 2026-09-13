@@ -104,10 +104,16 @@
   /* Hover treatment for the intro's panels. Separate from `.glass` so static
      surfaces (the console's fixed cockpit panels) never pick up hover state.
 
-     Deliberately not a glass bloom: no accent wash, no coloured glow. A panel
-     under the cursor lifts a little and its shadow deepens, which is what a
-     raised surface actually does. The accent stays reserved for state that
-     means something, so hover cannot be mistaken for a reading.
+     The bloom is an outer box-shadow, not a gradient layer. Two earlier
+     attempts got this wrong in the same way: `.glass` is semi-transparent with
+     a backdrop blur, so anything painted on or behind the card bleeds through
+     and tints the readings — which is the frosted-glass look, not a glow.
+     An outer box-shadow is clipped to the outside of the border box by
+     definition, so the light can only ever exist around the panel while the
+     surface itself stays clean.
+
+     Offsets are weighted downward so it reads as light from underneath rather
+     than an evenly haloed sticker outline.
 
      `translate`, not `transform`: these panels are motion.div and framer
      writes an inline transform for the rise entrance, which beats anything a
@@ -124,27 +130,35 @@
      on a touch screen does not stick in a hover state. */
   .glass-hover:focus-within {
     translate: 0 -2px;
-    border-color: rgb(var(--as-hairline));
-    box-shadow: 0 14px 30px -20px rgb(15 23 42 / 0.35);
+    border-color: rgb(var(--as-accent) / 0.4);
+    box-shadow:
+      0 10px 26px -8px rgb(var(--as-accent) / 0.4),
+      0 22px 60px -20px rgb(var(--as-accent) / 0.22),
+      0 14px 30px -20px rgb(15 23 42 / 0.35);
   }
   @media (hover: hover) and (pointer: fine) {
     .glass-hover:hover {
       translate: 0 -2px;
-      border-color: rgb(var(--as-hairline));
-      box-shadow: 0 14px 30px -20px rgb(15 23 42 / 0.35);
+      border-color: rgb(var(--as-accent) / 0.4);
+      box-shadow:
+        0 10px 26px -8px rgb(var(--as-accent) / 0.4),
+        0 22px 60px -20px rgb(var(--as-accent) / 0.22),
+        0 14px 30px -20px rgb(15 23 42 / 0.35);
     }
   }
   .dark .glass-hover:focus-within {
-    border-color: rgb(255 255 255 / 0.14);
     box-shadow:
       inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+      0 12px 30px -8px rgb(var(--as-accent) / 0.5),
+      0 26px 70px -22px rgb(var(--as-accent) / 0.3),
       0 20px 44px -22px rgb(0 0 0 / 0.7);
   }
   @media (hover: hover) and (pointer: fine) {
     .dark .glass-hover:hover {
-      border-color: rgb(255 255 255 / 0.14);
       box-shadow:
         inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+        0 12px 30px -8px rgb(var(--as-accent) / 0.5),
+        0 26px 70px -22px rgb(var(--as-accent) / 0.3),
         0 20px 44px -22px rgb(0 0 0 / 0.7);
     }
   }
