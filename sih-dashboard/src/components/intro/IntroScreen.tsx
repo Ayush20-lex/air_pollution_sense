@@ -8,6 +8,7 @@ import { StatusPills, SLOTS } from './StatusPills';
 import { ParticleProbe, type Probe } from './ParticleProbe';
 import { TelemetryStat } from './TelemetryOverlay';
 import { ScrollPanels, ScrollSectionHead } from './ScrollPanels';
+import { EntryGrid } from './EntryGrid';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { CommandPalette } from '@/components/ui/command-palette';
 import { Badge } from '@/components/ui/badge';
@@ -383,8 +384,10 @@ export function IntroScreen() {
           <ScrollPanels frame={frame} series={series} interventions={interventions} />
         </section>
 
-        {/* ---- closing call to action -------------------------------------- */}
-        <section className="flex min-h-[85svh] w-full flex-col justify-center border-t border-hairline/60 pt-6">
+        {/* ---- closing: where to go next ----------------------------------
+            Sized by its content. It used to be min-h-[85svh] wrapped around a
+            heading, a line and a button — 138px of content in a 740px box. */}
+        <section className="w-full border-t border-hairline/60 pb-[6vh] pt-10">
           <motion.h2
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -392,14 +395,13 @@ export function IntroScreen() {
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             className="max-w-2xl font-mono text-xl font-bold uppercase leading-tight tracking-[0.12em] text-ink sm:text-2xl"
           >
-            Open the <span className="text-accent">live terminal</span>
+            Three ways <span className="text-accent">in</span>
           </motion.h2>
-          <p className="mt-2 max-w-md text-pretty text-sm leading-relaxed text-muted">
-            Live telemetry, eight-channel spectrometry and the geospatial plume map for
-            the full {MODEL_META.resolution} domain.
+          <p className="mt-2 max-w-lg text-pretty text-sm leading-relaxed text-muted">
+            The public terminal is read-only; the console carries the levers.
           </p>
-          <div className="mt-5">
-            <ScanButton onScan={startScan} scanning={handingOff} />
+          <div className="mt-6">
+            <EntryGrid frame={frame} onScan={startScan} scanning={handingOff} />
           </div>
         </section>
       </div>
