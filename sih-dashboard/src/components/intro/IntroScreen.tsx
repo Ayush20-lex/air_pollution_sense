@@ -6,7 +6,7 @@ import { ScanButton } from './ScanButton';
 import { ScanTransition } from './ScanTransition';
 import { StatusPills, SLOTS } from './StatusPills';
 import { ParticleProbe, type Probe } from './ParticleProbe';
-import { AnalysisCard, TelemetryStat } from './TelemetryOverlay';
+import { TelemetryStat } from './TelemetryOverlay';
 import { ScrollPanels, ScrollSectionHead } from './ScrollPanels';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { CommandPalette } from '@/components/ui/command-palette';
@@ -320,16 +320,11 @@ export function IntroScreen() {
         />
       </div>
 
-      {/* --- right analysis card ------------------------------------------ */}
-      <div className="absolute right-5 top-1/2 z-20 hidden -translate-y-1/2 sm:right-8 lg:block">
-        <AnalysisCard frame={frame} interventions={interventions} series={series} />
-      </div>
-
       {/* --- masthead stack ------------------------------------------------
           Deliberately off-axis: title left-aligned against a rule, lede and
           CTA on a second horizontal axis. Gate 6 fails a hero whose eyebrow,
           title, lede and CTA all stack on one centred vertical spine. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-5 px-5 pb-10 sm:px-8 sm:pb-12 lg:pl-[19rem] lg:pr-[27rem]">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-5 px-5 pb-10 sm:px-8 sm:pb-12 lg:pl-[19rem] lg:pr-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
