@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { HeartPulse, Hospital, Radio, Share2, Thermometer, Wind } from 'lucide-react';
 import { Label, Meter, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
-import { ADVISORY_TEXT, BIOMETRIC_IMPACTS, EPA_SCALE, HUB } from '@/lib/terminal/content';
+import { ADVISORY_TEXT, BIOMETRIC_IMPACTS, CPCB_SCALE, HUB } from '@/lib/terminal/content';
 import { aqiColor } from '@/lib/terminal/bands';
 import { cn } from '@/lib/utils';
 import { TERM } from '@/lib/terminal/palette';
@@ -69,7 +69,7 @@ function StatPill({
   );
 }
 
-/** Radial composite-index gauge with the EPA benchmark scale beside it. */
+/** Radial composite-index gauge with the CPCB category scale beside it. */
 function AqiGauge() {
   const color = aqiColor(HUB.aqi);
   const circumference = 515;
@@ -82,7 +82,7 @@ function AqiGauge() {
 
       <div className="relative z-10 flex items-start justify-between">
         <div>
-          <Label>Composite Air Quality Index (EPA CAQI)</Label>
+          <Label>Composite Air Quality Index (CPCB National AQI)</Label>
           <div className="mt-0.5 font-display text-xl font-bold text-white">{HUB.sector}</div>
           <div className="mt-1 flex items-center gap-2 font-mono text-xs text-slate-400">
             <span>Updated {HUB.updatedSeconds}s ago</span>
@@ -139,17 +139,20 @@ function AqiGauge() {
         </div>
 
         <div className="space-y-2 sm:col-span-6">
-          <Label>International EPA AQI Benchmark</Label>
+          <Label>CPCB National AQI Categories</Label>
           <ul className="space-y-1.5">
-            {EPA_SCALE.map((b) => {
-              const active = 'active' in b && b.active;
+            {CPCB_SCALE.map((b) => {
+              // Highlight the band the reading is actually in. The old scale
+              // hardcoded the highlight on one row, so it stayed on Sensitive
+              // Groups whatever the gauge said.
+              const active = HUB.aqi >= b.from && HUB.aqi <= b.to;
               return (
                 <li
                   key={b.label}
                   className={cn(
                     'flex items-center justify-between rounded-lg border px-3 py-1.5 font-mono text-xs transition-colors',
                     active
-                      ? 'border-orange-500/50 bg-orange-500/15 text-orange-300'
+                      ? 'border-term-primary/40 bg-term-primary/10 text-white'
                       : 'border-transparent text-slate-400',
                   )}
                 >

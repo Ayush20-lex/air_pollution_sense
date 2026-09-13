@@ -247,8 +247,8 @@ function NodeLedger({ frame }: { frame: TerminalFrame }) {
         sub={`${STATIONS.length} active CPCB / DPCC / HSPCB / UPPCB monitoring stations across the National Capital Region`}
         right={
           <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-slate-400">
-            <span className="size-2 rounded-full bg-term-primary" />
-            ISO/WHO/EPA standards aligned
+            <span className="size-2 rounded-full bg-amber-400" />
+            CPCB National AQI · demo values
           </span>
         }
       />

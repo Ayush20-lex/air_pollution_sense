@@ -5,6 +5,7 @@
  * compute. Kept out of the components so the numbers live in one place and a
  * future API swap has an obvious seam.
  */
+import { AQI_RAMP, bandForAqi } from './bands';
 import { SEVERITY } from '@/lib/tokens';
 import { TERM } from '@/lib/terminal/palette';
 
@@ -13,8 +14,18 @@ export const HUB = {
   sector: 'Anand Vihar Sector 4',
   station: 'Station Anand Vihar #04 • Sector 4',
   aqi: 142,
-  band: 'Moderate-High',
-  advisoryBand: 'Unhealthy for Sensitive Groups',
+  /**
+   * Both were invented category names — "Moderate-High" is not a CPCB band at
+   * all, and "Unhealthy for Sensitive Groups" is the US EPA's label for a range
+   * CPCB simply calls Moderate. Derived from the reading now, so the gauge's
+   * caption and the legend beside it cannot disagree.
+   */
+  get band() {
+    return bandForAqi(this.aqi).label;
+  },
+  get advisoryBand() {
+    return `${bandForAqi(this.aqi).label} air quality`;
+  },
   delta: 8.4,
   updatedSeconds: 12,
   ping: '18ms',
@@ -26,14 +37,26 @@ export const HUB = {
   sampleRate: 'Demo cadence',
 } as const;
 
-/** EPA benchmark scale shown beside the hero gauge. */
-export const EPA_SCALE = [
-  { label: 'Good', range: '0 – 50', color: SEVERITY.good },
-  { label: 'Moderate', range: '51 – 100', color: SEVERITY.fair },
-  { label: 'Sensitive Groups', range: '101 – 150', color: SEVERITY.poor, active: true },
-  { label: 'Unhealthy', range: '151 – 200', color: SEVERITY.bad },
-  { label: 'Very Unhealthy / Haz', range: '201 – 500', color: SEVERITY.severe },
-] as const;
+/**
+ * CPCB National AQI categories, shown beside the hero gauge.
+ *
+ * Was the US EPA scale — Sensitive Groups / Unhealthy / Very Unhealthy over
+ * 50-point bands. This project computes the CPCB index end to end
+ * (backend/aqi_cpcb.py), and the two standards disagree on both the names and
+ * the boundaries: CPCB's Moderate runs 101-200 where EPA splits the same range
+ * into two categories. Showing EPA labels over a CPCB number misreports every
+ * reading above 100.
+ *
+ * Derived from AQI_RAMP rather than restated, so the gauge, the pins, the
+ * table and this legend cannot drift apart.
+ */
+export const CPCB_SCALE = AQI_RAMP.map((b) => ({
+  label: b.label,
+  range: `${b.from} – ${b.to}`,
+  color: b.color,
+  from: b.from,
+  to: b.to,
+}));
 
 /** Biometric impact meters in the advisory card. */
 export const BIOMETRIC_IMPACTS = [

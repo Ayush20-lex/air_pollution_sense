@@ -154,7 +154,7 @@ function SpectrometryLedger() {
     <div id="ledger" className="space-y-3">
       <SectionHead
         title="Pollutant Master Spectrometry Ledger"
-        sub="Eight continuously sampled channels with calibration state"
+        sub="The eight channels the CPCB National AQI indexes"
       />
       <TelemetryCard className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -193,7 +193,9 @@ function SpectrometryLedger() {
                   <td className="px-4 py-2.5">
                     <Spark values={p.trend} color={p.color} width={72} height={22} className="h-5 w-20" />
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-term-primary">VERIFIED</td>
+                  {/* Was "VERIFIED" on every row — a calibration state this
+                      project cannot attest to for readings it did not measure. */}
+                  <td className="px-4 py-2.5 font-mono text-xs text-slate-400">SYNTHETIC</td>
                   <td className="px-4 py-2.5">
                     <button
                       type="button"

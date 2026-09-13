@@ -27,8 +27,8 @@ export function OverviewMetrics() {
           sub="Continuous spectrometry • Hover any card for its 24-hour trajectory, sampled every 2 hours"
           right={
             <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-slate-400">
-              <span className="size-2 rounded-full bg-term-primary" />
-              ISO/WHO/EPA standards aligned
+              <span className="size-2 rounded-full bg-amber-400" />
+              CPCB National AQI · demo values
             </span>
           }
         />

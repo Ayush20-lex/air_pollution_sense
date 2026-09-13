@@ -16,12 +16,25 @@ export type TerminalBand = {
   to: number;
 };
 
+/**
+ * The six CPCB National AQI categories.
+ *
+ * This used to be five bands on US EPA boundaries (0-50, 51-100, 101-150,
+ * 151-200, 201-500) carrying CPCB's names, which is the worst of both: AQI 272
+ * read as "Severe" when CPCB calls it Poor, and the Moderate band was 100
+ * points narrower than the standard. The boundaries below are the ones
+ * CATEGORIES in backend/aqi_cpcb.py indexes against, so the screen and the
+ * engine now agree.
+ *
+ * PM25_BANDS below was already correct CPCB; only the composite ramp was not.
+ */
 export const AQI_RAMP: TerminalBand[] = [
   { label: 'Good', color: SEVERITY.good, from: 0, to: 50 },
-  { label: 'Moderate', color: SEVERITY.fair, from: 51, to: 100 },
-  { label: 'Poor', color: SEVERITY.poor, from: 101, to: 150 },
-  { label: 'Very Poor', color: SEVERITY.bad, from: 151, to: 200 },
-  { label: 'Severe', color: SEVERITY.severe, from: 201, to: 500 },
+  { label: 'Satisfactory', color: SEVERITY.fair, from: 51, to: 100 },
+  { label: 'Moderate', color: SEVERITY.moderate, from: 101, to: 200 },
+  { label: 'Poor', color: SEVERITY.poor, from: 201, to: 300 },
+  { label: 'Very Poor', color: SEVERITY.bad, from: 301, to: 400 },
+  { label: 'Severe', color: SEVERITY.severe, from: 401, to: 500 },
 ];
 
 export function bandForAqi(aqi: number): TerminalBand {
@@ -138,9 +151,18 @@ export const TERMINAL_ALERT_COLOR: Record<TerminalAlert, string> = {
   EMERGENCY: SEVERITY.bad,
 };
 
+/**
+ * Operational alert stage for an AQI.
+ *
+ * Aligned to GRAP, the Graded Response Action Plan the NCR actually runs on —
+ * Stage I at Poor (201), Stage II at Very Poor (301), Stage III at Severe
+ * (401). The previous thresholds (130 / 155 / 175) sat inside what CPCB calls
+ * Moderate, so the map raised an EMERGENCY over air the standard does not
+ * consider unhealthy for the general population.
+ */
 export function alertForAqi(aqi: number): TerminalAlert {
-  if (aqi > 175) return 'EMERGENCY';
-  if (aqi > 155) return 'ALERT';
-  if (aqi > 130) return 'WATCH';
+  if (aqi > 400) return 'EMERGENCY';
+  if (aqi > 300) return 'ALERT';
+  if (aqi > 200) return 'WATCH';
   return 'NONE';
 }
