@@ -47,6 +47,11 @@ OUT_DIR = DATA_DIR / "raw" / "observations"
 MANIFEST = OUT_DIR / "_manifest.json"
 
 
+#: How many times a window may be halved before giving up. Four levels turns
+#: 18.6 months into ~35-day spans, which the API serves comfortably.
+MAX_SPLIT_DEPTH = 4
+
+
 def season_window(catalog: dict, year: int) -> tuple[str, str]:
     """Read the season's real window from the catalogue.
 
@@ -91,8 +96,9 @@ def flatten(row: dict, sensor_id: int, location_id: int, param: str) -> dict | N
     }
 
 
-def fetch_one(client: OpenAQClient, sensor_id: int, location_id: int,
-              param: str, dt_from: str, dt_to: str) -> pd.DataFrame:
+def _fetch_span(client: OpenAQClient, sensor_id: int, location_id: int,
+                param: str, dt_from: str, dt_to: str) -> list[dict]:
+    """One contiguous request span, paginated."""
     rows = []
     for raw in client.paginate(
         f"/v3/sensors/{sensor_id}/hours",
@@ -102,6 +108,39 @@ def fetch_one(client: OpenAQClient, sensor_id: int, location_id: int,
         rec = flatten(raw, sensor_id, location_id, param)
         if rec:
             rows.append(rec)
+    return rows
+
+
+def fetch_one(client: OpenAQClient, sensor_id: int, location_id: int,
+              param: str, dt_from: str, dt_to: str, depth: int = 0) -> pd.DataFrame:
+    """Hourly rows for one sensor, halving the window when the API asks us to.
+
+    Some sensors time out on a long span - the 2025-02..2026-09 window is 18.6
+    months and OpenAQ answers HTTP 408 with "try a smaller time frame". That is
+    a request, not a transient fault, so retrying the same span fails
+    identically however many times it is attempted. Splitting in half and
+    recursing satisfies it; the halves are concatenated and de-duplicated, so
+    the result is indistinguishable from a single successful call.
+    """
+    try:
+        rows = _fetch_span(client, sensor_id, location_id, param, dt_from, dt_to)
+    except OpenAQError as exc:
+        too_long = "408" in str(exc) or "smaller time frame" in str(exc).lower()
+        if not too_long or depth >= MAX_SPLIT_DEPTH:
+            raise
+        mid = (datetime.fromisoformat(dt_from.replace("Z", "+00:00"))
+               + (datetime.fromisoformat(dt_to.replace("Z", "+00:00"))
+                  - datetime.fromisoformat(dt_from.replace("Z", "+00:00"))) / 2)
+        mid_s = mid.strftime("%Y-%m-%dT%H:%M:%SZ")
+        logger.info("      span too long; splitting at %s (depth %d)", mid_s[:10], depth + 1)
+        left = fetch_one(client, sensor_id, location_id, param, dt_from, mid_s, depth + 1)
+        right = fetch_one(client, sensor_id, location_id, param, mid_s, dt_to, depth + 1)
+        parts = [d for d in (left, right) if not d.empty]
+        if not parts:
+            return pd.DataFrame()
+        df = pd.concat(parts, ignore_index=True)
+        return df.sort_values("timestamp_utc").drop_duplicates(subset=["timestamp_utc"])
+
     if not rows:
         return pd.DataFrame()
     df = pd.DataFrame(rows)

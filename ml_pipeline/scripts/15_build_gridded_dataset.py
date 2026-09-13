@@ -39,6 +39,7 @@ them understates the channel by nearly half.
 """
 from __future__ import annotations
 
+import argparse
 import glob
 import json
 import logging
@@ -77,7 +78,10 @@ logger = logging.getLogger('build_gridded')
 DATA = REPO_ROOT / 'ml_pipeline' / 'data'
 OUT_DIR = DATA / 'processed'
 
+#: Default pair, kept so an argument-free run still reproduces the pilot
+#: dataset exactly. The extended record is fetched under season 2026.
 SEASONS = (2022, 2025)
+CATALOG_DEFAULT = 'catalog.json'
 
 LAT_MIN, LAT_MAX = 28.20, 28.90
 LON_MIN, LON_MAX = 76.80, 77.60
@@ -109,9 +113,13 @@ TIME_CHUNK = 240        # hours gridded at once; caps peak memory
 
 # ── catalogue ─────────────────────────────────────────────────────────────────
 
-def load_catalog() -> tuple[dict[int, tuple[float, float]], dict[int, str]]:
-    """Returns station coordinates and each sensor's reported unit."""
-    cat = json.loads((DATA / 'raw' / 'stations' / 'catalog.json').read_text('utf-8'))
+def load_catalog(catalog: str = CATALOG_DEFAULT) -> tuple[dict[int, tuple[float, float]], dict[int, str]]:
+    """Returns station coordinates and each sensor's reported unit.
+
+    Defaults to the pilot catalogue so callers that predate the extended
+    record - 17_spatial_validation.py imports this - keep working unchanged.
+    """
+    cat = json.loads((DATA / 'raw' / 'stations' / catalog).read_text('utf-8'))
 
     coords: dict[int, tuple[float, float]] = {}
     units: dict[int, str] = {}
@@ -366,14 +374,25 @@ def build_season(season: int, coords, units) -> tuple[np.ndarray, pd.DatetimeInd
 # ── entry point ───────────────────────────────────────────────────────────────
 
 def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('--seasons', type=int, nargs='+', default=list(SEASONS),
+                    help='seasons to grid (default: the 2022/2025 pilot pair)')
+    ap.add_argument('--catalog', default=CATALOG_DEFAULT,
+                    help='catalogue filename under data/raw/stations')
+    ap.add_argument('--name', default='gridded_dataset',
+                    help='output stem; the pilot dataset is never overwritten '
+                         'unless this is left at its default')
+    args = ap.parse_args()
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    coords, units = load_catalog()
+    coords, units = load_catalog(args.catalog)
     logger.info('catalogue: %d stations inside the grid, %d sensor units',
                 len(coords), len(units))
 
     blocks, tensors, all_times = [], [], []
     cursor = 0
-    for season in SEASONS:
+    for season in args.seasons:
         tensor, times, meta = build_season(season, coords, units)
         logger.info('season %d: %d h x %d stations gridded', season, len(times), meta['stations'])
         tensors.append(tensor)
@@ -400,7 +419,7 @@ def main() -> int:
 
     normalised = normalise(physical).astype(np.float16)
 
-    out_path = OUT_DIR / 'gridded_dataset.npy'
+    out_path = OUT_DIR / f'{args.name}.npy'
     np.save(out_path, normalised)
 
     manifest = {
@@ -424,7 +443,7 @@ def main() -> int:
         ),
         'times': [t.isoformat() for t in times],
     }
-    (OUT_DIR / 'gridded_dataset_manifest.json').write_text(
+    (OUT_DIR / f'{args.name}_manifest.json').write_text(
         json.dumps(manifest, indent=2), encoding='utf-8'
     )
 
