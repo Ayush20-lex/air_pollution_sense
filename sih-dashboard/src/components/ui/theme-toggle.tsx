@@ -9,6 +9,10 @@ import { cn } from '@/lib/utils';
 export function ThemeToggle({ className }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
+  // next-themes reports resolvedTheme as undefined until it has read storage,
+  // so the icon is held back for one frame rather than rendering the wrong one
+  // and correcting it.
+  // oxlint-disable-next-line react/set-state-in-effect
   React.useEffect(() => setMounted(true), []);
 
   const dark = resolvedTheme !== 'light';

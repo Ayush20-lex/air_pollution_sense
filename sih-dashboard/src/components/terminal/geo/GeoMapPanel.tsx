@@ -183,7 +183,6 @@ function TimelineTransport({ frame }: { frame: TerminalFrame }) {
   const stepFrame = useTerminalStore((s) => s.stepFrame);
   const playing = useTerminalStore((s) => s.playing);
   const togglePlay = useTerminalStore((s) => s.togglePlay);
-  const setPlaying = useTerminalStore((s) => s.setPlaying);
   const rate = useTerminalStore((s) => s.rate);
   const setRate = useTerminalStore((s) => s.setRate);
 

@@ -4,6 +4,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { AdaptiveDpr, Preload } from '@react-three/drei';
 import { useTheme } from 'next-themes';
 import { PARTICLE } from '@/lib/tokens';
+import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import { seeded } from '@/lib/utils';
 
 const COUNT = 9200;
@@ -227,6 +228,10 @@ function Rig({ dispersing, progress }: { dispersing: boolean; progress?: Progres
     const p = progress?.current ?? 0;
     const targetZ = dispersing ? 0.35 : 5.5 - pointer.y * 0.25 - p * 2.6;
     const targetY = dispersing ? 0.1 : 0.55 + pointer.y * 0.2 + p * 0.9;
+    // Mutating the camera inside useFrame is how R3F drives a camera; the rule
+    // cannot see that this runs in a frame loop rather than during render.
+    // Setting camera state through React would re-render sixty times a second.
+    // oxlint-disable-next-line react/immutability
     camera.position.z += (targetZ - camera.position.z) * Math.min(1, delta * (dispersing ? 2.1 : 1.6));
     camera.position.y += (targetY - camera.position.y) * Math.min(1, delta * 1.6);
     camera.position.x += (pointer.x * 0.7 - camera.position.x) * Math.min(1, delta * 1.6);
@@ -254,14 +259,7 @@ function AerosolCloudWrapper({ dispersing, progress }: { dispersing: boolean; pr
 export function ParticleField({ dispersing, progress }: { dispersing: boolean; progress?: ProgressRef }) {
   // Gate 27: the canvas is continuous motion, so honour the OS setting by
   // rendering a single static frame instead of running the loop.
-  const [reduced, setReduced] = React.useState(false);
-  React.useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const sync = () => setReduced(mq.matches);
-    sync();
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
-  }, []);
+  const reduced = usePrefersReducedMotion();
 
   return (
     <Canvas

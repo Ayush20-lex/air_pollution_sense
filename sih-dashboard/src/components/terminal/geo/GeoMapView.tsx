@@ -17,8 +17,18 @@ export function GeoMapView() {
   // re-anchors the 24-hour window on the current time — so the readings
   // actually move rather than the button merely spinning.
   const refreshedAt = useTerminalStore((s) => s.refreshedAt);
-  const [frames, setFrames] = React.useState<TerminalFrame[] | null>(null);
-  React.useEffect(() => setFrames(buildFrames()), [refreshedAt]);
+
+  // Seeded from a lazy initialiser rather than null-then-effect: the first
+  // window is available on the first render, so the map never paints an empty
+  // frame and there is no state write during mount. The effect then covers
+  // only the refresh, and skips the run that fires alongside mount.
+  const [frames, setFrames] = React.useState<TerminalFrame[]>(() => buildFrames());
+  const builtAt = React.useRef(refreshedAt);
+  React.useEffect(() => {
+    if (builtAt.current === refreshedAt) return;
+    builtAt.current = refreshedAt;
+    setFrames(buildFrames());
+  }, [refreshedAt]);
 
   const frameIndex = useTerminalStore((s) => s.frameIndex);
   const select = useTerminalStore((s) => s.select);
@@ -59,18 +69,10 @@ export function GeoMapView() {
         </div>
       </div>
 
-      {frames ? (
-        <MapBody frame={frames[Math.min(frameIndex, frames.length - 1)]} />
-      ) : (
-        <div className="flex min-h-[50vh] items-center justify-center">
-          <div className="flex flex-col items-center gap-3">
-            <div className="size-10 animate-spin rounded-full border-2 border-term-outline-variant border-t-term-primary" />
-            <span className="font-mono text-[10px] uppercase tracking-[0.28em] text-term-primary">
-              Interpolating sensor mesh
-            </span>
-          </div>
-        </div>
-      )}
+      {/* No loading branch: frames are seeded on the first render, so this can
+          never be empty. The Leaflet chunk still streams in behind its own
+          Suspense boundary in TerminalGeoMap. */}
+      <MapBody frame={frames[Math.min(frameIndex, frames.length - 1)]} />
     </>
   );
 }

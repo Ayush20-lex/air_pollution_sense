@@ -103,7 +103,6 @@ function StressorDonut() {
   const total = STRESSORS.reduce((sum, s) => sum + s.share, 0);
   const r = 62;
   const c = 2 * Math.PI * r;
-  let acc = 0;
 
   return (
     <TelemetryCard className="space-y-4 p-5 lg:col-span-4">
@@ -116,11 +115,14 @@ function StressorDonut() {
         <div className="relative size-44">
           <svg viewBox="0 0 160 160" className="size-full -rotate-90" aria-hidden="true">
             <circle cx="80" cy="80" r={r} fill="none" stroke={TERM.surfaceRaised} strokeWidth="18" />
-            {STRESSORS.map((s) => {
+            {STRESSORS.map((s, i) => {
               const len = (s.share / total) * c;
               const dash = `${len} ${c - len}`;
-              const offset = -acc;
-              acc += len;
+              // Offset is the arc length of everything before this segment.
+              // Derived rather than accumulated into a closure variable: a
+              // render that runs the map twice would otherwise double every
+              // offset and scramble the ring.
+              const offset = -STRESSORS.slice(0, i).reduce((a, x) => a + (x.share / total) * c, 0);
               return (
                 <circle
                   key={s.label}

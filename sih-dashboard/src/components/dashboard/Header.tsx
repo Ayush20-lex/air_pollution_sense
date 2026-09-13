@@ -9,7 +9,6 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { CommandPalette } from '@/components/ui/command-palette';
 import { Hint } from '@/components/ui/tooltip';
 import { POLLUTANTS, type Pollutant } from '@/lib/data';
-import { SEVERITY } from '@/lib/tokens';
 import { cn, formatLST } from '@/lib/utils';
 import { useAppStore } from '@/store/useAppStore';
 

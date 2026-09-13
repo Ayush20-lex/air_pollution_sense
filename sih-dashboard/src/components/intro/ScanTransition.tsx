@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import { motion } from 'framer-motion';
 import { Radio } from 'lucide-react';
 
@@ -22,8 +23,14 @@ export function ScanTransition({ active }: { active: boolean }) {
   const [step, setStep] = React.useState(0);
   const reduced = usePrefersReducedMotion();
 
+  // Driven by timers, not by render. The step is a position in a timed
+  // sequence, so there is nothing to derive from props.
+  // oxlint-disable-next-line react/set-state-in-effect
   React.useEffect(() => {
     if (!active) {
+      // Rewinds the sequence when the curtain closes, so a second scan starts
+      // from the first step rather than wherever the last one stopped.
+      // oxlint-disable-next-line react/set-state-in-effect
       setStep(0);
       return;
     }
@@ -106,17 +113,4 @@ export function ScanTransition({ active }: { active: boolean }) {
       </div>
     </motion.div>
   );
-}
-
-/** Matches the CSS reduced-motion gate the rest of the app honours. */
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = React.useState(false);
-  React.useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReduced(mq.matches);
-    const onChange = () => setReduced(mq.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-  return reduced;
 }

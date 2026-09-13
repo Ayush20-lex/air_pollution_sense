@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { columnKeys, rollDuration, toDigits, tween } from '@/lib/terminal/rolling';
+import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import { cn } from '@/lib/utils';
 import { useTerminalStore } from '@/store/useTerminalStore';
 
@@ -50,18 +51,6 @@ function subscribe(tick: Tick): () => void {
 
 /* -------------------------------------------------------------- duration */
 
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = React.useState(false);
-  React.useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const sync = () => setReduced(mq.matches);
-    sync();
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
-  }, []);
-  return reduced;
-}
-
 /** Roll duration for the current transport state. */
 export function useRollDuration(): number {
   const playing = useTerminalStore((s) => s.playing);
@@ -86,9 +75,17 @@ export function useAnimatedNumber(value: number, duration: number): number {
   const from = React.useRef(value);
   const start = React.useRef(0);
 
+  // The effect subscribes to the shared rAF ticker, which is exactly the
+  // external system effects are for. The value cannot be derived during
+  // render: it depends on elapsed time.
+  // oxlint-disable-next-line react/set-state-in-effect
   React.useEffect(() => {
     if (duration <= 0) {
       shownRef.current = value;
+      // Reduced motion and 12x playback both set duration to 0, where the
+      // readout should jump rather than roll. Still a subscription to the
+      // transport, not a value derivable from props.
+      // oxlint-disable-next-line react/set-state-in-effect
       setShown(value);
       return;
     }

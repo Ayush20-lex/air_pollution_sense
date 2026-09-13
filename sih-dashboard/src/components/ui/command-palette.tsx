@@ -220,8 +220,6 @@ export function CommandPalette() {
     return () => document.removeEventListener('keydown', onKey);
   }, [open, flat, cursor, exec, close]);
 
-  React.useEffect(() => setCursor(0), [query]);
-
   React.useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
@@ -288,7 +286,13 @@ export function CommandPalette() {
                 <input
                   ref={inputRef}
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    // Reset here rather than in an effect on `query`: the
+                    // keystroke is what invalidates the selection, and doing it
+                    // at the cause avoids a second render pass per character.
+                    setCursor(0);
+                  }}
                   placeholder="Search stations, screens…"
                   aria-label="Search commands"
                   className="h-12 w-full bg-transparent font-mono text-sm text-ink placeholder:text-faint focus:outline-none"
