@@ -451,6 +451,48 @@
   color: rgb(var(--as-muted));
   white-space: nowrap;
 }
+/* ---- Pin density variants ----------------------------------------------
+   26 stations inside one basin collide badly once the map is zoomed out: at
+   z10 the full pins overlapped into an unreadable stack. Each pin therefore
+   renders at one of three densities, chosen by zoom and then by screen-space
+   collision (see NcrPlumeMap's usePinDensity). `full` keeps the name, `compact`
+   drops to the AQI alone, `dot` is a bare severity marker that still carries
+   its tooltip and click target. */
+.as-pin-compact {
+  width: 44px;
+  height: 34px;
+}
+.as-pin-compact .as-pin-body {
+  padding: 2px 6px 3px;
+  border-radius: 7px;
+}
+.as-pin-compact .as-pin-aqi {
+  font-size: 11px;
+}
+
+.as-pin-dot {
+  width: 16px;
+  height: 16px;
+  justify-content: center;
+}
+.as-pin-dot .as-pin-body {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border-radius: 999px;
+  border-width: 1.5px;
+  background: var(--pin);
+  box-shadow: 0 0 0 3px rgb(var(--as-base) / 0.75), 0 2px 8px -2px rgb(0 0 0 / 0.7);
+}
+/* A dot is already at the marker's anchor point, so the stem would hang
+   below the station rather than pointing at it. */
+.as-pin-dot .as-pin-stem {
+  display: none;
+}
+.as-pin-dot:hover .as-pin-body {
+  transform: scale(1.45);
+}
+
 .as-pin-stem {
   width: 1px;
   height: 12px;

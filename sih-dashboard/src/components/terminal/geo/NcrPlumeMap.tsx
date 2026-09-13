@@ -65,17 +65,39 @@ export function NcrPlumeMap({ frame }: { frame: TerminalFrame }) {
       {layers.contours && <IsoContours frame={frame} />}
       {layers.tracks && <SourceRibbons />}
       {layers.wind && <WindStreamlines frame={frame} />}
-      {layers.pins &&
-        STATIONS.map((s) => {
+      {layers.pins && <StationPins frame={frame} selectedId={selectedId} select={select} />}
+    </MapContainer>
+  );
+}
+
+/**
+ * The station mesh. Split out of the map body because usePinDensity calls
+ * useMap, which only resolves inside a MapContainer child.
+ */
+function StationPins({
+  frame,
+  selectedId,
+  select,
+}: {
+  frame: TerminalFrame;
+  selectedId: string | null;
+  select: (id: string) => void;
+}) {
+  const density = usePinDensity(selectedId);
+
+  return (
+    <>
+      {STATIONS.map((s) => {
           const n = frame.nodes[s.id];
+          const d = density[s.id] ?? 'full';
           return (
             <Marker
               key={s.id}
               position={[s.lat, s.lng]}
-              icon={buildPin(s, n.pm25, n.aqi, n.alert, selectedId === s.id)}
+              icon={buildPin(s, n.pm25, n.aqi, n.alert, selectedId === s.id, d)}
               eventHandlers={{ click: () => select(s.id) }}
             >
-              <LTooltip direction="top" offset={[0, -50]} opacity={1} className="as-tip">
+              <LTooltip direction="top" offset={[0, d === 'dot' ? -10 : d === 'compact' ? -36 : -50]} opacity={1} className="as-tip">
                 <div style={{ minWidth: 160 }}>
                   <div style={{ fontWeight: 700, marginBottom: 4, color: '#fff' }}>{s.name}</div>
                   <div>
@@ -96,7 +118,7 @@ export function NcrPlumeMap({ frame }: { frame: TerminalFrame }) {
             </Marker>
           );
         })}
-    </MapContainer>
+    </>
   );
 }
 
@@ -114,6 +136,86 @@ function Fitter() {
     return () => ro.disconnect();
   }, [map]);
   return null;
+}
+
+type PinDensity = 'full' | 'compact' | 'dot';
+
+/**
+ * Chooses a density per station so the mesh stays readable at every zoom.
+ *
+ * 26 stations sit inside one basin, so at the fitted zoom the full pins
+ * overlapped into an unreadable stack of AQI cards.
+ *
+ * Rather than switch every pin at fixed zoom thresholds — which collapsed the
+ * whole mesh to dots at z9, the zoom the map actually fits to — each station
+ * degrades on its own: try the full card, fall back to the number alone, then
+ * to a bare dot, taking the first that does not collide with a pin already
+ * placed. The map self-adapts to any zoom and any container size, and zooming
+ * in promotes pins back as space appears.
+ *
+ * The walk is worst-AQI-first, so when pins fight for the same pixels the more
+ * severe reading keeps its label. A demoted station is never hidden: a dot
+ * still carries its tooltip and click target.
+ */
+function usePinDensity(selectedId: string | null): Record<string, PinDensity> {
+  const map = useMap();
+  // Zoom and pan both change which pins overlap, so both re-run the pass.
+  const [, bump] = React.useReducer((n: number) => n + 1, 0);
+
+  React.useEffect(() => {
+    map.on('zoomend', bump);
+    map.on('moveend', bump);
+    return () => {
+      map.off('zoomend', bump);
+      map.off('moveend', bump);
+    };
+  }, [map, bump]);
+
+  // Deliberately not memoised: the result depends on the map's current
+  // projection, which useMemo cannot express as a dependency. 26 rectangle
+  // tests per render is far cheaper than getting the cache key wrong.
+  {
+    const out: Record<string, PinDensity> = {};
+
+    // Selected first so it always keeps the richest label it can — it is what
+    // the rest of the page is pointing at. Then worst AQI first.
+    const order = [...STATIONS].sort((a, b) => {
+      if (a.id === selectedId) return -1;
+      if (b.id === selectedId) return 1;
+      return b.aqi - a.aqi;
+    });
+
+    type Rect = { x1: number; y1: number; x2: number; y2: number };
+    const placed: Rect[] = [];
+    const hits = (r: Rect) =>
+      placed.some((q) => r.x1 < q.x2 && r.x2 > q.x1 && r.y1 < q.y2 && r.y2 > q.y1);
+
+    const ladder: PinDensity[] = ['full', 'compact', 'dot'];
+
+    for (const st of order) {
+      const pt = map.latLngToContainerPoint([st.lat, st.lng]);
+
+      for (const d of ladder) {
+        const [w, h] = PIN_SIZE[d];
+        // 3px of breathing room, or pins merely touch and still read as a clump.
+        const pad = 3;
+        // Labelled pins sit above their point; a dot is centred on it.
+        const rect: Rect =
+          d === 'dot'
+            ? { x1: pt.x - w / 2 - pad, y1: pt.y - h / 2 - pad, x2: pt.x + w / 2 + pad, y2: pt.y + h / 2 + pad }
+            : { x1: pt.x - w / 2 - pad, y1: pt.y - h - pad, x2: pt.x + w / 2 + pad, y2: pt.y + pad };
+
+        // The dot is the floor: it is placed even when it overlaps, because a
+        // station that renders nothing cannot be clicked or hovered.
+        if (d === 'dot' || !hits(rect)) {
+          out[st.id] = d;
+          placed.push(rect);
+          break;
+        }
+      }
+    }
+    return out;
+  }
 }
 
 /** Recentres and zooms when a station is picked from a list elsewhere. */
@@ -451,7 +553,21 @@ function WindStreamlines({ frame }: { frame: TerminalFrame }) {
   );
 }
 
-function buildPin(station: Station, pm: number, aqi: number, alert: string, selected: boolean) {
+/** Rendered footprint per density, used for both the icon and collision tests. */
+const PIN_SIZE: Record<PinDensity, [number, number]> = {
+  full: [86, 48],
+  compact: [44, 34],
+  dot: [16, 16],
+};
+
+function buildPin(
+  station: Station,
+  pm: number,
+  aqi: number,
+  alert: string,
+  selected: boolean,
+  density: PinDensity,
+) {
   // The pin body is coloured by composite AQI so it agrees with every list on
   // the page; the tooltip carries the PM2.5 band separately.
   const color = aqiColor(aqi);
@@ -459,14 +575,22 @@ function buildPin(station: Station, pm: number, aqi: number, alert: string, sele
   const critical = alert === 'EMERGENCY';
 
   const html = `
-    <div class="as-pin" style="--pin:${color};--alert:${alertColor};--pm:${pm25Color(pm)}">
+    <div class="as-pin as-pin-${density}" style="--pin:${color};--alert:${alertColor};--pm:${pm25Color(pm)}">
       ${critical ? '<span class="as-pin-ring"></span>' : ''}
       <div class="as-pin-body${selected ? ' as-pin-selected' : ''}">
-        <span class="as-pin-aqi">${aqi}</span>
-        <span class="as-pin-name">${station.name}</span>
+        ${density === 'dot' ? '' : `<span class="as-pin-aqi">${aqi}</span>`}
+        ${density === 'full' ? `<span class="as-pin-name">${station.name}</span>` : ''}
       </div>
       <span class="as-pin-stem"></span>
     </div>`;
 
-  return L.divIcon({ className: 'as-pin-wrap', iconSize: [86, 48], iconAnchor: [43, 48], html });
+  const size = PIN_SIZE[density];
+  return L.divIcon({
+    className: 'as-pin-wrap',
+    iconSize: size,
+    // Anchored at the bottom of the stem for the labelled densities so the pin
+    // points at its station; a dot has no stem and anchors at its centre.
+    iconAnchor: density === 'dot' ? [size[0] / 2, size[1] / 2] : [size[0] / 2, size[1]],
+    html,
+  });
 }
