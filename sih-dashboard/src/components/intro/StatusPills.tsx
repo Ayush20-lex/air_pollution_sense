@@ -8,7 +8,7 @@ import { DISTRICTS } from '@/lib/data';
  * Floating zone pills scattered over the particle grid.
  * Positions are hand-placed so they frame the cloud rather than cover it.
  */
-const SLOTS: { id: string; top: string; left: string; delay: number }[] = [
+export const SLOTS: { id: string; top: string; left: string; delay: number }[] = [
   { id: 'ghaziabad', top: '21%', left: '61%', delay: 0.5 },
   { id: 'delhi', top: '57%', left: '20%', delay: 0.65 },
   { id: 'gurgaon', top: '25%', left: '17%', delay: 0.8 },

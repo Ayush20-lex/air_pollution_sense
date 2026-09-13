@@ -4,14 +4,15 @@ import { motion, useMotionValue, useMotionValueEvent, useTransform } from 'frame
 import { ChevronDown, Cpu, Gauge, Satellite, Wind } from 'lucide-react';
 import { ScanButton } from './ScanButton';
 import { ScanTransition } from './ScanTransition';
-import { StatusPills } from './StatusPills';
+import { StatusPills, SLOTS } from './StatusPills';
+import { ParticleProbe, type Probe } from './ParticleProbe';
 import { AnalysisCard, TelemetryStat } from './TelemetryOverlay';
 import { ScrollPanels, ScrollSectionHead } from './ScrollPanels';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { CommandPalette } from '@/components/ui/command-palette';
 import { Badge } from '@/components/ui/badge';
 import { aqiColor } from '@/lib/aqi';
-import { MODEL_META } from '@/lib/data';
+import { DISTRICTS, MODEL_META } from '@/lib/data';
 import { SEVERITY } from '@/lib/tokens';
 import { useAppStore } from '@/store/useAppStore';
 import { formatLST } from '@/lib/utils';
@@ -54,6 +55,54 @@ export function IntroScreen() {
     const id = setTimeout(completeScan, 1500);
     return () => clearTimeout(id);
   }, [scanning, completeScan]);
+
+  // --- cursor probe --------------------------------------------------------
+  // Hovering the cloud names the zone under the cursor. Mapping is
+  // nearest-zone against the same SLOTS the pills are placed from, so the
+  // readout can never disagree with the pill it is sitting next to.
+  //
+  // The earlier version mapped the cursor's vertical position to a
+  // concentration band, which suited the old flat scatter — the field is now a
+  // Fibonacci shell whose loaded patches are distributed over a sphere, so
+  // height alone no longer names a concentration.
+  const [probe, setProbe] = React.useState<Probe | null>(null);
+  const stageRef = React.useRef<HTMLDivElement>(null);
+
+  const onStageMove = React.useCallback(
+    (e: React.PointerEvent) => {
+      // Coarse pointers have no hover, and the readout is decorative — a tap
+      // would pin a card the user then has to dismiss.
+      if (e.pointerType !== 'mouse') return;
+      const el = stageRef.current;
+      if (!el) return;
+
+      const r = el.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+
+      let best: { id: string; d: number } | null = null;
+      for (const slot of SLOTS) {
+        const sx = (parseFloat(slot.left) / 100) * r.width;
+        const sy = (parseFloat(slot.top) / 100) * r.height;
+        // Normalised so a wide viewport does not bias the match horizontally.
+        const dx = (x - sx) / r.width;
+        const dy = (y - sy) / r.height;
+        const d = Math.hypot(dx, dy);
+        if (!best || d < best.d) best = { id: slot.id, d };
+      }
+
+      // Beyond this the cursor is over empty sky rather than the cloud, and a
+      // readout there would be claiming a reading for nothing.
+      if (!best || best.d > 0.32) {
+        setProbe(null);
+        return;
+      }
+      const district = DISTRICTS.find((d) => d.id === best!.id);
+      if (!district) return;
+      setProbe({ district, x, y });
+    },
+    [],
+  );
 
   // --- scroll choreography ------------------------------------------------
   // The stage is pinned while the track scrolls past it. `progress` is handed
@@ -133,7 +182,12 @@ export function IntroScreen() {
       <ScanTransition active={handingOff} />
 
       {/* ---- pinned stage: the canvas and HUD stay put while the track scrolls */}
-      <div className="sticky top-0 h-dvh w-full overflow-hidden">
+      <div
+        ref={stageRef}
+        onPointerMove={onStageMove}
+        onPointerLeave={() => setProbe(null)}
+        className="sticky top-0 h-dvh w-full overflow-hidden"
+      >
       {/* --- background layers ------------------------------------------- */}
       <div className="absolute inset-0 grid-bg opacity-70" />
       <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 70% 55% at 50% 40%, rgb(var(--as-accent) / 0.10), transparent 70%)' }} />
@@ -180,6 +234,7 @@ export function IntroScreen() {
 
       {/* --- floating zone pills ------------------------------------------ */}
       <StatusPills frame={frame} />
+      <ParticleProbe probe={probe} frame={frame} />
 
       {/* --- left telemetry rail ------------------------------------------ */}
       <div className="absolute left-5 top-1/2 z-20 hidden -translate-y-1/2 flex-col gap-4 sm:left-8 lg:flex">
