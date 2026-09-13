@@ -26,11 +26,13 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { MotionConfig } from 'framer-motion';
-import { ThemeProvider } from 'next-themes';
+import { ThemeProvider, useTheme } from 'next-themes';
+import { Toaster } from 'sonner';
 import dynamic from '@/lib/dynamic';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useAppStore } from '@/store/useAppStore';
 import { IntroScreen } from '@/components/intro/IntroScreen';
+import { ForecastStatus } from '@/components/ui/forecast-status';
 
 // Each of these pulls a heavy chunk — Leaflet, Recharts, Three — so they stay
 // out of the landing bundle. The fallback covers the chunk fetch so the scan
@@ -127,6 +129,19 @@ function ConsoleRoute() {
   );
 }
 
+function ThemedToaster() {
+  const { resolvedTheme } = useTheme();
+  return (
+    <Toaster
+      theme={resolvedTheme === 'light' ? 'light' : 'dark'}
+      position="bottom-right"
+      richColors
+      closeButton
+      toastOptions={{ className: 'font-mono text-xs' }}
+    />
+  );
+}
+
 export default function App() {
   return (
     <ThemeProvider
@@ -139,6 +154,18 @@ export default function App() {
       <MotionConfig reducedMotion="user">
         {/* gate 17: hover waits ~800ms, keyboard focus opens instantly (Radix default) */}
         <TooltipProvider delayDuration={800} skipDelayDuration={300}>
+          {/* Mounted here, at the root, and never inside a route or a motion.*
+              subtree. Sonner's toaster is position: fixed, and a transformed
+              ancestor becomes its containing block and traps its z-index — the
+              same thing that put the command palette under the telemetry
+              panels. framer writes a transform on the intro's header.
+
+              Sonner's `theme` defaults to 'light' and does not follow the OS,
+              so it has to be handed the resolved theme or toasts render
+              white-on-white on this dark console. */}
+          <ThemedToaster />
+          <ForecastStatus />
+
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<IntroRoute />} />

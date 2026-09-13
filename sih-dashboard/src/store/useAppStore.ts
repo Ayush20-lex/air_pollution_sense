@@ -41,6 +41,15 @@ type AppState = {
   liveFrames: Frame[] | null;
   source: ForecastSource | null;
   loadingLive: boolean;
+  /**
+   * Whether the backend forecast actually arrived.
+   *
+   * `source` alone cannot answer this: it is null both before the first fetch
+   * and after a failed one, so a UI reading it cannot tell "still loading"
+   * from "backend is down". The console falls back to synthetic frames on
+   * failure, which looks identical to a healthy demo.
+   */
+  liveStatus: 'idle' | 'loading' | 'live' | 'offline';
   loadLiveForecast: () => Promise<void>;
 
   setIntervention: (key: keyof Interventions, value: number) => void;
@@ -83,14 +92,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   liveFrames: null,
   source: null,
   loadingLive: false,
+  liveStatus: 'idle',
 
   loadLiveForecast: async () => {
     if (get().loadingLive) return;
-    set({ loadingLive: true });
+    set({ loadingLive: true, liveStatus: 'loading' });
     const live = await fetchLiveForecast();
     if (!live) {
-      // Backend unreachable. Keep the synthetic frames already in place.
-      set({ loadingLive: false });
+      // Backend unreachable. Keep the synthetic frames already in place, but
+      // record the failure so the UI can say so instead of quietly pretending.
+      set({ loadingLive: false, liveStatus: 'offline' });
       return;
     }
     const { interventions } = get();
@@ -103,6 +114,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       source: live.source,
       frames: active,
       loadingLive: false,
+      liveStatus: 'live',
     });
   },
 
