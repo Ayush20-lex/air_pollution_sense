@@ -232,6 +232,7 @@ function TerminalHeader() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Find station, zone or coordinates"
+            aria-label="Find a station, zone or coordinates"
             className="w-full rounded-lg border border-term-outline-variant/80 bg-term-surface-c py-1.5 pl-9 pr-10 font-body text-xs text-white outline-none placeholder:text-slate-400 focus:border-term-secondary focus:ring-1 focus:ring-term-secondary"
           />
           <span className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-term-surface-highest px-1.5 py-0.5 font-mono text-[10px] text-slate-300">
