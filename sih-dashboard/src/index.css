@@ -14,6 +14,10 @@
   :root {
     --font-sans: 'IBM Plex Sans';
     --font-mono: 'JetBrains Mono';
+    /* The /terminal surface only. Declared here so the <head> link is the
+       single place fonts are fetched. */
+    --font-display: 'Plus Jakarta Sans';
+    --font-body: 'Inter';
   }
 
   /* ---- Light theme (default) : clean slate ---- */

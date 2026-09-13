@@ -25,10 +25,41 @@ const config: Config = {
         poor: '#FF9500',
         emergency: '#FF3B30',
         severe: '#A855F7',
+        /**
+         * AIR AQI Sense public terminal (`/terminal`). A self-contained,
+         * dark-only Material-3 style ramp — literal values, not `--as-*`
+         * variables, because this surface never follows the light/dark swap.
+         */
+        term: {
+          primary: '#4edea3',
+          'primary-container': '#10b981',
+          'on-primary': '#003824',
+          secondary: '#7bd0ff',
+          'secondary-container': '#00a6e0',
+          tertiary: '#d0bcff',
+          bg: '#040e1a',
+          surface: '#051424',
+          'surface-lowest': '#010f1f',
+          'surface-low': '#0d1c2d',
+          'surface-c': '#122131',
+          'surface-high': '#1c2b3c',
+          'surface-highest': '#273647',
+          ink: '#f1f5f9',
+          'ink-variant': '#94a3b8',
+          outline: '#64748b',
+          'outline-variant': '#233549',
+          error: '#ffb4ab',
+          'error-container': '#93000a',
+        },
       },
       fontFamily: {
         sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        // The terminal carries its own typography: Plus Jakarta Sans for
+        // headings and large readouts, Inter for body copy. The mono face is
+        // shared, so numbers read the same on both surfaces.
+        display: ['var(--font-display)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        body: ['var(--font-body)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
