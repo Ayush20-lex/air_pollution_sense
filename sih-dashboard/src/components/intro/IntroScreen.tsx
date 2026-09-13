@@ -284,8 +284,14 @@ export function IntroScreen() {
           </h1>
         </motion.div>
 
-        {/* compact telemetry strip for small screens */}
-        <div className="flex w-full items-center justify-between gap-2 lg:hidden">
+        {/* Compact telemetry strip for small screens.
+            pointer-events-auto because the masthead wrapper above is
+            pointer-events-none — it spans the lower half of the stage and would
+            otherwise swallow every pointer event heading for the particle
+            field. Children that need the cursor opt back in, as the header and
+            the CTA do; these cards carry .glass-hover and never got it, so
+            their hover treatment could not fire at any width below lg. */}
+        <div className="pointer-events-auto flex w-full items-center justify-between gap-2 lg:hidden">
           <MiniStat icon={<Gauge className="size-3" />} label="PM2.5" value={`${frame.avgPm25.toFixed(0)}`} color={aqiColor(frame.avgPm25)} />
           <MiniStat icon={<Wind className="size-3" />} label="PBL" value={`${frame.avgPbl}m`} />
           <MiniStat icon={<Cpu className="size-3" />} label="INV" value={frame.inversionIndex.toFixed(2)} color={SEVERITY.moderate} />
