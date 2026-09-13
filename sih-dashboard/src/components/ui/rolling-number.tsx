@@ -13,6 +13,15 @@ import { cn } from '@/lib/utils';
  * An odometer readout: the value glides to its target and each digit column
  * rolls with it.
  *
+ * The console's hero readout, and the only caller. Its sibling is
+ * `@/components/terminal/MeshOdometer`, which serves the public terminal: that
+ * one runs every instance off one shared rAF ticker with CSS transitions, so a
+ * 26-row table costs one frame loop rather than 26. This one drives framer
+ * MotionValues per digit, which buys the colour tween and the carry gating
+ * below, and is worth it for a single large readout but not for a table.
+ *
+ * Pick by surface: console here, terminal there. They used to share a name.
+ *
  * Replaces the previous approach of keying a motion.div on its own value, which
  * remounted the element on every change and replayed the enter animation. At a
  * 900ms playback tick that re-fire read as a blink.

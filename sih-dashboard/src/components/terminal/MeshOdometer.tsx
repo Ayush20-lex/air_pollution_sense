@@ -6,10 +6,18 @@ import { useTerminalStore } from '@/store/useTerminalStore';
 /**
  * Smooth AQI readouts for timeline playback.
  *
+ * Not to be confused with `@/components/ui/rolling-number`, which is the
+ * console's hero odometer. That one drives framer MotionValues per digit and
+ * carries a colour tween and a fixed column count; this one runs every
+ * instance off a single shared rAF ticker, because GeoSections renders these
+ * across a 26-row table and 26 independent frame loops is not the same cost as
+ * one. They were both called RollingNumber, which made the wrong import a
+ * plausible mistake — hence the names.
+ *
  * Two treatments, because one size does not fit both jobs:
- *   `RollingNumber`   — odometer digit columns, for the hero readout.
- *   `AnimatedNumber`  — value tween as plain text, for the 50+ list and table
- *                       cells where rolling columns would be noise.
+ *   `MeshOdometer`   — odometer digit columns, for the hero readout.
+ *   `AnimatedNumber` — value tween as plain text, for the 50+ list and table
+ *                      cells where rolling columns would be noise.
  *
  * Both are driven by one shared animation frame loop. Fifty independent rAF
  * loops would each schedule their own frame; a single ticker walking a
@@ -130,7 +138,7 @@ const STRIP = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
  * Columns are keyed from the right (`columnKeys`), so 98 -> 104 mounts a new
  * hundreds column and leaves the tens and units rolling from where they were.
  */
-export function RollingNumber({
+export function MeshOdometer({
   value,
   duration,
   className,

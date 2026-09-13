@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Compass, Navigation, Wind } from 'lucide-react';
-import { RollingNumber, useRollDuration } from '@/components/terminal/RollingNumber';
+import { MeshOdometer, useRollDuration } from '@/components/terminal/MeshOdometer';
 import { Label, Meter, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { DISPERSION, type TerminalFrame } from '@/lib/terminal/field';
@@ -104,7 +104,7 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <RollingNumber
+            <MeshOdometer
               value={sample.aqi}
               duration={rollMs}
               className="font-display text-3xl font-extrabold leading-none text-white"

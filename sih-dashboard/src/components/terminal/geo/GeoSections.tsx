@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { AlertTriangle, CircleAlert, Info } from 'lucide-react';
 import { Delta, Label, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
-import { AnimatedNumber, useRollDuration } from '@/components/terminal/RollingNumber';
+import { AnimatedNumber, useRollDuration } from '@/components/terminal/MeshOdometer';
 import { COVERAGE_KPIS, INCIDENTS } from '@/lib/terminal/content';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { DISPERSION, nodeSeries, type TerminalFrame } from '@/lib/terminal/field';
