@@ -28,6 +28,7 @@ import {
   type Station,
 } from '@/lib/terminal/stations';
 import { useTerminalStore } from '@/store/useTerminalStore';
+import { TERM } from '@/lib/terminal/palette';
 
 /**
  * Delhi NCR plume map.
@@ -436,7 +437,7 @@ function WindStreamlines({ frame }: { frame: TerminalFrame }) {
           interactive={false}
           pathOptions={{
             renderer,
-            color: '#7bd0ff',
+            color: TERM.secondary,
             weight: 1.1,
             opacity: 0.46,
             fill: false,

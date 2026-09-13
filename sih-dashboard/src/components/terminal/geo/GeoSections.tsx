@@ -8,6 +8,7 @@ import { DISPERSION, nodeSeries, type TerminalFrame } from '@/lib/terminal/field
 import { STATIONS, STATIONS_BY_SEVERITY, ZONE_SUMMARY } from '@/lib/terminal/stations';
 import { cn } from '@/lib/utils';
 import { useTerminalStore } from '@/store/useTerminalStore';
+import { TERM, TERM_SEVERITY } from '@/lib/terminal/palette';
 
 /** Everything below the map on the geo page. */
 export function GeoSections({ frame }: { frame: TerminalFrame }) {
@@ -167,37 +168,37 @@ function TrappingProfile() {
         >
         <defs>
           <linearGradient id="term-smog" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#f97316" stopOpacity="0.45" />
-            <stop offset="100%" stopColor="#ef4444" stopOpacity="0.18" />
+            <stop offset="0%" stopColor={TERM_SEVERITY.high} stopOpacity="0.45" />
+            <stop offset="100%" stopColor={TERM_SEVERITY.severe} stopOpacity="0.18" />
           </linearGradient>
         </defs>
-        <rect x="0" y="0" width="400" height="210" fill="#04101d" />
-        <line x1="0" y1="60" x2="400" y2="60" stroke="#7bd0ff" strokeOpacity="0.45" strokeWidth="2" strokeDasharray="6 5" />
-        <text x="200" y="52" fill="#7bd0ff" fontSize="9" fontWeight="700" letterSpacing="1.5" textAnchor="middle" fontFamily="var(--font-mono), monospace">
+        <rect x="0" y="0" width="400" height="210" fill={TERM.bgDeep} />
+        <line x1="0" y1="60" x2="400" y2="60" stroke={TERM.secondary} strokeOpacity="0.45" strokeWidth="2" strokeDasharray="6 5" />
+        <text x="200" y="52" fill={TERM.secondary} fontSize="9" fontWeight="700" letterSpacing="1.5" textAnchor="middle" fontFamily="var(--font-mono), monospace">
           INVERSION LID — {DISPERSION.boundaryLayer} m
         </text>
         <path d="M 30,150 L 104,132 L 300,132 L 372,138 L 372,60 L 30,60 Z" fill="url(#term-smog)" />
         <path
           d="M 0,170 L 40,140 L 78,155 L 104,132 L 300,132 L 330,150 L 366,128 L 400,146 L 400,190 L 0,190 Z"
-          fill="#101f30"
-          stroke="#233549"
+          fill={TERM.surfaceLow}
+          stroke={TERM.outlineVariant}
           strokeWidth="1.5"
         />
-        <g stroke="#f97316" strokeOpacity="0.5" strokeWidth="1.2" fill="none">
+        <g stroke={TERM_SEVERITY.high} strokeOpacity="0.5" strokeWidth="1.2" fill="none">
           <path d="M 120,120 q 20,-14 40,0 t 40,0" />
           <path d="M 150,96 q 20,-14 40,0 t 40,0" />
           <path d="M 180,144 q 20,-12 40,0 t 40,0" />
         </g>
-        <text transform="translate(16,146) rotate(-38)" fill="#64748b" fontSize="8" fontWeight="700" fontFamily="var(--font-mono), monospace">
+        <text transform="translate(16,146) rotate(-38)" fill={TERM.outline} fontSize="8" fontWeight="700" fontFamily="var(--font-mono), monospace">
           ARAVALLI SW
         </text>
-        <text transform="translate(338,120) rotate(-32)" fill="#64748b" fontSize="8" fontWeight="700" fontFamily="var(--font-mono), monospace">
+        <text transform="translate(338,120) rotate(-32)" fill={TERM.outline} fontSize="8" fontWeight="700" fontFamily="var(--font-mono), monospace">
           HIMALAYAN NE
         </text>
-        <text x="200" y="112" fill="#fb923c" fontSize="9" fontWeight="700" letterSpacing="1.5" textAnchor="middle" fontFamily="var(--font-mono), monospace">
+        <text x="200" y="112" fill={TERM_SEVERITY.highSoft} fontSize="9" fontWeight="700" letterSpacing="1.5" textAnchor="middle" fontFamily="var(--font-mono), monospace">
           TRAPPED SMOG LAYER
         </text>
-        <text x="200" y="166" fill="#94a3b8" fontSize="9" fontWeight="700" letterSpacing="1.5" textAnchor="middle" fontFamily="var(--font-mono), monospace">
+        <text x="200" y="166" fill={TERM.inkVariant} fontSize="9" fontWeight="700" letterSpacing="1.5" textAnchor="middle" fontFamily="var(--font-mono), monospace">
           DELHI NCR BASIN FLOOR
         </text>
         </svg>
@@ -313,9 +314,9 @@ function NodeLedger({ frame }: { frame: TerminalFrame }) {
 }
 
 const ALERT_STYLE = {
-  CRITICAL: { border: 'border-l-red-500', color: '#ef4444', Icon: CircleAlert, pill: 'border-red-500/40 bg-red-500/20 text-red-300' },
-  WARNING: { border: 'border-l-amber-500', color: '#f59e0b', Icon: AlertTriangle, pill: 'border-amber-500/40 bg-amber-500/20 text-amber-300' },
-  ADVISORY: { border: 'border-l-term-secondary', color: '#7bd0ff', Icon: Info, pill: 'border-term-secondary/40 bg-term-secondary/20 text-term-secondary' },
+  CRITICAL: { border: 'border-l-red-500', color: TERM_SEVERITY.severe, Icon: CircleAlert, pill: 'border-red-500/40 bg-red-500/20 text-red-300' },
+  WARNING: { border: 'border-l-amber-500', color: TERM_SEVERITY.elevated, Icon: AlertTriangle, pill: 'border-amber-500/40 bg-amber-500/20 text-amber-300' },
+  ADVISORY: { border: 'border-l-term-secondary', color: TERM.secondary, Icon: Info, pill: 'border-term-secondary/40 bg-term-secondary/20 text-term-secondary' },
 } as const;
 
 function SpatialAlerts() {

@@ -3,6 +3,7 @@ import { Label, SectionHead, TelemetryCard } from '@/components/terminal/Termina
 import { EXPOSURE_HISTORY, STRESSORS, TEMPORAL_TRACE } from '@/lib/terminal/content';
 import { POLLUTANTS } from '@/lib/terminal/content';
 import { cn } from '@/lib/utils';
+import { TERM, TERM_SEVERITY } from '@/lib/terminal/palette';
 
 const TIMEFRAMES = ['24H', '7D', '30D', '90D'] as const;
 
@@ -61,28 +62,28 @@ function TemporalTrend() {
       <svg viewBox={`0 0 ${w} ${h}`} className="h-64 w-full" role="img" aria-label="24-hour composite AQI trace">
         <defs>
           <linearGradient id="tt-area" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#f97316" stopOpacity="0.45" />
-            <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
+            <stop offset="0%" stopColor={TERM_SEVERITY.high} stopOpacity="0.45" />
+            <stop offset="100%" stopColor={TERM_SEVERITY.high} stopOpacity="0" />
           </linearGradient>
         </defs>
 
         {/* severity bands behind the trace */}
-        <rect x="0" y={y(200)} width={w} height={y(150) - y(200)} fill="#ef4444" opacity="0.07" />
-        <rect x="0" y={y(150)} width={w} height={y(100) - y(150)} fill="#f97316" opacity="0.07" />
-        <rect x="0" y={y(100)} width={w} height={y(50) - y(100)} fill="#facc15" opacity="0.05" />
+        <rect x="0" y={y(200)} width={w} height={y(150) - y(200)} fill={TERM_SEVERITY.severe} opacity="0.07" />
+        <rect x="0" y={y(150)} width={w} height={y(100) - y(150)} fill={TERM_SEVERITY.high} opacity="0.07" />
+        <rect x="0" y={y(100)} width={w} height={y(50) - y(100)} fill={TERM_SEVERITY.caution} opacity="0.05" />
 
         {[50, 100, 150, 200].map((v) => (
           <g key={v}>
-            <line x1="0" y1={y(v)} x2={w} y2={y(v)} stroke="#233549" strokeWidth="1" strokeDasharray="4 6" />
-            <text x="4" y={y(v) - 4} fill="#64748b" fontSize="10" fontFamily="var(--font-mono), monospace">
+            <line x1="0" y1={y(v)} x2={w} y2={y(v)} stroke={TERM.outlineVariant} strokeWidth="1" strokeDasharray="4 6" />
+            <text x="4" y={y(v) - 4} fill={TERM.outline} fontSize="10" fontFamily="var(--font-mono), monospace">
               {v}
             </text>
           </g>
         ))}
 
         <path d={`${line} L${w},${h} L0,${h} Z`} fill="url(#tt-area)" />
-        <path d={line} fill="none" stroke="#f97316" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx={x(lastIdx)} cy={y(TEMPORAL_TRACE[lastIdx])} r="5" fill="#f97316" stroke="#fff" strokeWidth="2">
+        <path d={line} fill="none" stroke={TERM_SEVERITY.high} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx={x(lastIdx)} cy={y(TEMPORAL_TRACE[lastIdx])} r="5" fill={TERM_SEVERITY.high} stroke="#fff" strokeWidth="2">
           <animate attributeName="r" values="5;9;5" dur="2.2s" repeatCount="indefinite" />
         </circle>
       </svg>
@@ -114,7 +115,7 @@ function StressorDonut() {
       <div className="flex items-center justify-center">
         <div className="relative size-44">
           <svg viewBox="0 0 160 160" className="size-full -rotate-90" aria-hidden="true">
-            <circle cx="80" cy="80" r={r} fill="none" stroke="#162335" strokeWidth="18" />
+            <circle cx="80" cy="80" r={r} fill="none" stroke={TERM.surfaceRaised} strokeWidth="18" />
             {STRESSORS.map((s) => {
               const len = (s.share / total) * c;
               const dash = `${len} ${c - len}`;
@@ -204,7 +205,7 @@ function Correlator() {
 
         <svg viewBox={`0 0 ${w} ${h}`} className="h-60 w-full" role="img" aria-label="Correlated pollutant channels">
           {[0.25, 0.5, 0.75].map((f) => (
-            <line key={f} x1="0" y1={h * f} x2={w} y2={h * f} stroke="#233549" strokeWidth="1" strokeDasharray="4 6" />
+            <line key={f} x1="0" y1={h * f} x2={w} y2={h * f} stroke={TERM.outlineVariant} strokeWidth="1" strokeDasharray="4 6" />
           ))}
           {POLLUTANTS.filter((p) => active[p.id]).map((p) => {
             const min = Math.min(...p.trend);

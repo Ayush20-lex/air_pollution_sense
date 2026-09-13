@@ -6,6 +6,7 @@
  * future API swap has an obvious seam.
  */
 import { SEVERITY } from '@/lib/tokens';
+import { TERM } from '@/lib/terminal/palette';
 
 export const HUB = {
   name: 'Anand Vihar Hub-04',
@@ -21,8 +22,8 @@ export const HUB = {
   min24: 88,
   max24: 176,
   dominant: 'PM2.5 (68 µg/m³)',
-  confidence: '99.4% Optical',
-  sampleRate: 'Active 100 Hz',
+  confidence: 'Synthetic sample',
+  sampleRate: 'Demo cadence',
 } as const;
 
 /** EPA benchmark scale shown beside the hero gauge. */
@@ -50,8 +51,8 @@ export const KPI_CARDS = [
   { label: 'PM2.5 Dust', value: '68', unit: 'µg/m³', delta: 12.4, color: SEVERITY.poor, series: [44, 47, 43, 52, 58, 61, 57, 68] },
   { label: 'PM10 Coarse', value: '118', unit: 'µg/m³', delta: 8.1, color: SEVERITY.moderate, series: [96, 101, 98, 106, 110, 108, 114, 118] },
   { label: 'Ambient Temp', value: '29.4', unit: '°C', delta: -2.2, color: SEVERITY.fair, series: [33, 32.4, 31.8, 31, 30.6, 30.1, 29.8, 29.4] },
-  { label: 'Humidity', value: '64', unit: '%', delta: 4.6, color: '#7bd0ff', series: [54, 56, 58, 57, 60, 62, 63, 64] },
-  { label: 'Wind Vector', value: '11.2', unit: 'km/h NW', delta: -1.4, color: '#7bd0ff', series: [14, 13.4, 12.8, 12.2, 11.8, 11.4, 11.1, 11.2] },
+  { label: 'Humidity', value: '64', unit: '%', delta: 4.6, color: TERM.secondary, series: [54, 56, 58, 57, 60, 62, 63, 64] },
+  { label: 'Wind Vector', value: '11.2', unit: 'km/h NW', delta: -1.4, color: TERM.secondary, series: [14, 13.4, 12.8, 12.2, 11.8, 11.4, 11.1, 11.2] },
   { label: 'Optical Vis', value: '2.4', unit: 'km', delta: -6.8, color: SEVERITY.bad, series: [3.6, 3.4, 3.1, 2.9, 2.8, 2.6, 2.5, 2.4] },
 ] as const;
 
@@ -88,8 +89,8 @@ export const STRESSORS = [
   { label: 'PM2.5', share: 38, color: SEVERITY.poor },
   { label: 'PM10', share: 24, color: SEVERITY.moderate },
   { label: 'CO₂', share: 14, color: SEVERITY.fair },
-  { label: 'O₃', share: 11, color: '#7bd0ff' },
-  { label: 'Other', share: 13, color: '#64748b' },
+  { label: 'O₃', share: 11, color: TERM.secondary },
+  { label: 'Other', share: 13, color: TERM.outline },
 ] as const;
 
 /** 30-day exposure frequency, days spent in each band. */
@@ -132,13 +133,24 @@ export const INCIDENTS = [
 ];
 
 export const COVERAGE_KPIS = [
-  { label: 'Mesh Coverage', value: '94.2', unit: '%', color: '#4edea3', series: [88, 89, 90, 91, 92, 93, 94, 94.2] },
-  { label: 'Interpolation Confidence', value: '96.8', unit: '%', color: '#7bd0ff', series: [93, 94, 93.5, 95, 95.4, 96, 96.4, 96.8] },
-  { label: 'Spatial Resolution', value: '250', unit: 'm', color: '#64748b', series: [250, 250, 250, 250, 250, 250, 250, 250] },
+  { label: 'Mesh Coverage', value: '94.2', unit: '%', color: TERM.primary, series: [88, 89, 90, 91, 92, 93, 94, 94.2] },
+  { label: 'Interpolation Confidence', value: '96.8', unit: '%', color: TERM.secondary, series: [93, 94, 93.5, 95, 95.4, 96, 96.4, 96.8] },
+  { label: 'Spatial Resolution', value: '250', unit: 'm', color: TERM.outline, series: [250, 250, 250, 250, 250, 250, 250, 250] },
   { label: 'Last Full Sweep', value: '12', unit: 's ago', color: SEVERITY.poor, series: [9, 14, 8, 16, 11, 15, 10, 12] },
 ] as const;
 
-export const CERTIFICATIONS = ['EN 16450 COMPLIANT', 'EPA CFR 40 VERIFIED', 'STREAM LATENCY: 18MS'] as const;
+/**
+ * Footer strip. This deliberately no longer claims EN 16450 / EPA CFR 40
+ * conformance: those are real instrument standards, and the readings on this
+ * surface are shaped demo values, not output from an accredited analyser.
+ * Claiming an accreditation the project has not been granted is a
+ * credibility risk in front of anyone who knows the standard.
+ */
+export const CERTIFICATIONS = [
+  'DEMO DATA · NOT AN ACCREDITED FEED',
+  'STATION LIST: CPCB / DPCC / HSPCB / UPPCB',
+  'SIH ID26082 · NCMRWF',
+] as const;
 
 export const LOCATIONS = [
   'Delhi NCR - Anand Vihar (Sector 4)',

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Delta, Label, Meter, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { KPI_CARDS, POLLUTANTS, type PollutantReading } from '@/lib/terminal/content';
+import { TERM } from '@/lib/terminal/palette';
 
 /** Six KPI micro-cards + the eight-channel chemical grid. */
 export function OverviewMetrics() {
@@ -145,7 +146,7 @@ function TrendChart({ values, color }: { values: number[]; color: string }) {
           cy={y(v)}
           r={i === values.length - 1 ? 3.5 : 2}
           fill={color}
-          stroke={i === values.length - 1 ? '#ffffff' : 'none'}
+          stroke={i === values.length - 1 ? TERM.ink : 'none'}
           strokeWidth="1"
         />
       ))}

@@ -1,7 +1,20 @@
-/* Hallmark · audit pass: gates 1, 4, 5, 6, 7, 10, 11, 13, 14, 15, 17, 22,
- * 26, 27, 33, 40, 41, 45, 48, 50 closed
- * pre-emit critique: P4 H4 E4 S5 R4 V3
- * contrast: pass (40-41) · tokens: pass (48) · mobile: pass (34, 49-51)
+/* Hallmark · genre: atmospheric
+ * surfaces: intro (aerosol-globe landing track) · console (/console) ·
+ *           public terminal (/terminal, dark-only, scoped in terminal.css)
+ *
+ * The previous stamp here claimed a blanket audit pass and "tokens: pass (48)".
+ * Both had stopped being true: the intro was rewritten around a Fibonacci-shell
+ * particle field, the terminal was ported in from the Next app, and 59 raw hex
+ * values were sitting in the terminal's SVG and canvas layers. A stamp that
+ * overstates its own compliance is worse than none — it stops the next audit
+ * from looking. Recorded below is what the last audit actually found.
+ *
+ * audit 2026-09-13 · gates closed: 34 (overflow-x clip) · 38a (no italic
+ *   headers) · 47 (no re-drawn chrome) · 48 (tokens — terminal SVG/canvas
+ *   colours now named in lib/terminal/palette.ts) · 54 (no tag-left heads)
+ * open: the terminal's readings are shaped demo values, not live data. They
+ *   are labelled as such on the surface rather than dressed as an accredited
+ *   feed; wiring it to the real forecast is the standing fix.
  */
 @tailwind base;
 @tailwind components;

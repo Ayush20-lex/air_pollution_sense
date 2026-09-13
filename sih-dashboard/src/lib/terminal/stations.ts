@@ -7,6 +7,8 @@
  * the hourly variation is applied by `buildFrames` in `./field`.
  */
 
+import { TERM, TERM_SEVERITY } from './palette';
+
 export type TerminalZone = 'North' | 'West' | 'Central' | 'East' | 'South' | 'NCR Outer';
 
 export type NodeStatus = 'ONLINE' | 'DEGRADED' | 'CALIBRATING';
@@ -130,7 +132,7 @@ export const PLUME_SOURCES: PlumeSource[] = [
     label: 'Stubble Burning',
     detail: 'Punjab / Haryana — NW inflow',
     share: 34,
-    color: '#a855f7',
+    color: TERM.tertiary,
     entry: [28.95, 76.78],
     target: [28.72, 77.09],
     curve: 0.05,
@@ -140,7 +142,7 @@ export const PLUME_SOURCES: PlumeSource[] = [
     label: 'Industrial',
     detail: 'Bawana / Wazirpur — N inflow',
     share: 26,
-    color: '#ef4444',
+    color: TERM_SEVERITY.severe,
     entry: [28.96, 77.2],
     target: [28.68, 77.28],
     curve: -0.04,
@@ -150,7 +152,7 @@ export const PLUME_SOURCES: PlumeSource[] = [
     label: 'Vehicular',
     detail: 'NH48 Expressway — SW inflow',
     share: 22,
-    color: '#f97316',
+    color: TERM_SEVERITY.high,
     entry: [28.3, 76.82],
     target: [28.58, 77.08],
     curve: 0.05,
@@ -160,7 +162,7 @@ export const PLUME_SOURCES: PlumeSource[] = [
     label: 'Construction',
     detail: 'Faridabad / Noida — SE inflow',
     share: 18,
-    color: '#facc15',
+    color: TERM_SEVERITY.caution,
     entry: [28.28, 77.62],
     target: [28.52, 77.33],
     curve: -0.045,

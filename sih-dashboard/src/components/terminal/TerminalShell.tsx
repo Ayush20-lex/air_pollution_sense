@@ -158,8 +158,8 @@ function TerminalSidebar() {
             <span className="font-semibold text-term-secondary">{HUB.ping} ping</span>
           </div>
           <div className="flex justify-between border-t border-term-outline-variant/40 pt-1.5 font-mono text-[10px] text-slate-400">
-            <span>ISO/IEC 17025 CERT</span>
-            <span className="font-semibold text-term-primary">VERIFIED</span>
+            <span>Data source</span>
+            <span className="font-semibold text-term-primary">SYNTHETIC</span>
           </div>
         </div>
         <div className="rounded-lg border border-term-outline-variant/30 bg-term-surface-c/40 p-2 text-center font-mono text-[11px] text-slate-400">
@@ -235,9 +235,9 @@ function TerminalHeader() {
 
       <div className="flex shrink-0 items-center justify-end gap-3">
         <div className="flex items-center gap-2 rounded-full border border-term-primary/40 bg-term-primary/10 px-3 py-1.5 shadow-[0_0_15px_rgba(78,222,163,0.15)]">
-          <span className="pulse-live size-2.5 rounded-full bg-term-primary" />
+          <span className="size-2.5 rounded-full bg-amber-400" />
           <span className="font-mono text-xs font-bold uppercase tracking-wide text-term-primary">
-            Live Monitoring
+            Demo / Synthetic
           </span>
         </div>
         <LiveClock />

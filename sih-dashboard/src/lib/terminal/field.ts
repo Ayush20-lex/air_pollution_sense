@@ -13,6 +13,7 @@
 import { alertForAqi, type TerminalAlert } from './bands';
 import type { GridPoint, ScalarGrid } from './contours';
 import { NCR_BOUNDS, STATIONS } from './stations';
+import { TERM_SEVERITY } from '@/lib/terminal/palette';
 
 /** Cells per side of the nested grid. */
 export const GRID = 18;
@@ -212,7 +213,7 @@ export function gridToLatLng(n: number, [gx, gy]: GridPoint): [number, number] {
  * above it.
  */
 export const CONTOUR_LEVELS = [
-  { value: 45, label: '45', color: '#facc15', dash: '6 6' as string | null, weight: 1.1 },
-  { value: 60, label: '60', color: '#f97316', dash: null as string | null, weight: 1.4 },
-  { value: 90, label: '90', color: '#ef4444', dash: null as string | null, weight: 1.8 },
+  { value: 45, label: '45', color: TERM_SEVERITY.caution, dash: '6 6' as string | null, weight: 1.1 },
+  { value: 60, label: '60', color: TERM_SEVERITY.high, dash: null as string | null, weight: 1.4 },
+  { value: 90, label: '90', color: TERM_SEVERITY.severe, dash: null as string | null, weight: 1.8 },
 ];

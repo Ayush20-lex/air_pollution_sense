@@ -6,6 +6,7 @@ import { INCIDENTS, POLLUTANTS } from '@/lib/terminal/content';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { STATIONS_BY_SEVERITY } from '@/lib/terminal/stations';
 import { cn } from '@/lib/utils';
+import { TERM, TERM_SEVERITY } from '@/lib/terminal/palette';
 
 /** Regional station cards, incident banners and the spectrometry ledger. */
 export function OverviewMesh() {
@@ -101,9 +102,9 @@ function StationMesh() {
 }
 
 const LEVEL_STYLE = {
-  CRITICAL: { border: 'border-l-red-500', color: '#ef4444', icon: CircleAlert, pill: 'bg-red-500/20 text-red-300 border-red-500/40' },
-  WARNING: { border: 'border-l-amber-500', color: '#f59e0b', icon: AlertTriangle, pill: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
-  ADVISORY: { border: 'border-l-term-secondary', color: '#7bd0ff', icon: Info, pill: 'bg-term-secondary/20 text-term-secondary border-term-secondary/40' },
+  CRITICAL: { border: 'border-l-red-500', color: TERM_SEVERITY.severe, icon: CircleAlert, pill: 'bg-red-500/20 text-red-300 border-red-500/40' },
+  WARNING: { border: 'border-l-amber-500', color: TERM_SEVERITY.elevated, icon: AlertTriangle, pill: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+  ADVISORY: { border: 'border-l-term-secondary', color: TERM.secondary, icon: Info, pill: 'bg-term-secondary/20 text-term-secondary border-term-secondary/40' },
 } as const;
 
 function IncidentBanners() {

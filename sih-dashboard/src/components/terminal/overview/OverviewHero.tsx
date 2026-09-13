@@ -4,6 +4,7 @@ import { Label, Meter, TelemetryCard } from '@/components/terminal/TerminalPrimi
 import { ADVISORY_TEXT, BIOMETRIC_IMPACTS, EPA_SCALE, HUB } from '@/lib/terminal/content';
 import { aqiColor } from '@/lib/terminal/bands';
 import { cn } from '@/lib/utils';
+import { TERM } from '@/lib/terminal/palette';
 
 /** Status banner + hero gauge + public health advisory. */
 export function OverviewHero() {
@@ -38,8 +39,8 @@ function StatusBanner() {
         <StatPill icon={<Radio className="size-4 text-term-primary" />} label="Mesh Stream Sync" value={HUB.sampleRate} />
         <StatPill
           icon={<Thermometer className="size-4 text-term-secondary" />}
-          label="Calibrated"
-          value="EPA CFR 40"
+          label="Readings"
+          value="Demo values"
           valueClass="text-term-primary"
         />
       </div>
@@ -104,7 +105,7 @@ function AqiGauge() {
                 cy="100"
                 r="82"
                 fill="none"
-                stroke="#162335"
+                stroke={TERM.surfaceRaised}
                 strokeWidth="16"
                 strokeLinecap="round"
                 strokeDasharray={circumference}

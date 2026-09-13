@@ -6,6 +6,7 @@ import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { DISPERSION, type TerminalFrame } from '@/lib/terminal/field';
 import { PLUME_SOURCES, stationById } from '@/lib/terminal/stations';
 import { useTerminalStore } from '@/store/useTerminalStore';
+import { TERM } from '@/lib/terminal/palette';
 
 /** The three-card rail beside the map. */
 export function GeoRail({ frame }: { frame: TerminalFrame }) {
@@ -87,7 +88,7 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
       <div className="flex items-center gap-4">
         <div className="relative size-28 shrink-0">
           <svg viewBox="0 0 120 120" className="size-full -rotate-90" aria-hidden="true">
-            <circle cx="60" cy="60" r="48" fill="none" stroke="#162335" strokeWidth="12" />
+            <circle cx="60" cy="60" r="48" fill="none" stroke={TERM.surfaceRaised} strokeWidth="12" />
             <circle
               cx="60"
               cy="60"
@@ -161,16 +162,16 @@ function TrappingDispersion() {
 
       <div className="flex items-center gap-4">
         <svg viewBox="0 0 100 100" className="size-24 shrink-0" aria-label="Wind direction north-west">
-          <circle cx="50" cy="50" r="42" fill="#010f1f" stroke="#233549" strokeWidth="2" />
-          <circle cx="50" cy="50" r="32" fill="none" stroke="#1c2b3c" strokeWidth="1" />
-          <g fill="#64748b" fontSize="9" fontWeight="700" textAnchor="middle" fontFamily="var(--font-mono), monospace">
+          <circle cx="50" cy="50" r="42" fill={TERM.surfaceLowest} stroke={TERM.outlineVariant} strokeWidth="2" />
+          <circle cx="50" cy="50" r="32" fill="none" stroke={TERM.surfaceHigh} strokeWidth="1" />
+          <g fill={TERM.outline} fontSize="9" fontWeight="700" textAnchor="middle" fontFamily="var(--font-mono), monospace">
             <text x="50" y="16">N</text>
             <text x="50" y="92">S</text>
             <text x="90" y="54">E</text>
             <text x="10" y="54">W</text>
           </g>
-          <line x1="50" y1="50" x2="27" y2="27" stroke="#4edea3" strokeWidth="3" strokeLinecap="round" />
-          <circle cx="50" cy="50" r="3.5" fill="#4edea3" />
+          <line x1="50" y1="50" x2="27" y2="27" stroke={TERM.primary} strokeWidth="3" strokeLinecap="round" />
+          <circle cx="50" cy="50" r="3.5" fill={TERM.primary} />
         </svg>
 
         <dl className="flex-1 space-y-1.5 font-mono text-[11px]">
