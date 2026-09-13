@@ -72,7 +72,19 @@ export type PollutantReading = {
   trend: number[];
 };
 
-/** The eight-channel chemical grid, also the rows of the ledger. */
+/**
+ * The eight-channel chemical grid, also the rows of the ledger.
+ *
+ * These are the eight the CPCB National AQI indexes — PM2.5, PM10, NO2, SO2,
+ * CO, O3, NH3, Pb — matching BREAKPOINTS in backend/aqi_cpcb.py. This grid
+ * used to carry CO2 in place of NO2, which was wrong twice over: CO2 has no
+ * CPCB breakpoint table and so cannot contribute a sub-index, and dropping
+ * NO2 removed the vehicular marker that matters most in an NCR winter.
+ *
+ * NO2 sits at 68 µg/m³ against the 80 µg/m³ 24-hour standard — a sub-index of
+ * about 85, which stays below the 142 shown on the hero, so PM2.5 remains the
+ * prominent pollutant and the two screens still agree.
+ */
 export const POLLUTANTS: PollutantReading[] = [
   { id: 'pm25', symbol: 'PM2.5', name: 'Fine Particulate', value: 68, unit: 'µg/m³', reference: '< 30', pct: 78, delta: 12.4, status: 'Unhealthy', color: SEVERITY.poor, note: 'Threshold Exceeded', trend: [44, 47, 43, 52, 58, 61, 55, 64, 66, 67, 68, 68] },
   { id: 'pm10', symbol: 'PM10', name: 'Coarse Particulate', value: 118, unit: 'µg/m³', reference: '< 60', pct: 68, delta: 8.1, status: 'Poor', color: SEVERITY.moderate, note: 'Threshold Exceeded', trend: [92, 96, 99, 104, 101, 108, 112, 109, 114, 116, 117, 118] },
@@ -81,14 +93,14 @@ export const POLLUTANTS: PollutantReading[] = [
   { id: 'pb', symbol: 'Pb', name: 'Lead Aerosol', value: 0.42, unit: 'µg/m³', reference: '< 1.0', pct: 42, delta: 1.1, status: 'Normal', color: SEVERITY.good, note: 'Within Limits', trend: [0.38, 0.39, 0.4, 0.39, 0.41, 0.42, 0.41, 0.42, 0.42, 0.43, 0.42, 0.42] },
   { id: 'so2', symbol: 'SO₂', name: 'Sulphur Dioxide', value: 22, unit: 'µg/m³', reference: '< 80', pct: 28, delta: 3.4, status: 'Normal', color: SEVERITY.good, note: 'Within Limits', trend: [17, 18, 19, 18, 20, 21, 20, 21, 22, 22, 23, 22] },
   { id: 'co', symbol: 'CO', name: 'Carbon Monoxide', value: 1.8, unit: 'mg/m³', reference: '< 2.0', pct: 62, delta: 6.9, status: 'Elevated', color: SEVERITY.moderate, note: 'Approaching Limit', trend: [1.2, 1.3, 1.4, 1.4, 1.5, 1.6, 1.6, 1.7, 1.7, 1.8, 1.8, 1.8] },
-  { id: 'co2', symbol: 'CO₂', name: 'Carbon Dioxide', value: 486, unit: 'ppm', reference: '< 420', pct: 74, delta: 4.2, status: 'Elevated', color: SEVERITY.moderate, note: 'Above Baseline', trend: [432, 438, 441, 448, 452, 459, 464, 470, 474, 480, 483, 486] },
+  { id: 'no2', symbol: 'NO₂', name: 'Nitrogen Dioxide', value: 68, unit: 'µg/m³', reference: '< 80', pct: 85, delta: 5.7, status: 'Elevated', color: SEVERITY.moderate, note: 'Vehicular Peak', trend: [44, 47, 51, 50, 54, 57, 59, 62, 63, 66, 67, 68] },
 ];
 
 /** Stressor contribution to the composite index. */
 export const STRESSORS = [
   { label: 'PM2.5', share: 38, color: SEVERITY.poor },
   { label: 'PM10', share: 24, color: SEVERITY.moderate },
-  { label: 'CO₂', share: 14, color: SEVERITY.fair },
+  { label: 'NO₂', share: 14, color: SEVERITY.fair },
   { label: 'O₃', share: 11, color: TERM.secondary },
   { label: 'Other', share: 13, color: TERM.outline },
 ] as const;
