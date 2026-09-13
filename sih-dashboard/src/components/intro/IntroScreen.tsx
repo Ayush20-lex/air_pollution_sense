@@ -80,20 +80,40 @@ export function IntroScreen() {
       const x = e.clientX - r.left;
       const y = e.clientY - r.top;
 
+      // Is the cursor actually over the cloud?
+      //
+      // Proximity to a zone pill is the wrong test: the pills are placed to
+      // frame the cloud rather than cover it, so the nearest one can be a
+      // short hop away while the cursor sits on empty sky.
+      //
+      // The footprint is an ellipse fitted to the rendered field. It is not
+      // derived from the camera: the rig dollies on scroll and parallaxes with
+      // the pointer, so a projection computed from the nominal camera drifts
+      // out of register as soon as the page moves. The drawing buffer is not
+      // preserved either, so the canvas cannot be sampled without paying for
+      // preserveDrawingBuffer on the heaviest chunk in the build. These are
+      // empirical, and the only thing they need to be is a good fit — nudge
+      // them if the field's radius changes.
+      const CLOUD = { cx: 0.5, cy: 0.4, rx: 0.32, ry: 0.34 };
+      const nx = (x / r.width - CLOUD.cx) / CLOUD.rx;
+      const ny = (y / r.height - CLOUD.cy) / CLOUD.ry;
+      if (nx * nx + ny * ny > 1) {
+        setProbe(null);
+        return;
+      }
+
+      // Inside the cloud, the nearest pill names the zone — it is the same
+      // direction the pill itself is pointing at.
       let best: { id: string; d: number } | null = null;
       for (const slot of SLOTS) {
         const sx = (parseFloat(slot.left) / 100) * r.width;
         const sy = (parseFloat(slot.top) / 100) * r.height;
-        // Normalised so a wide viewport does not bias the match horizontally.
         const dx = (x - sx) / r.width;
         const dy = (y - sy) / r.height;
         const d = Math.hypot(dx, dy);
         if (!best || d < best.d) best = { id: slot.id, d };
       }
-
-      // Beyond this the cursor is over empty sky rather than the cloud, and a
-      // readout there would be claiming a reading for nothing.
-      if (!best || best.d > 0.32) {
+      if (!best) {
         setProbe(null);
         return;
       }
