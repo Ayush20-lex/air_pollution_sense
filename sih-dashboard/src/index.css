@@ -101,6 +101,54 @@
       0 18px 50px -20px rgb(0 0 0 / 0.6);
   }
 
+  /* Interactive lift for the intro's panels. Separate from `.glass` so static
+     surfaces (the console's fixed cockpit panels) never pick up hover state. */
+  .glass-hover {
+    position: relative;
+    isolation: isolate;
+    transition:
+      transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.28s ease,
+      box-shadow 0.28s ease;
+  }
+  .glass-hover::after {
+    /* accent wash that blooms from the top edge on hover */
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      160deg,
+      rgb(var(--as-accent) / 0.14),
+      transparent 55%
+    );
+    opacity: 0;
+    transition: opacity 0.28s ease;
+    pointer-events: none;
+    z-index: -1;
+  }
+  .glass-hover:hover,
+  .glass-hover:focus-within {
+    transform: translateY(-4px);
+    border-color: rgb(var(--as-accent) / 0.45);
+    box-shadow:
+      0 0 0 1px rgb(var(--as-accent) / 0.18),
+      0 20px 44px -24px rgb(var(--as-accent) / 0.55),
+      0 12px 32px -18px rgb(15 23 42 / 0.25);
+  }
+  .dark .glass-hover:hover,
+  .dark .glass-hover:focus-within {
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.07),
+      0 0 0 1px rgb(var(--as-accent) / 0.22),
+      0 24px 52px -24px rgb(var(--as-accent) / 0.5),
+      0 18px 50px -20px rgb(0 0 0 / 0.6);
+  }
+  .glass-hover:hover::after,
+  .glass-hover:focus-within::after {
+    opacity: 1;
+  }
+
   .panel-title {
     @apply flex items-center gap-2 font-mono text-2xs uppercase tracking-[0.18em] text-faint;
   }
@@ -313,6 +361,11 @@
    handled separately by <MotionConfig reducedMotion="user">, and the intro
    canvas drops to an on-demand frameloop. ------------------------------ */
 @media (prefers-reduced-motion: reduce) {
+  /* keep the accent wash as the hover affordance, drop the lift */
+  .glass-hover:hover,
+  .glass-hover:focus-within {
+    transform: none;
+  }
   *,
   *::before,
   *::after {

@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import * as React from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
@@ -7,34 +6,38 @@ import { useTheme } from 'next-themes';
 import { PARTICLE } from '@/lib/tokens';
 import { seeded } from '@/lib/utils';
 
-// Finer grain: more particles, each smaller. The cloud reads as aerosol rather
-// than as a scatter of dots, and the extra count keeps it from thinning out now
-// that the individual grains are ~40% the old diameter.
-const COUNT = 13500;
+const COUNT = 9200;
+/** Radius of the aerosol globe, in world units. */
+const RADIUS = 2.45;
+/** Golden angle — the spacing that keeps a Fibonacci sphere free of seams. */
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
-/** Base point diameter in world units. 0.075 read as soft blobs at this count. */
-const GRAIN = 0.042;
+/**
+ * Low-frequency field over the sphere. Three rotated sine lobes stand in for
+ * fbm noise: enough to break the globe into continent-sized clean and loaded
+ * regions, cheap enough to evaluate once per particle at build time.
+ */
+function loadAt(x: number, y: number, z: number) {
+  const v =
+    Math.sin(x * 2.1 + z * 1.3) * 0.45 +
+    Math.sin(y * 3.3 - x * 1.7) * 0.33 +
+    Math.sin(z * 2.7 + y * 2.1) * 0.22;
+  return Math.min(1, Math.max(0, 0.5 + v * 0.5));
+}
 
 /** Round, soft-edged sprite so points read as aerosol, not squares. */
 function makeSprite() {
-  const size = 128; // finer grains need the extra texel budget to stay round
+  const size = 64;
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d')!;
   const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  // A tighter, brighter core with a longer tail: crisper centre, still no
-  // hard edge. The old 0.35 stop left grains looking like soft blobs.
   g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.18, 'rgba(255,255,255,0.92)');
-  g.addColorStop(0.42, 'rgba(255,255,255,0.34)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.55)');
   g.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, size, size);
   const tex = new THREE.CanvasTexture(c);
-  tex.generateMipmaps = true;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.magFilter = THREE.LinearFilter;
-  tex.anisotropy = 4;
   tex.needsUpdate = true;
   return tex;
 }
@@ -57,6 +60,7 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
     const positions = new Float32Array(COUNT * 3);
     const colors = new Float32Array(COUNT * 3);
     const seeds = new Float32Array(COUNT * 3);
+    const sizes = new Float32Array(COUNT);
 
     // Light mode needs deeper pigments: the neon set greys out against white.
     const p = dark ? PARTICLE.dark : PARTICLE.light;
@@ -67,41 +71,49 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
     const tmp = new THREE.Color();
 
     for (let i = 0; i < COUNT; i++) {
-      const a = seeded(i * 1.13) * Math.PI * 2;
-      // Tighter bundle: the disc is drawn in from 3.25 to 2.35 and the exponent
-      // raised from 0.62 to 0.70, which pulls mass toward the centre instead of
-      // spreading it evenly to the rim.
-      const r = Math.pow(seeded(i * 2.71), 0.7) * 2.35;
-      // Stratification: most mass trapped in a shallow layer near y = -0.4
-      const strat = Math.pow(seeded(i * 3.37), 2.4);
-      // Vertical extent pulled in to match, so the slab stays in proportion
-      // rather than becoming a tall column once the radius shrinks.
-      const y = -1.0 + strat * 2.35 + (seeded(i * 5.19) - 0.5) * 0.2;
+      // Fibonacci lattice: even coverage of the sphere, with none of the
+      // polar clustering naive lat/long sampling produces.
+      const t = i / (COUNT - 1);
+      const dy = 1 - t * 2;
+      const ring = Math.sqrt(Math.max(0, 1 - dy * dy));
+      const theta = GOLDEN_ANGLE * i;
+      const dx = Math.cos(theta) * ring;
+      const dz = Math.sin(theta) * ring;
 
-      positions[i * 3] = Math.cos(a) * r;
-      positions[i * 3 + 1] = y;
-      positions[i * 3 + 2] = Math.sin(a) * r * 0.82;
+      // Most mass sits in a thin shell; the rest drifts inside as depth haze.
+      const u = seeded(i * 2.71);
+      const shell =
+        u < 0.78 ? 0.94 + seeded(i * 5.19) * 0.06 : Math.pow(seeded(i * 7.13), 0.4) * 0.9;
+      const rad = RADIUS * shell;
+
+      positions[i * 3] = dx * rad;
+      positions[i * 3 + 1] = dy * rad;
+      positions[i * 3 + 2] = dz * rad;
 
       seeds[i * 3] = seeded(i * 7.77);
       seeds[i * 3 + 1] = seeded(i * 9.11);
       seeds[i * 3 + 2] = seeded(i * 11.31);
 
-      // Concentration falls off with height -> colour ramps good -> emergency
-      const load = 1 - strat;
+      // Pollution patches over the globe -> colour ramps good -> emergency
+      const load = loadAt(dx * 2, dy * 2, dz * 2);
       if (load > 0.82) tmp.copy(bad);
       else if (load > 0.6) tmp.lerpColors(warn, bad, (load - 0.6) / 0.22);
       else if (load > 0.35) tmp.lerpColors(cool, warn, (load - 0.35) / 0.25);
       else tmp.lerpColors(good, cool, load / 0.35);
 
+      // Interior haze sits behind the shell, so cool and dim it for depth.
+      if (u >= 0.78) tmp.lerp(cool, 0.32).multiplyScalar(0.7);
+
       // A small fraction burn bright as "hot" monitored parcels
       const hot = seeded(i * 13.7) > 0.965;
-      if (hot) tmp.lerp(new THREE.Color(p.hot), 0.45);
+      if (hot) tmp.lerp(new THREE.Color(p.hot), 0.5);
 
       colors[i * 3] = tmp.r;
       colors[i * 3 + 1] = tmp.g;
       colors[i * 3 + 2] = tmp.b;
+      sizes[i] = hot ? 0.09 : 0.02 + seeded(i * 17.3) * 0.04;
     }
-    return { positions, colors, seeds };
+    return { positions, colors, seeds, sizes };
   }, [dark]);
 
   const base = React.useMemo(() => positions.slice(), [positions]);
@@ -136,10 +148,10 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
 
       // Radial blast-out during the scan transition.
       const blast = d * (2.6 + sx * 5.5);
-      const len = Math.hypot(bx, bz) || 1;
+      const len = Math.hypot(bx, by, bz) || 1;
 
       arr[ix] = bx + drift + (bx / len) * blast;
-      arr[ix + 1] = by + rise + d * (sy - 0.35) * 3.4;
+      arr[ix + 1] = by + rise + (by / len) * blast;
       arr[ix + 2] = bz + wobble + (bz / len) * blast;
     }
     p.geometry.attributes.position.needsUpdate = true;
@@ -149,18 +161,18 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
 
     const mat = p.material as THREE.PointsMaterial;
     mat.opacity = (dark ? 0.95 : 0.9) * (1 - d * 0.95);
-    mat.size = GRAIN + d * 0.05;
+    mat.size = 0.055 + d * 0.05;
   });
 
   return (
-    <points ref={points} frustumCulled={false}>
+    <points ref={points} frustumCulled={false} rotation={[0, 0, 0.22]}>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
         <bufferAttribute attach="attributes-color" args={[colors, 3]} />
       </bufferGeometry>
       <pointsMaterial
         map={sprite}
-        size={GRAIN}
+        size={0.055}
         vertexColors
         transparent
         opacity={0.9}
@@ -172,24 +184,25 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
   );
 }
 
-/** Faint horizontal plane marking the inversion cap above the aerosol slab. */
-function InversionPlane({ dark, dispersing, progress }: CloudProps) {
+/** Orbital scan ring — the inversion cap, wrapped around the globe. */
+function ScanRing({ dark, dispersing, progress }: CloudProps) {
   const ref = React.useRef<THREE.Mesh>(null);
   useFrame((state, delta) => {
     if (!ref.current) return;
     const m = ref.current.material as THREE.MeshBasicMaterial;
     const faded = 1 - Math.min(1, (progress?.current ?? 0) * 1.6);
-    const target = dispersing ? 0 : (dark ? 0.075 : 0.06) * faded;
+    const target = dispersing ? 0 : (dark ? 0.22 : 0.16) * faded;
     m.opacity += (target - m.opacity) * Math.min(1, delta * 3);
-    ref.current.position.y = 0.85 + Math.sin(state.clock.elapsedTime * 0.4) * 0.05;
+    ref.current.rotation.z += delta * 0.1;
+    ref.current.rotation.x = -Math.PI / 2 + Math.sin(state.clock.elapsedTime * 0.25) * 0.07;
   });
   return (
-    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.85, 0]}>
-      <circleGeometry args={[4.4, 64]} />
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[RADIUS * 1.16, RADIUS * 1.19, 128]} />
       <meshBasicMaterial
         color={dark ? PARTICLE.dark.cool : PARTICLE.light.cool}
         transparent
-        opacity={0.07}
+        opacity={0.2}
         side={THREE.DoubleSide}
         depthWrite={false}
       />
@@ -233,7 +246,7 @@ function AerosolCloudWrapper({ dispersing, progress }: { dispersing: boolean; pr
   return (
     <>
       <AerosolCloud dispersing={dispersing} dark={dark} progress={progress} />
-      <InversionPlane dispersing={dispersing} dark={dark} progress={progress} />
+      <ScanRing dispersing={dispersing} dark={dark} progress={progress} />
     </>
   );
 }
@@ -255,7 +268,7 @@ export function ParticleField({ dispersing, progress }: { dispersing: boolean; p
       aria-hidden
       frameloop={reduced ? 'demand' : 'always'}
       className="!absolute inset-0"
-      dpr={[1, 2]}
+      dpr={[1, 1.75]}
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
       camera={{ position: [0, 0.55, 5.5], fov: 55, near: 0.01, far: 100 }}
     >

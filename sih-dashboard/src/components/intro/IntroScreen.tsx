@@ -1,18 +1,16 @@
-
 import * as React from 'react';
 import dynamic from '@/lib/dynamic';
-import { motion, useMotionValue, useTransform } from 'framer-motion';
+import { motion, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
 import { ChevronDown, Cpu, Gauge, Satellite, Wind } from 'lucide-react';
 import { ScanButton } from './ScanButton';
-import { StatusPills, PILL_IDS } from './StatusPills';
-import { ParticleProbe, type Probe } from './ParticleProbe';
+import { ScanTransition } from './ScanTransition';
+import { StatusPills } from './StatusPills';
 import { AnalysisCard, TelemetryStat } from './TelemetryOverlay';
 import { ScrollPanels, ScrollSectionHead } from './ScrollPanels';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Badge } from '@/components/ui/badge';
-import { SourceBadge } from '@/components/ui/source-badge';
 import { aqiColor } from '@/lib/aqi';
-import { DISTRICTS, MODEL_META } from '@/lib/data';
+import { MODEL_META } from '@/lib/data';
 import { SEVERITY } from '@/lib/tokens';
 import { useAppStore } from '@/store/useAppStore';
 import { formatLST } from '@/lib/utils';
@@ -38,6 +36,8 @@ export function IntroScreen() {
   const frame = frames[0];
 
   const scanning = screen === 'transition';
+  // Stays true through the route push so the curtain never lifts early.
+  const handingOff = screen !== 'intro';
   const [clock, setClock] = React.useState<string>('--:--:--');
 
   React.useEffect(() => {
@@ -58,29 +58,22 @@ export function IntroScreen() {
   // The stage is pinned while the track scrolls past it. `progress` is handed
   // to the WebGL field as a ref so the canvas reads it inside its own frame
   // loop instead of re-rendering React on every scroll event.
-  //
-  // This measures the track directly rather than going through
-  // useScroll({ target, offset: ['start start', 'end end'] }). That hook was
-  // returning a progress that fell as the page scrolled down, so the HUD faded
-  // part-way and then came back — leaving the masthead and telemetry rail
-  // painted on top of the rising panels. Track height minus viewport height is
-  // exactly the scrollable range here (the stage is pinned for the whole
-  // track), so the ratio below is unambiguous and clamps at both ends.
   const trackRef = React.useRef<HTMLElement>(null);
+  // Scroll progress is computed here rather than with `useScroll`.
+  //
+  // Both `useScroll({ target })` and bare `useScroll()` cache the scroll range,
+  // and this page invalidates that cache after first paint: the stage is
+  // `sticky h-dvh`, the WebGL canvas mounts lazily, and `min-h-[100svh]`
+  // sections resolve late. Progress read ~0.07 at 79% scrolled and snapped back
+  // to 0 at the bottom, so the HUD never faded and the closing section scrolled
+  // straight into the pinned hero. Re-reading scrollHeight on every event costs
+  // one layout read per scroll and cannot go stale.
   const scrollYProgress = useMotionValue(0);
-  const progress = React.useRef(0);
-
   React.useEffect(() => {
-    const el = trackRef.current;
-    if (!el) return;
-
     const update = () => {
-      const range = el.offsetHeight - window.innerHeight;
-      const v = range > 0 ? Math.min(1, Math.max(0, window.scrollY / range)) : 0;
-      progress.current = v;
-      scrollYProgress.set(v);
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      scrollYProgress.set(max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0);
     };
-
     update();
     window.addEventListener('scroll', update, { passive: true });
     window.addEventListener('resize', update);
@@ -89,13 +82,14 @@ export function IntroScreen() {
       window.removeEventListener('resize', update);
     };
   }, [scrollYProgress]);
+  const progress = React.useRef(0);
+  useMotionValueEvent(scrollYProgress, 'change', (v) => {
+    progress.current = v;
+  });
 
   // The masthead and HUD hand over to the rising panels in the first third.
   const stageOpacity = useTransform(scrollYProgress, [0, 0.26], [1, 0]);
   const stageY = useTransform(scrollYProgress, [0, 0.26], [0, -40]);
-  // Once faded the stage must stop swallowing clicks meant for the panels
-  // climbing over it — opacity alone leaves the header and CTA hit-testable.
-  const stagePointer = useTransform(scrollYProgress, (v) => (v > 0.24 ? 'none' : 'auto'));
   // the scroll hint retires as soon as the user actually scrolls
   const hintOpacity = useTransform(scrollYProgress, [0, 0.04], [1, 0]);
 
@@ -114,62 +108,6 @@ export function IntroScreen() {
   React.useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
-
-  // --- aerosol band probe --------------------------------------------------
-  // The cloud is stratified by load: dense and red at the surface, thinning
-  // through amber to cool colours above the inversion. So the height of the
-  // cursor over the canvas already selects a concentration — this maps that
-  // height onto the pinned zones, ordered by their own PM2.5, so hovering the
-  // red layer reports the emergency zone and the amber layer a warning one.
-  //
-  // Bands are read off the stage box rather than raycast against 13.5k points:
-  // the colour ramp is purely a function of height, so a box test is both
-  // exact and free.
-  const stageRef = React.useRef<HTMLDivElement>(null);
-  const [probe, setProbe] = React.useState<Probe | null>(null);
-
-  const bandZones = React.useMemo(() => {
-    // Highest concentration sits lowest in the slab; order bottom -> top.
-    return [...PILL_IDS]
-      .map((id) => DISTRICTS.find((d) => d.id === id)!)
-      .sort((a, b) => frame.districts[b.id].pm25 - frame.districts[a.id].pm25);
-  }, [frame]);
-
-  const onStageMove = React.useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      // Only while the stage still owns the screen.
-      if (scanning || progress.current > 0.2) {
-        setProbe(null);
-        return;
-      }
-      const box = stageRef.current?.getBoundingClientRect();
-      if (!box) return;
-      const y = (e.clientY - box.top) / box.height;
-      const x = (e.clientX - box.left) / box.width;
-
-      // Vertical extent of the visible slab, and horizontal reach around its
-      // axis — outside this the cursor is over empty sky, not the cloud.
-      const inSlab = y >= 0.12 && y <= 0.8 && x > 0.16 && x < 0.86;
-      if (!inSlab) {
-        setProbe(null);
-        return;
-      }
-
-      // 0 at the top of the slab, 1 at the bottom -> index into bandZones,
-      // which is ordered densest-first.
-      const depth = (y - 0.12) / (0.8 - 0.12);
-      const idx = Math.min(
-        bandZones.length - 1,
-        Math.floor((1 - depth) * bandZones.length),
-      );
-      setProbe({
-        district: bandZones[idx],
-        x: e.clientX - box.left,
-        y: e.clientY - box.top,
-      });
-    },
-    [bandZones, scanning],
-  );
 
   const series = frames.map((f) => f.avgPm25);
 
@@ -191,15 +129,10 @@ export function IntroScreen() {
       ref={trackRef}
       className="relative w-full"
     >
-      {/* ---- pinned stage: the canvas and HUD stay put while the track scrolls
-          The probe listens here rather than on the canvas so it still fires
-          when the HUD or a pill is under the cursor — the event bubbles up. */}
-      <div
-        ref={stageRef}
-        onPointerMove={onStageMove}
-        onPointerLeave={() => setProbe(null)}
-        className="sticky top-0 h-dvh w-full overflow-hidden"
-      >
+      <ScanTransition active={handingOff} />
+
+      {/* ---- pinned stage: the canvas and HUD stay put while the track scrolls */}
+      <div className="sticky top-0 h-dvh w-full overflow-hidden">
       {/* --- background layers ------------------------------------------- */}
       <div className="absolute inset-0 grid-bg opacity-70" />
       <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 70% 55% at 50% 40%, rgb(var(--as-accent) / 0.10), transparent 70%)' }} />
@@ -209,10 +142,7 @@ export function IntroScreen() {
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-base via-base/80 to-transparent" />
 
       {/* the HUD fades out as the panels take over */}
-      <motion.div
-        style={{ opacity: stageOpacity, y: stageY, pointerEvents: stagePointer }}
-        className="absolute inset-0"
-      >
+      <motion.div style={{ opacity: stageOpacity, y: stageY }} className="absolute inset-0">
 
       {/* --- top bar ------------------------------------------------------ */}
       <motion.header
@@ -235,19 +165,19 @@ export function IntroScreen() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <SourceBadge className="hidden sm:inline-flex" />
+          <Badge className="hidden sm:inline-flex">Demo / Synthetic</Badge>
           <Badge color={SEVERITY.good} dot className="hidden md:inline-flex">
             {MODEL_META.cycle} cycle
           </Badge>
           <span className="hidden font-mono text-2xs tabular-nums text-muted sm:inline">
-            LST {clock}
+          {clock} IST
           </span>
           <ThemeToggle />
         </div>
       </motion.header>
 
       {/* --- floating zone pills ------------------------------------------ */}
-      <StatusPills frame={frame} activeId={probe?.district.id ?? null} />
+      <StatusPills frame={frame} />
 
       {/* --- left telemetry rail ------------------------------------------ */}
       <div className="absolute left-5 top-1/2 z-20 hidden -translate-y-1/2 flex-col gap-4 sm:left-8 lg:flex">
@@ -312,7 +242,7 @@ export function IntroScreen() {
           </p>
 
           <div className="pointer-events-auto flex shrink-0 flex-col items-start gap-2.5 sm:items-end">
-            <ScanButton onScan={startScan} scanning={scanning} />
+            <ScanButton onScan={startScan} scanning={handingOff} />
             <motion.span
               style={{ opacity: hintOpacity }}
               className="flex items-center gap-1.5 whitespace-nowrap font-mono text-2xs uppercase tracking-[0.2em] text-faint"
@@ -324,17 +254,14 @@ export function IntroScreen() {
         </div>
       </div>
       </motion.div>
-
-      {/* Probe readout rides above the fading HUD — it is only live while the
-          stage owns the screen, so it never collides with the panels. */}
-      <ParticleProbe probe={probe} frame={frame} />
       </div>
 
       {/* ---- rising content -------------------------------------------------
-          Normal flow after the pinned stage, pulled up so it starts climbing
-          over the hero rather than after a gap. The stage stays put until the
-          track runs out, so the aerosol field opens out behind these. */}
-      <div className="relative z-20 -mt-[16vh] px-5 pb-[8vh] sm:px-8">
+          Normal flow after the pinned stage, so it starts exactly at the fold
+          and climbs over the hero as the track scrolls. It used to carry a
+          negative top margin, which lifted it above the fold and printed it on
+          top of the CTA on short and mobile viewports. */}
+      <div className="relative z-20 px-5 pb-[8vh] sm:px-8">
         <section className="flex min-h-[100svh] flex-col justify-center gap-6">
           <ScrollSectionHead frame={frame} />
           <ScrollPanels frame={frame} series={series} interventions={interventions} />
@@ -349,14 +276,14 @@ export function IntroScreen() {
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             className="max-w-2xl font-mono text-xl font-bold uppercase leading-tight tracking-[0.12em] text-ink sm:text-2xl"
           >
-            Open the <span className="text-accent">console</span>
+            Open the <span className="text-accent">live terminal</span>
           </motion.h2>
           <p className="mt-2 max-w-md text-pretty text-sm leading-relaxed text-muted">
-            Spatial field, timeline playback and the what-if policy simulator for the
-            full {MODEL_META.resolution} domain.
+            Live telemetry, eight-channel spectrometry and the geospatial plume map for
+            the full {MODEL_META.resolution} domain.
           </p>
           <div className="mt-5">
-            <ScanButton onScan={startScan} scanning={scanning} />
+            <ScanButton onScan={startScan} scanning={handingOff} />
           </div>
         </section>
       </div>
@@ -376,7 +303,7 @@ function MiniStat({
   color?: string;
 }) {
   return (
-    <div className="glass flex flex-1 flex-col items-center gap-0.5 px-2 py-2">
+    <div className="glass glass-hover flex flex-1 flex-col items-center gap-0.5 px-2 py-2">
       <span className="flex items-center gap-1 font-mono text-2xs uppercase tracking-widest text-faint">
         {icon}
         {label}

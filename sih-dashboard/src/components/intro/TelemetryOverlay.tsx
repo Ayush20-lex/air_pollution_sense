@@ -1,4 +1,3 @@
-
 import * as React from 'react';
 import { motion } from 'framer-motion';
 import { Activity, Layers, Radio, Waves } from 'lucide-react';
@@ -32,7 +31,7 @@ export function TelemetryStat({
   delay?: number;
 }) {
   return (
-    <motion.div {...fade(delay)} className="relative border-l border-hairline/60 px-3 py-2">
+    <motion.div {...fade(delay)} className="group relative rounded-r-lg border-l border-hairline/60 px-3 py-2 transition-colors duration-300 hover:border-accent/70 hover:bg-elevated/40">
       <div className="hud-label">{label}</div>
       <div className="mt-1 flex items-baseline gap-1.5">
         <span
@@ -65,7 +64,7 @@ export function AnalysisCard({
   return (
     <motion.div
       {...fade(0.35)}
-      className="glass w-[min(92vw,380px)] overflow-hidden p-0"
+      className="glass glass-hover w-[min(92vw,380px)] overflow-hidden p-0"
     >
       <div className="flex items-center justify-between border-b border-hairline/60 px-3 py-2">
         <span className="panel-title">

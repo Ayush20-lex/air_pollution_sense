@@ -1,4 +1,3 @@
-
 import * as React from 'react';
 import { motion } from 'framer-motion';
 import { Activity, AlertTriangle, Layers, LineChart } from 'lucide-react';
@@ -37,9 +36,9 @@ export function ScrollPanels({
     .slice(0, 3);
 
   return (
-    <div className="panel-deck grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {/* --- current telemetry ------------------------------------------ */}
-      <motion.div {...rise(0)} className="glass p-3">
+      <motion.div {...rise(0)} className="glass glass-hover p-3">
         <div className="flex items-center justify-between">
           <span className="panel-title">
             <Activity className="size-3" />
@@ -56,7 +55,7 @@ export function ScrollPanels({
       </motion.div>
 
       {/* --- 72h trajectory ---------------------------------------------- */}
-      <motion.div {...rise(1)} className="glass flex flex-col p-3">
+      <motion.div {...rise(1)} className="glass glass-hover flex flex-col p-3">
         <div className="flex items-center justify-between">
           <span className="panel-title">
             <LineChart className="size-3" />
@@ -67,7 +66,7 @@ export function ScrollPanels({
         <div className="mt-4 flex-1">
           <MiniSparkline values={series} width={320} height={92} className="w-full" />
         </div>
-        <div className="deck-fade mt-1 flex justify-between font-mono text-2xs text-faint">
+        <div className="mt-1 flex justify-between font-mono text-2xs text-faint">
           <span>NOW</span>
           <span>+24h</span>
           <span>+48h</span>
@@ -76,13 +75,13 @@ export function ScrollPanels({
       </motion.div>
 
       {/* --- coupling ----------------------------------------------------- */}
-      <motion.div {...rise(2)} className="glass p-3">
+      <motion.div {...rise(2)} className="glass glass-hover p-3">
         <span className="panel-title">
           <Layers className="size-3" />
           {analysis.title}
         </span>
         <p className="mt-3 text-pretty text-xs leading-relaxed text-muted">{analysis.body}</p>
-        <div className="deck-fade mt-3 flex flex-wrap items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-faint">
+        <div className="mt-3 flex flex-wrap items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-faint">
           {['Aerosol', 'Extinction', 'Cooling', 'PBL', 'Trapping'].map((step, i, a) => (
             <React.Fragment key={step}>
               <span className="rounded border border-hairline bg-elevated/50 px-1.5 py-0.5">{step}</span>
@@ -93,7 +92,7 @@ export function ScrollPanels({
       </motion.div>
 
       {/* --- inversion risk ----------------------------------------------- */}
-      <motion.div {...rise(3)} className="glass p-3">
+      <motion.div {...rise(3)} className="glass glass-hover p-3">
         <div className="flex items-center justify-between">
           <span className="panel-title">
             <AlertTriangle className="size-3" />
@@ -107,7 +106,6 @@ export function ScrollPanels({
           {ranked.map(({ d, s }) => (
             <div
               key={d.id}
-              data-severity
               className="flex items-center gap-2 rounded-md px-2 py-1.5"
               style={{ background: `${ALERT_COLOR[s.alert]}12` }}
             >
@@ -146,9 +144,7 @@ function Row({
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-hairline/40 pb-2 last:border-0 last:pb-0">
       <dt className="hud-label">{label}</dt>
-      {/* A colour-coded reading is severity, not decoration — exempt it from
-          the deck recede so it stays legible while a sibling is hovered. */}
-      <dd className="flex items-baseline gap-1" data-severity={color ? '' : undefined}>
+      <dd className="flex items-baseline gap-1">
         <span
           className="font-mono text-lg font-semibold tabular-nums"
           style={{ color: color ?? 'rgb(var(--as-ink))' }}
