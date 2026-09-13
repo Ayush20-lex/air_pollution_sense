@@ -74,6 +74,10 @@ ml_pipeline/data/raw/forecast/
 ml_pipeline/data/raw/stations/
 # Derived AQI series — regenerate with ml_pipeline/scripts/13_compute_station_aqi.py
 ml_pipeline/data/processed/station_aqi_*.parquet
+ml_pipeline/data/processed/gridded_dataset.npy
+ml_pipeline/data/processed/gridded_dataset_manifest.json
+ml_pipeline/data/processed/spatial_validation.json
+ml_pipeline/data/processed/spatial_validation_by_station.csv
 # Baseline scores - regenerate with 14_baselines.py
 ml_pipeline/data/processed/baselines_*.csv
 ml_pipeline/data/processed/baseline_corrections.json
@@ -83,3 +87,6 @@ ml_pipeline/data/processed/baseline_corrections.json
 
 # Third-party skills installed by `npx skills add` — per-machine, not project code
 .claude/skills/
+
+# Training output: checkpoints are 13 MB each and regenerable from script 16.
+backend/weights/

@@ -1,8 +1,8 @@
-﻿\"\"\"
+"""
 Normalization and Coupling Correctness Tests - Air Pollution Sense
 SIH26082 Phase 7 verification
 Run: cd backend && python test_normalization.py
-\"\"\"
+"""
 from __future__ import annotations
 import sys, os, math
 _BACKEND = os.path.dirname(os.path.abspath(__file__))
