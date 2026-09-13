@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { SourceBadge } from '@/components/ui/source-badge';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { CommandPalette } from '@/components/ui/command-palette';
 import { Hint } from '@/components/ui/tooltip';
 import { POLLUTANTS, type Pollutant } from '@/lib/data';
 import { SEVERITY } from '@/lib/tokens';
@@ -73,6 +74,9 @@ export function Header() {
           <SlidersHorizontal />
           <span className="hidden sm:inline">What-if</span>
         </Button>
+        {/* Without this the console is a dead end: it is reachable from the
+            palette but carries no link back to the terminal or the intro. */}
+        <CommandPalette />
         <ThemeToggle />
       </div>
     </header>

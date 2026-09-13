@@ -8,6 +8,7 @@ import { StatusPills } from './StatusPills';
 import { AnalysisCard, TelemetryStat } from './TelemetryOverlay';
 import { ScrollPanels, ScrollSectionHead } from './ScrollPanels';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { CommandPalette } from '@/components/ui/command-palette';
 import { Badge } from '@/components/ui/badge';
 import { aqiColor } from '@/lib/aqi';
 import { MODEL_META } from '@/lib/data';
@@ -172,6 +173,7 @@ export function IntroScreen() {
           <span className="hidden font-mono text-2xs tabular-nums text-muted sm:inline">
           {clock} IST
           </span>
+          <CommandPalette />
           <ThemeToggle />
         </div>
       </motion.header>

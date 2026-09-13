@@ -21,6 +21,7 @@ import { CERTIFICATIONS, HUB, LOCATIONS } from '@/lib/terminal/content';
 import { TerminalEnter } from './TerminalEnter';
 import { cn } from '@/lib/utils';
 import { useTerminalStore } from '@/store/useTerminalStore';
+import { CommandPalette } from '@/components/ui/command-palette';
 
 /**
  * Sidebar + header + footer chrome shared by every terminal page.
@@ -201,6 +202,11 @@ function TerminalHeader() {
         >
           <ArrowLeft className="size-4" />
         </Link>
+
+        {/* Doubles as the terminal's mobile navigation: the rail that carries
+            the nav is hidden below md, so on a phone this is the only way to
+            reach the geo map, the console or any of the 26 stations. */}
+        <CommandPalette />
 
         <div className="relative min-w-[260px] sm:min-w-[310px]">
           <MapPin className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-term-primary" />
