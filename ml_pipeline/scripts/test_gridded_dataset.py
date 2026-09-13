@@ -35,8 +35,11 @@ def check(name: str, condition: bool, detail: str = '') -> None:
 
 
 PROC = REPO_ROOT / 'ml_pipeline' / 'data' / 'processed'
-arr = np.load(PROC / 'gridded_dataset.npy')
-manifest = json.loads((PROC / 'gridded_dataset_manifest.json').read_text('utf-8'))
+# Optional stem argument so the extended record can be checked by the same
+# suite as the pilot dataset, rather than going unverified for being new.
+NAME = sys.argv[1] if len(sys.argv) > 1 else 'gridded_dataset'
+arr = np.load(PROC / f'{NAME}.npy')
+manifest = json.loads((PROC / f'{NAME}_manifest.json').read_text('utf-8'))
 times = pd.to_datetime(manifest['times'], utc=True)
 
 # ── shape and range ───────────────────────────────────────────────────────────
@@ -73,7 +76,15 @@ _notes.append(f'wind: mean {float(speed.mean()):.2f} m/s, max {float(speed.max()
 
 pm25 = phys[:, CH_PM25]
 med = float(np.median(pm25))
-check('PM2.5 median is in Delhi winter range', 80.0 < med < 300.0, f'{med:.1f} ug/m3')
+# A full-year record is dominated by clean monsoon months, so the all-hours
+# median says little. Delhi's winter is the regime this project forecasts, so
+# check that specifically - Oct to Feb, which is when GRAP is in force.
+winter = np.isin(times.month, [10, 11, 12, 1, 2])
+med_winter = float(np.median(pm25[winter])) if winter.any() else med
+check('PM2.5 winter median is in Delhi range', 80.0 < med_winter < 300.0,
+      f'winter {med_winter:.1f}, all-hours {med:.1f} ug/m3')
+_notes.append(f'seasonal split: {winter.mean() * 100:.0f}% of hours are Oct-Feb; '
+              f'winter median {med_winter:.0f} vs all-hours {med:.0f} ug/m3')
 check('PM2.5 reaches severe levels', float(pm25.max()) > 400.0, f'max {float(pm25.max()):.0f}')
 check('PM2.5 is never negative', float(pm25.min()) >= 0.0, f'min {float(pm25.min()):.1f}')
 _notes.append(f'PM2.5: median {med:.0f}, p99 {float(np.percentile(pm25, 99)):.0f}, '
@@ -106,33 +117,38 @@ check('PM2.5 varies across the grid', float(spatial_sd.mean()) > 1.0,
 # ── blocks ────────────────────────────────────────────────────────────────────
 
 blocks = manifest['blocks']
-check('two blocks recorded', len(blocks) == 2, str(len(blocks)))
-check('blocks tile the time axis without overlap',
-      blocks[0]['start_index'] == 0
-      and blocks[0]['end_index'] == blocks[1]['start_index']
-      and blocks[1]['end_index'] == arr.shape[0])
+check('at least one block recorded', len(blocks) >= 1, str(len(blocks)))
+tiles = blocks[0]['start_index'] == 0 and blocks[-1]['end_index'] == arr.shape[0] and all(
+    a['end_index'] == b['start_index'] for a, b in zip(blocks, blocks[1:]))
+check('blocks tile the time axis without overlap', tiles)
 
 for b in blocks:
     seg = times[b['start_index']:b['end_index']]
-    check(f'block {b["season"]} holds only its own season',
-          bool((seg.year == b['season']).all()),
-          str(sorted(set(seg.year))))
+    lo = pd.Timestamp(b['first_hour'])
+    hi = pd.Timestamp(b['last_hour'])
+    check(f'block {b["season"]} stays inside its declared window',
+          bool((seg >= lo).all() and (seg <= hi).all()),
+          f'{seg.min()} .. {seg.max()} vs {lo} .. {hi}')
     check(f'block {b["season"]} is contiguous hourly',
           bool((seg.to_series().diff().dropna() == pd.Timedelta('1h')).all()))
 
-seam = blocks[1]['start_index']
-gap_years = (times[seam] - times[seam - 1]).days / 365.25
-check('the seam between blocks is a real discontinuity', gap_years > 2.5,
-      f'{gap_years:.1f} years')
-_notes.append(f'seam at index {seam}: {times[seam - 1].date()} -> {times[seam].date()}')
+if len(blocks) > 1:
+    seam = blocks[1]['start_index']
+    gap_years = (times[seam] - times[seam - 1]).days / 365.25
+    check('the seam between blocks is a real discontinuity', gap_years > 2.5,
+          f'{gap_years:.1f} years')
+    _notes.append(f'seam at index {seam}: {times[seam - 1].date()} -> {times[seam].date()}')
+else:
+    _notes.append('single continuous block - no seam, so no windows are rejected')
 
 # A sampler that ignores blocks would emit windows spanning that gap.
 CONTEXT, HORIZON = 6, 72
 span = CONTEXT + HORIZON
 naive = arr.shape[0] - span
 legal = sum(max(0, (b['end_index'] - b['start_index']) - span) for b in blocks)
-check('block-aware sampling drops the windows that straddle the seam',
-      legal < naive, f'{legal} legal vs {naive} naive')
+check('block-aware sampling never invents a window',
+      legal <= naive and (legal < naive or len(blocks) == 1),
+      f'{legal} legal vs {naive} naive across {len(blocks)} block(s)')
 _notes.append(f'training windows (context {CONTEXT} + horizon {HORIZON}): '
               f'{legal} legal, {naive - legal} rejected at the seam')
 
@@ -149,9 +165,12 @@ for b in blocks:
             check(f'block {b["season"]}: {name} declared real and carries signal',
                   float(seg.astype(np.float32).std()) > 0.0)
 
-check('2022 PBL is absent, as the forecast archive has no column for it',
-      float(np.abs(arr[:blocks[1]['start_index'], CH_PBL]).max()) == 0.0)
-check('2025 PBL is present', float(arr[blocks[1]['start_index']:, CH_PBL].max()) > 0.0)
+for b in blocks:
+    seg = arr[b['start_index']:b['end_index'], CH_PBL]
+    declared = b['channels']['pbl']['source'] == 'absent'
+    check(f'block {b["season"]}: PBL matches its declaration',
+          (float(np.abs(seg).max()) == 0.0) == declared,
+          f'declared {"absent" if declared else "present"}')
 
 # ── round trip ────────────────────────────────────────────────────────────────
 

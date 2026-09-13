@@ -50,6 +50,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import torch
 from torch import Tensor
 
@@ -66,6 +67,8 @@ from coupled_model import AirPollutionCoupledForecaster  # noqa: E402
 from physics_loss import AtmosphericInversionLoss  # noqa: E402
 
 PROC = REPO_ROOT / 'ml_pipeline' / 'data' / 'processed'
+#: Default stem. --dataset selects another build without disturbing the pilot
+#: dataset the published baselines were measured on.
 DATASET = PROC / 'gridded_dataset.npy'
 MANIFEST = PROC / 'gridded_dataset_manifest.json'
 DEFAULT_OUT = REPO_ROOT / 'backend' / 'weights'
@@ -98,6 +101,28 @@ def legal_windows(blocks: list[dict], context: int, horizon: int,
         if last >= b['start_index']:
             starts.append(np.arange(b['start_index'], last + 1, stride))
     return np.concatenate(starts) if starts else np.empty(0, dtype=np.int64)
+
+
+def split_by_date(starts: np.ndarray, times: pd.DatetimeIndex, span: int,
+                  lo: str, hi: str) -> tuple[np.ndarray, np.ndarray]:
+    """Validate on one explicit date range, train on everything clear of it.
+
+    A fraction-based split takes the end of the record, which on a full-year
+    archive is the monsoon - the cleanest air of the year, where any method
+    scores well. Scoring there would flatter the model for a reason that has
+    nothing to do with forecasting skill, and would not be comparable to a
+    baseline measured in December. This holds out a stated window instead, and
+    excludes any training window that overlaps it by even one hour.
+    """
+    lo_ts = pd.Timestamp(lo, tz='UTC')
+    hi_ts = pd.Timestamp(hi, tz='UTC')
+    starts = np.sort(starts)
+    w_start = times[starts]
+    w_end = times[np.minimum(starts + span - 1, len(times) - 1)]
+
+    in_val = (w_start >= lo_ts) & (w_end <= hi_ts)
+    overlaps = (w_start <= hi_ts) & (w_end >= lo_ts)
+    return starts[~overlaps], starts[in_val]
 
 
 def temporal_split(starts: np.ndarray, val_fraction: float,
@@ -233,6 +258,8 @@ def teacher_forcing_ratio(epoch: int, epochs: int, start: float, end: float) -> 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument('--dataset', default='gridded_dataset',
+                   help='dataset stem under data/processed (default: the pilot build)')
     p.add_argument('--blocks', default='2025',
                    help='comma-separated seasons to train on (default: 2025)')
     p.add_argument('--context', type=int, default=24, help='hours of history')
@@ -258,6 +285,11 @@ def main() -> int:
     p.add_argument('--graph-window', type=int, default=10,
                    help='0 restores the original all-pairs attention')
     p.add_argument('--val-fraction', type=float, default=0.15)
+    p.add_argument('--val-range', nargs=2, metavar=('START', 'END'), default=None,
+                   help='hold out this UTC date range for validation instead of '
+                        'the last --val-fraction. Needed once the record spans a '
+                        'full year: the last 15%% of it is monsoon, where errors '
+                        'are small for reasons that have nothing to do with skill.')
     p.add_argument('--tf-start', type=float, default=0.8, help='teacher forcing at epoch 0')
     p.add_argument('--tf-end', type=float, default=0.0, help='teacher forcing at the last epoch')
     p.add_argument('--amp', action='store_true', help='fp16 autocast')
@@ -279,6 +311,9 @@ def main() -> int:
     np.random.seed(args.seed)
     device = torch.device(args.device)
 
+    global DATASET, MANIFEST
+    DATASET = PROC / f'{args.dataset}.npy'
+    MANIFEST = PROC / f'{args.dataset}_manifest.json'
     if not DATASET.exists():
         print(f'missing {DATASET}\nrun: python ml_pipeline/scripts/15_build_gridded_dataset.py')
         return 1
@@ -304,7 +339,11 @@ def main() -> int:
 
     span = args.context + args.horizon
     starts = legal_windows(blocks, args.context, args.horizon, args.stride)
-    train_starts, val_starts = temporal_split(starts, args.val_fraction, span)
+    if args.val_range:
+        times_all = pd.to_datetime(manifest['times'], utc=True)
+        train_starts, val_starts = split_by_date(starts, times_all, span, *args.val_range)
+    else:
+        train_starts, val_starts = temporal_split(starts, args.val_fraction, span)
     if len(train_starts) == 0:
         print('no training windows; lower --context/--horizon or --stride')
         return 1
@@ -354,6 +393,8 @@ def main() -> int:
     print(f'  blocks      {[b["season"] for b in blocks]}')
     print(f'  windows     {len(train_starts)} train / {len(val_starts)} val '
           f'(context {args.context} h, horizon {args.horizon} h, stride {args.stride})')
+    if args.val_range:
+        print(f'  validation  held-out range {args.val_range[0]} .. {args.val_range[1]}')
     print(f'  model       {n_params:,} params, hidden {args.hidden_dim}, '
           f'graph window {args.graph_window or "all-pairs"}, '
           f'head {"absolute" if args.no_residual else "residual"}')
