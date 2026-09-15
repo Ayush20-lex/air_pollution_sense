@@ -249,8 +249,15 @@ function TerminalHeader() {
             palette carrying it, so the control still accepts type-ahead. */}
         {/* Grows into whatever the header has spare, up to a cap, rather than
             taking a fixed width: a fixed one can't yield to the right-hand
-            cluster and pushes the refresh control off-screen around 1440. */}
-        <div className="hidden min-w-0 max-w-md flex-1 lg:block 2xl:max-w-lg">
+            cluster and pushes the refresh control off-screen around 1440.
+
+            The cap rises with the breakpoint because a flat one leaves a hole:
+            at 1560 the row had 630px of room and the field took 512 of it, so
+            134px sat empty between the field and the provenance pill — read as
+            a gap rather than as breathing room, since nothing sits in it. Above
+            1700 the IST clock claims that space instead and the field yields to
+            it on its own, min-w-0 doing the work. */}
+        <div className="hidden min-w-0 max-w-md flex-1 lg:block xl:max-w-xl 2xl:max-w-3xl">
           <button
             type="button"
             onClick={() => openCommandPalette()}
