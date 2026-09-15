@@ -90,3 +90,34 @@ ml_pipeline/data/processed/baseline_corrections.json
 
 # Training output: checkpoints are 13 MB each and regenerable from script 16.
 backend/weights/
+
+# --- Runtime archive the deployed API reads -------------------------------
+# The blend baseline runs in archive_replay mode, so these ~5.5 MB are not a
+# cache the host can refetch - they are the forecast. Committing them is what
+# makes the deploy self-contained; without them the API boots and serves
+# nothing, and a demo that depends on a third-party API being up on the day is
+# a demo that fails on the day.
+#
+# git cannot un-ignore a file inside an ignored directory, so each directory is
+# re-admitted, its contents excluded again, and only the needed files named.
+
+# Generated tensors stay out regardless - the 2026 build alone is 1.7 GB.
+ml_pipeline/data/processed/gridded_dataset*
+ml_pipeline/data/processed/*.log
+
+!ml_pipeline/data/raw/stations/
+ml_pipeline/data/raw/stations/*
+!ml_pipeline/data/raw/stations/catalog.json
+
+!ml_pipeline/data/raw/forecast/
+ml_pipeline/data/raw/forecast/*
+!ml_pipeline/data/raw/forecast/forecast_2025.parquet
+
+!ml_pipeline/data/raw/observations/
+ml_pipeline/data/raw/observations/*
+!ml_pipeline/data/raw/observations/season=2025/
+ml_pipeline/data/raw/observations/season=2025/*
+!ml_pipeline/data/raw/observations/season=2025/pm25_*.parquet
+
+# The fitted CAMS bias factor is a four-kilobyte model parameter, not a cache.
+!ml_pipeline/data/processed/baseline_corrections.json

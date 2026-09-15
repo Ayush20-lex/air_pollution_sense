@@ -188,11 +188,24 @@ async def lifespan(app: FastAPI):
         _state.weights_loaded = False
         log.info("[model] MOCK_MODE=True — running with random weights.")
 
-    # Determine data mode for status endpoint
-    _state.data_mode = (
-        "live" if (not cfg.mock_mode and cfg.aqicn_token and _state.weights_loaded)
-        else "synthetic"
-    )
+    # Determine data mode for status endpoint.
+    #
+    # This flag was written when there were only two possibilities: a trained
+    # model on a live feed, or the synthetic generator. The scored blend
+    # baseline is a third - real observations from 68 CPCB stations replayed
+    # from the archive, with no trained model - and it was being reported as
+    # "synthetic", which is the opposite of true. /health said synthetic while
+    # /forecast/frames said is_synthetic: false, and anyone checking the
+    # cheaper endpoint would have concluded the whole system was fabricated.
+    if not cfg.mock_mode and cfg.aqicn_token and _state.weights_loaded:
+        _state.data_mode = "live"
+    elif cfg.use_baseline and not _state.weights_loaded:
+        # The baseline loads lazily on the first forecast, so this states the
+        # configured intent. _generate_forecast_tensor corrects it to
+        # "synthetic" if the archive turns out to be unreadable.
+        _state.data_mode = "archive_replay"
+    else:
+        _state.data_mode = "synthetic"
 
     yield
     _state.cache.clear()
@@ -321,6 +334,10 @@ def _generate_forecast_tensor() -> tuple[torch.Tensor, bool]:
             log.warning("blend baseline unavailable (%s); falling back to the "
                         "untrained model path, whose output is SYNTHETIC.", exc)
             _state.forecast_meta = None
+            # Startup announced archive_replay on the strength of the config.
+            # The archive is not readable, so withdraw that rather than let
+            # /health keep asserting it.
+            _state.data_mode = "synthetic"
 
     # ── CPCB / AQI data ───────────────────────────────────────────────────────
     if cfg.mock_mode or not cfg.aqicn_token:

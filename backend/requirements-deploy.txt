@@ -1,0 +1,39 @@
+# SIH26082 - MoES/NCMRWF - deployment manifest
+#
+# requirements.txt is the development environment. This is what a host actually
+# needs to serve the API, and the difference matters on a free tier.
+#
+# Two things here are not cosmetic:
+#
+#   torch on Linux defaults to the CUDA build, which is about 2.5 GB and
+#   exceeds the image limit on every free tier. The CPU wheel is ~200 MB and
+#   is all the API needs - inference runs on whatever the host has, and the
+#   host has no GPU.
+#
+#   psycopg2-binary, asyncpg, redis, msgpack, orjson, httpx and
+#   python-multipart are not imported anywhere in backend/. They cost build
+#   time, and the two database drivers are the classic cause of a free-tier
+#   build failing outright.
+#
+# Install with:
+#   pip install -r requirements-deploy.txt --extra-index-url https://download.pytorch.org/whl/cpu
+
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+
+# CPU build only - see above.
+torch>=2.3.0
+
+numpy>=1.26.4
+pandas>=2.2.2
+pyarrow>=15.0.0          # pandas needs it to read the archive parquets
+scipy>=1.13.1
+pyproj>=3.6.1
+
+# spatial_fusion imports both; api_server imports spatial_fusion at module
+# level, so they are required even when the blend baseline is serving.
+geopandas>=0.14.4
+shapely>=2.0.4
+
+pydantic>=2.7.4
+pydantic-settings>=2.3.4
