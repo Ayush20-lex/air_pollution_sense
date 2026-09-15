@@ -1,22 +1,12 @@
 import * as React from 'react';
 import dynamic from '@/lib/dynamic';
-import {
-  Cloudy,
-  Layers,
-  MapPin,
-  Pause,
-  Play,
-  SkipBack,
-  SkipForward,
-  Spline,
-  Waves,
-  Wind,
-} from 'lucide-react';
-import { Label, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
+import { Cloudy, Layers, MapPin, Spline, Waves, Wind } from 'lucide-react';
+import { TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { TERMINAL_FIELDS, dispersionGradientCss, type TerminalField } from '@/lib/terminal/bands';
-import { FRAME_COUNT, type TerminalFrame } from '@/lib/terminal/field';
+import type { TerminalFrame } from '@/lib/terminal/field';
+import { TimelineTrack } from './TimelineTrack';
 import { cn } from '@/lib/utils';
-import { useTerminalStore, type PlaybackRate, type TerminalLayer } from '@/store/useTerminalStore';
+import { useTerminalStore, type TerminalLayer } from '@/store/useTerminalStore';
 
 const NcrPlumeMap = dynamic(() => import('./NcrPlumeMap').then((m) => m.NcrPlumeMap), {
   ssr: false,
@@ -37,10 +27,15 @@ const LAYER_META: { id: TerminalLayer; label: string; icon: React.ReactNode }[] 
   { id: 'pins', label: 'Stations', icon: <MapPin className="size-3.5" /> },
 ];
 
-const RATES: PlaybackRate[] = [1, 4, 12];
 
 /** Map surface, its floating chrome, and the playback transport beneath it. */
-export function GeoMapPanel({ frame }: { frame: TerminalFrame }) {
+export function GeoMapPanel({
+  frame,
+  frames,
+}: {
+  frame: TerminalFrame;
+  frames: TerminalFrame[];
+}) {
   const layers = useTerminalStore((s) => s.layers);
   const toggleLayer = useTerminalStore((s) => s.toggleLayer);
   const field = useTerminalStore((s) => s.field);
@@ -145,7 +140,7 @@ export function GeoMapPanel({ frame }: { frame: TerminalFrame }) {
         ))}
       </div>
 
-      <TimelineTransport frame={frame} />
+      <TimelineTrack frames={frames} />
     </TelemetryCard>
   );
 }
@@ -176,107 +171,3 @@ function FieldChip({
   );
 }
 
-/** Scrubbable 24-hour playback transport. */
-function TimelineTransport({ frame }: { frame: TerminalFrame }) {
-  const frameIndex = useTerminalStore((s) => s.frameIndex);
-  const setFrameIndex = useTerminalStore((s) => s.setFrameIndex);
-  const stepFrame = useTerminalStore((s) => s.stepFrame);
-  const playing = useTerminalStore((s) => s.playing);
-  const togglePlay = useTerminalStore((s) => s.togglePlay);
-  const rate = useTerminalStore((s) => s.rate);
-  const setRate = useTerminalStore((s) => s.setRate);
-
-  // Playback stops at the present rather than looping — the last frame is now.
-  React.useEffect(() => {
-    if (!playing) return;
-    const id = setInterval(() => {
-      const { frameIndex: i, setFrameIndex: set, setPlaying: stop } = useTerminalStore.getState();
-      if (i >= FRAME_COUNT - 1) {
-        stop(false);
-        return;
-      }
-      set(i + 1);
-    }, 900 / rate);
-    return () => clearInterval(id);
-  }, [playing, rate]);
-
-  return (
-    <div className="mt-2 flex items-center gap-3 rounded-xl border border-term-outline-variant/60 bg-term-surface-low px-3 py-2">
-      <button
-        type="button"
-        onClick={() => {
-          if (!playing && frameIndex >= FRAME_COUNT - 1) setFrameIndex(0);
-          togglePlay();
-        }}
-        aria-label={playing ? 'Pause timeline' : 'Play timeline'}
-        className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-term-primary/40 bg-term-primary/15 text-term-primary transition-colors hover:bg-term-primary/25"
-      >
-        {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
-      </button>
-      <button
-        type="button"
-        onClick={() => stepFrame(-1)}
-        aria-label="Previous frame"
-        className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-term-outline-variant/60 bg-term-surface-high text-slate-300 transition-colors hover:text-white"
-      >
-        <SkipBack className="size-3.5" />
-      </button>
-      <button
-        type="button"
-        onClick={() => stepFrame(1)}
-        aria-label="Next frame"
-        className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-term-outline-variant/60 bg-term-surface-high text-slate-300 transition-colors hover:text-white"
-      >
-        <SkipForward className="size-3.5" />
-      </button>
-
-      <div className="min-w-0 flex-1">
-        <input
-          type="range"
-          min={0}
-          max={FRAME_COUNT - 1}
-          step={1}
-          value={frameIndex}
-          onChange={(e) => setFrameIndex(Number(e.target.value))}
-          aria-label="Forecast frame"
-          className="tele-range w-full"
-        />
-        <div className="mt-1 flex justify-between font-mono text-[9px] text-slate-500">
-          <span>T-23h</span>
-          <span className="hidden sm:inline">T-18h</span>
-          <span className="hidden sm:inline">T-12h</span>
-          <span className="hidden sm:inline">T-6h</span>
-          <span className="font-bold text-term-primary">NOW</span>
-        </div>
-      </div>
-
-      <div className="shrink-0 text-right">
-        <div className="font-mono text-[11px] font-bold tabular-nums text-white">
-          {frame.offset === 0 ? 'NOW' : `T${frame.offset}h`}
-        </div>
-        <Label>
-          frame {frameIndex + 1} / {FRAME_COUNT}
-        </Label>
-      </div>
-
-      <div className="flex shrink-0 gap-1">
-        {RATES.map((r) => (
-          <button
-            key={r}
-            type="button"
-            onClick={() => setRate(r)}
-            aria-pressed={rate === r}
-            className={cn(
-              'rounded border px-2 py-1 font-mono text-[9px] font-bold transition-colors',
-              rate === r
-                ? 'border-term-primary/40 bg-term-primary/15 text-term-primary'
-                : 'border-term-outline-variant/60 bg-term-surface-high text-slate-400 hover:text-white',
-            )}
-          >
-            {r}×
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}

@@ -72,19 +72,22 @@ export function GeoMapView() {
       {/* No loading branch: frames are seeded on the first render, so this can
           never be empty. The Leaflet chunk still streams in behind its own
           Suspense boundary in TerminalGeoMap. */}
-      <MapBody frame={frames[Math.min(frameIndex, frames.length - 1)]} />
+      <MapBody frame={frames[Math.min(frameIndex, frames.length - 1)]} frames={frames} />
     </>
   );
 }
 
-function MapBody({ frame }: { frame: TerminalFrame }) {
+function MapBody({ frame, frames }: { frame: TerminalFrame; frames: TerminalFrame[] }) {
   return (
     <>
       {/* Columns stretch, and the map frame inside the left card is flex-1, so
           the height the taller rail forces becomes more map rather than dead
           space under a short card. */}
       <div id="map" className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <GeoMapPanel frame={frame} />
+        {/* The whole window, not just the current hour: the timeline strip
+            under the map draws all 24 frames, and rebuilding them there would
+            read the wall clock a second time and could disagree with the map. */}
+        <GeoMapPanel frame={frame} frames={frames} />
         <GeoRail frame={frame} />
       </div>
       <GeoSections frame={frame} />
