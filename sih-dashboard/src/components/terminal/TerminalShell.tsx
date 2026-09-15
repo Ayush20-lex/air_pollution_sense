@@ -283,10 +283,16 @@ function TerminalHeader() {
           and it is the first thing a reader should not have to go looking
           for. w-full forces the wrap rather than leaving it to chance. */}
       <div className="flex w-full shrink-0 items-center justify-end gap-3 md:w-auto">
-        <div className="flex items-center gap-2 rounded-full border border-term-primary/40 bg-term-primary/10 px-3 py-1.5 shadow-[0_0_15px_rgba(78,222,163,0.15)]">
+        {/* Sheds its second word below xl, where the rail has already taken
+            264px and every pixel this keeps comes off the search field. It
+            sheds it visually only: sr-only leaves the full phrase in the
+            accessibility tree at every width, because "Demo" alone is a
+            weaker claim than "Demo / Synthetic" and this badge is the one
+            place the page admits the readings are not measured. */}
+        <div className="flex shrink-0 items-center gap-2 rounded-full border border-term-primary/40 bg-term-primary/10 px-3 py-1.5 shadow-[0_0_15px_rgba(78,222,163,0.15)]">
           <span className="size-2.5 rounded-full bg-amber-400" />
           <span className="font-mono text-xs font-bold uppercase tracking-wide text-term-primary">
-            Demo / Synthetic
+            Demo<span className="sr-only xl:not-sr-only"> / Synthetic</span>
           </span>
         </div>
         <LiveClock />
