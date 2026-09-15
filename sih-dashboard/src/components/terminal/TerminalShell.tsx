@@ -196,7 +196,12 @@ function TerminalHeader() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 flex w-full items-center justify-between gap-4 border-b border-term-outline-variant/60 bg-term-surface-lowest/90 px-5 py-3 backdrop-blur-xl lg:px-8">
+    // flex-wrap below md only. At 375 the content box is 335px and the six
+    // controls need 668 between them, so they cannot share a row however hard
+    // they shrink; the header grows a second row rather than hiding any of
+    // them. From md up the back link drops out and the rail takes over that
+    // job, so one row fits — nowrap there, and the row shrinks instead.
+    <header className="sticky top-0 z-40 flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-term-outline-variant/60 bg-term-surface-lowest/90 px-5 py-3 backdrop-blur-xl md:flex-nowrap lg:px-8">
       {/* min-w-0 so this column can shrink past its content's min-content
           width; without it the search never gives ground and the row spills
           past the viewport instead. */}
@@ -215,7 +220,11 @@ function TerminalHeader() {
             the field below. */}
         <CommandPalette hideTrigger />
 
-        <div className="relative min-w-[260px] sm:min-w-[310px]">
+        {/* The width floor waits for lg, not md. md is where the sidebar rail
+            appears and takes 264px, so the header has LESS room at 768 than at
+            767, not more — a 310px floor there drove this straight through the
+            provenance pill. Below lg it shrinks and truncates instead. */}
+        <div className="relative min-w-0 lg:min-w-[310px]">
           <MapPin className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-term-primary" />
           <select
             aria-label="Monitoring location"
@@ -239,7 +248,7 @@ function TerminalHeader() {
         {/* Grows into whatever the header has spare, up to a cap, rather than
             taking a fixed width: a fixed one can't yield to the right-hand
             cluster and pushes the refresh control off-screen around 1440. */}
-        <div className="hidden min-w-0 max-w-md flex-1 md:block 2xl:max-w-lg">
+        <div className="hidden min-w-0 max-w-md flex-1 lg:block 2xl:max-w-lg">
           <button
             type="button"
             onClick={() => openCommandPalette()}
@@ -255,20 +264,25 @@ function TerminalHeader() {
           </button>
         </div>
 
-        {/* The field above is hidden below md, and the nav rail is too, so
-            without this a phone would have no way to reach the geo map, the
-            console or any of the 26 stations. */}
+        {/* Carries search wherever the field cannot fit — on a phone, where the
+            nav rail is hidden too and this is the only way to the geo map, the
+            console and the 26 stations, and on a tablet, where the rail is
+            visible but leaves the header too little width for the field. */}
         <button
           type="button"
           onClick={() => openCommandPalette()}
           aria-label="Search stations and screens"
-          className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-term-outline bg-term-surface-high text-term-ink-variant transition-colors hover:border-term-primary/50 hover:text-term-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60 md:hidden"
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-term-outline bg-term-surface-high text-term-ink-variant transition-colors hover:border-term-primary/50 hover:text-term-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60 lg:hidden"
         >
           <Search className="size-4" />
         </button>
       </div>
 
-      <div className="flex shrink-0 items-center justify-end gap-3">
+      {/* Takes its own row below md. Every item here has to survive the
+          phone: the pill is the badge that says these readings are synthetic,
+          and it is the first thing a reader should not have to go looking
+          for. w-full forces the wrap rather than leaving it to chance. */}
+      <div className="flex w-full shrink-0 items-center justify-end gap-3 md:w-auto">
         <div className="flex items-center gap-2 rounded-full border border-term-primary/40 bg-term-primary/10 px-3 py-1.5 shadow-[0_0_15px_rgba(78,222,163,0.15)]">
           <span className="size-2.5 rounded-full bg-amber-400" />
           <span className="font-mono text-xs font-bold uppercase tracking-wide text-term-primary">
