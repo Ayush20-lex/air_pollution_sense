@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { AlertTriangle, CircleAlert, Info } from 'lucide-react';
+import { AlertTriangle, CircleAlert, Info, Search } from 'lucide-react';
 import { Delta, Label, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { AnimatedNumber, useRollDuration } from '@/components/terminal/MeshOdometer';
 import { COVERAGE_KPIS, INCIDENTS } from '@/lib/terminal/content';
@@ -75,20 +75,37 @@ function ZoneStrip() {
 function MeshRanking({ frame }: { frame: TerminalFrame }) {
   const selectedId = useTerminalStore((s) => s.selectedId);
   const select = useTerminalStore((s) => s.select);
-  const query = useTerminalStore((s) => s.query).trim().toLowerCase();
+  const query = useTerminalStore((s) => s.query);
+  const setQuery = useTerminalStore((s) => s.setQuery);
   const rollMs = useRollDuration();
 
-  const rows = query
+  const needle = query.trim().toLowerCase();
+  const rows = needle
     ? STATIONS_BY_SEVERITY.filter(
-        (s) => s.name.toLowerCase().includes(query) || s.zone.toLowerCase().includes(query),
+        (s) => s.name.toLowerCase().includes(needle) || s.zone.toLowerCase().includes(needle),
       )
     : STATIONS_BY_SEVERITY;
 
   return (
     <TelemetryCard className="p-5 lg:col-span-7">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-display text-sm font-bold tracking-tight text-white">Mesh Ranking — Worst to Best</h3>
-        <Label>Click a row to locate</Label>
+        <div className="flex items-center gap-2">
+          {/* The filter sits here rather than in the header: this list is the
+              only thing it narrows, so beside the rows is the one place its
+              effect is visible as you type. */}
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3 -translate-y-1/2 text-slate-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Filter nodes"
+              aria-label="Filter the mesh ranking by station or zone"
+              className="w-36 rounded-md border border-term-outline-variant/70 bg-term-surface-c py-1 pl-7 pr-2 font-body text-[11px] text-white outline-none placeholder:text-slate-500 focus:border-term-secondary focus:ring-1 focus:ring-term-secondary"
+            />
+          </div>
+          <Label>Click a row to locate</Label>
+        </div>
       </div>
 
       <div className="max-h-[430px] space-y-0.5 overflow-y-auto pr-1">

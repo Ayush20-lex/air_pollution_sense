@@ -68,7 +68,20 @@ function writeRecents(ids: string[]) {
   }
 }
 
-export function CommandPalette() {
+/**
+ * Lets any surface open the palette without prop-drilling or a context
+ * provider. The terminal header folds its own search field and this palette
+ * into a single control, so it needs a way in that isn't the built-in button.
+ */
+const OPEN_EVENT = 'airsense:command-palette-open';
+
+/** `seed` pre-fills the query, so a control can hand over the keystroke that
+ *  opened it instead of swallowing the user's first character. */
+export function openCommandPalette(seed = '') {
+  window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: seed }));
+}
+
+export function CommandPalette({ hideTrigger = false }: { hideTrigger?: boolean } = {}) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [cursor, setCursor] = React.useState(0);
@@ -221,6 +234,19 @@ export function CommandPalette() {
   }, [open, flat, cursor, exec, close]);
 
   React.useEffect(() => {
+    const onOpen = (e: Event) => {
+      const seed = (e as CustomEvent<string>).detail;
+      if (typeof seed === 'string' && seed) {
+        setQuery(seed);
+        setCursor(0);
+      }
+      setOpen(true);
+    };
+    window.addEventListener(OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_EVENT, onOpen);
+  }, []);
+
+  React.useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
 
@@ -235,18 +261,20 @@ export function CommandPalette() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Open command palette"
-        className="flex items-center gap-2 rounded-lg border border-hairline bg-elevated/60 px-2.5 py-1.5 font-mono text-2xs uppercase tracking-wider text-muted transition-colors hover:border-accent/40 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-      >
-        <Search className="size-3.5" />
-        <span className="hidden sm:inline">Search</span>
-        <kbd className="hidden rounded border border-hairline bg-base/60 px-1 py-px text-[10px] sm:inline">
-          ⌘K
-        </kbd>
-      </button>
+      {hideTrigger ? null : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Open command palette"
+          className="flex items-center gap-2 rounded-lg border border-hairline bg-elevated/60 px-2.5 py-1.5 font-mono text-2xs uppercase tracking-wider text-muted transition-colors hover:border-accent/40 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        >
+          <Search className="size-3.5" />
+          <span className="hidden sm:inline">Search</span>
+          <kbd className="hidden rounded border border-hairline bg-base/60 px-1 py-px text-[10px] sm:inline">
+            ⌘K
+          </kbd>
+        </button>
+      )}
 
       {/* Portalled to <body> deliberately. The intro mounts this inside a
           motion.header, and framer writes a transform there for the entrance

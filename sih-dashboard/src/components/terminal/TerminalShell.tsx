@@ -22,7 +22,7 @@ import { STATIONS } from '@/lib/terminal/stations';
 import { TerminalEnter } from './TerminalEnter';
 import { cn } from '@/lib/utils';
 import { useTerminalStore } from '@/store/useTerminalStore';
-import { CommandPalette } from '@/components/ui/command-palette';
+import { CommandPalette, openCommandPalette } from '@/components/ui/command-palette';
 import { toast } from 'sonner';
 
 /**
@@ -173,18 +173,22 @@ function TerminalSidebar() {
 }
 
 function TerminalHeader() {
-  const query = useTerminalStore((s) => s.query);
-  const setQuery = useTerminalStore((s) => s.setQuery);
-  const searchRef = React.useRef<HTMLInputElement>(null);
+  // A printable key pressed on the focused search control opens the palette
+  // carrying that character, so type-ahead doesn't lose its first keystroke.
+  const handleTypeAhead = React.useCallback((e: React.KeyboardEvent) => {
+    if (e.key.length !== 1 || e.metaKey || e.ctrlKey || e.altKey) return;
+    e.preventDefault();
+    openCommandPalette(e.key);
+  }, []);
 
-  // "/" focuses search, matching the hint rendered in the field.
+  // "/" opens search from anywhere, matching the hint the control carries.
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if (e.key === '/') {
         e.preventDefault();
-        searchRef.current?.focus();
+        openCommandPalette();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -193,7 +197,10 @@ function TerminalHeader() {
 
   return (
     <header className="sticky top-0 z-40 flex w-full items-center justify-between gap-4 border-b border-term-outline-variant/60 bg-term-surface-lowest/90 px-5 py-3 backdrop-blur-xl lg:px-8">
-      <div className="flex flex-1 items-center gap-4">
+      {/* min-w-0 so this column can shrink past its content's min-content
+          width; without it the search never gives ground and the row spills
+          past the viewport instead. */}
+      <div className="flex min-w-0 flex-1 items-center gap-4">
         {/* The sidebar carrying the other Back control is hidden below md, so
             without this a phone has no way out of the terminal. */}
         <Link
@@ -204,10 +211,9 @@ function TerminalHeader() {
           <ArrowLeft className="size-4" />
         </Link>
 
-        {/* Doubles as the terminal's mobile navigation: the rail that carries
-            the nav is hidden below md, so on a phone this is the only way to
-            reach the geo map, the console or any of the 26 stations. */}
-        <CommandPalette />
+        {/* Trigger suppressed: the header carries one search control, and it is
+            the field below. */}
+        <CommandPalette hideTrigger />
 
         <div className="relative min-w-[260px] sm:min-w-[310px]">
           <MapPin className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-term-primary" />
@@ -225,20 +231,41 @@ function TerminalHeader() {
           <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
         </div>
 
-        <div className="relative hidden w-72 xl:block">
-          <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
-          <input
-            ref={searchRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Find station, zone or coordinates"
-            aria-label="Find a station, zone or coordinates"
-            className="w-full rounded-lg border border-term-outline-variant/80 bg-term-surface-c py-1.5 pl-9 pr-10 font-body text-xs text-white outline-none placeholder:text-slate-400 focus:border-term-secondary focus:ring-1 focus:ring-term-secondary"
-          />
-          <span className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-term-surface-highest px-1.5 py-0.5 font-mono text-[10px] text-slate-300">
-            /
-          </span>
+        {/* The header's single search control. It looks like a field but is a
+            button, because the results live in the palette: a plain input here
+            would show the user nothing on this route, its only consumer being
+            the mesh ranking on the geo map. Typing a character opens the
+            palette carrying it, so the control still accepts type-ahead. */}
+        {/* Grows into whatever the header has spare, up to a cap, rather than
+            taking a fixed width: a fixed one can't yield to the right-hand
+            cluster and pushes the refresh control off-screen around 1440. */}
+        <div className="hidden min-w-0 max-w-md flex-1 md:block 2xl:max-w-lg">
+          <button
+            type="button"
+            onClick={() => openCommandPalette()}
+            onKeyDown={handleTypeAhead}
+            aria-label="Search stations and screens"
+            className="flex w-full items-center gap-2.5 rounded-lg border border-term-outline-variant/80 bg-term-surface-c py-2 pl-3.5 pr-2.5 text-left font-body text-sm text-slate-400 transition-colors hover:border-term-secondary/60 hover:text-slate-200 focus-visible:border-term-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-term-secondary"
+          >
+            <Search className="size-4 shrink-0" />
+            <span className="flex-1 truncate">Find station, zone or coordinates</span>
+            <kbd className="shrink-0 rounded bg-term-surface-highest px-1.5 py-0.5 font-mono text-[11px] text-slate-300">
+              ⌘K
+            </kbd>
+          </button>
         </div>
+
+        {/* The field above is hidden below md, and the nav rail is too, so
+            without this a phone would have no way to reach the geo map, the
+            console or any of the 26 stations. */}
+        <button
+          type="button"
+          onClick={() => openCommandPalette()}
+          aria-label="Search stations and screens"
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-term-outline bg-term-surface-high text-term-ink-variant transition-colors hover:border-term-primary/50 hover:text-term-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60 md:hidden"
+        >
+          <Search className="size-4" />
+        </button>
       </div>
 
       <div className="flex shrink-0 items-center justify-end gap-3">
@@ -300,7 +327,11 @@ function LiveClock() {
   }, []);
 
   return (
-    <div className="hidden items-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-low px-3 py-1.5 font-mono text-xs text-slate-200 sm:flex">
+    // At 209px this is the widest thing in the header and the only one that
+    // isn't a control, so it yields to the search until there is room for
+    // both. 1700 rather than 2xl: at 1536 it would come back while the search
+    // is still growing, shrinking it again on the way up.
+    <div className="hidden items-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-low px-3 py-1.5 font-mono text-xs text-slate-200 min-[1700px]:flex">
       <Clock className="size-4 text-term-secondary" />
       <span suppressHydrationWarning className="font-semibold tracking-tight text-white">
         {stamp}
