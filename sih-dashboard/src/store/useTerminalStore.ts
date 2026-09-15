@@ -23,7 +23,6 @@ type TerminalState = {
 
   frameIndex: number;
   setFrameIndex: (i: number) => void;
-  stepFrame: (delta: number) => void;
 
   playing: boolean;
   togglePlay: () => void;
@@ -62,17 +61,24 @@ const DEFAULT_LAYERS: Record<TerminalLayer, boolean> = {
 
 const LAST_FRAME = FRAME_COUNT - 1;
 
-export const useTerminalStore = create<TerminalState>((set, get) => ({
+/**
+ * The frame the map opens on, and the one "NOW" returns to.
+ *
+ * Index 0 is the present: the window used to run backwards and end at now, so
+ * the default sat at the last frame. It now runs forwards from now, and the
+ * default moved with it.
+ */
+const NOW_FRAME = 0;
+
+export const useTerminalStore = create<TerminalState>((set) => ({
   layers: { ...DEFAULT_LAYERS },
   toggleLayer: (l) => set((s) => ({ layers: { ...s.layers, [l]: !s.layers[l] } })),
 
   field: 'PM2.5',
   setField: (field) => set({ field }),
 
-  frameIndex: LAST_FRAME,
+  frameIndex: NOW_FRAME,
   setFrameIndex: (i) => set({ frameIndex: Math.max(0, Math.min(LAST_FRAME, Math.round(i))) }),
-  stepFrame: (delta) => get().setFrameIndex(get().frameIndex + delta),
-
   playing: false,
   togglePlay: () => set((s) => ({ playing: !s.playing })),
   setPlaying: (playing) => set({ playing }),
@@ -93,7 +99,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     set({
       layers: { ...DEFAULT_LAYERS },
       field: 'PM2.5',
-      frameIndex: LAST_FRAME,
+      frameIndex: NOW_FRAME,
       playing: false,
       rate: 1,
       selectedId: MASTER_STATION.id,

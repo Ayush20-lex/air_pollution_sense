@@ -17,7 +17,16 @@ import { TERM_SEVERITY } from '@/lib/terminal/palette';
 
 /** Cells per side of the nested grid. */
 export const GRID = 18;
-export const FRAME_COUNT = 24;
+
+/**
+ * Forecast horizon in hours. 72 is what the rest of the product promises —
+ * the entry grid's "72-hour horizon", the model metadata, the intro copy —
+ * and this is the surface where that promise is actually walked through.
+ */
+export const HORIZON_HOURS = 72;
+
+/** NOW, plus one frame per hour out to the horizon. */
+export const FRAME_COUNT = HORIZON_HOURS + 1;
 
 export type NodeSample = {
   pm25: number;
@@ -30,7 +39,7 @@ export type NodeSample = {
 };
 
 export type TerminalFrame = {
-  /** Hours relative to now: -23 … 0. */
+  /** Hours ahead of now: 0 … 72. */
   offset: number;
   /** Local IST hour of the frame, 0-23. */
   localHour: number;
@@ -51,7 +60,15 @@ function pblHeight(hour: number): number {
 }
 
 /**
- * Build the 24 hourly frames ending at `now`.
+ * Build the hourly frames from `now` out to the 72-hour horizon.
+ *
+ * This ran backwards until the map's timeline became a forecast: it built the
+ * 24 hours ending at `now`, so the one thing the product claims to do — say
+ * where the plume goes next — was the one thing the map could not show.
+ *
+ * The engine itself is unchanged by the reversal. Each frame is the mesh
+ * modulated by the diurnal cycle at that frame's local hour, and that function
+ * runs forwards as readily as backwards; only the sign of the step moved.
  *
  * Pass a fixed `now` from the caller to keep a render deterministic; the page
  * builds frames once on mount so the clock ticking does not rebuild the field.
@@ -60,7 +77,7 @@ export function buildFrames(now: Date = new Date()): TerminalFrame[] {
   const frames: TerminalFrame[] = [];
 
   for (let f = 0; f < FRAME_COUNT; f++) {
-    const t = new Date(now.getTime() - (FRAME_COUNT - 1 - f) * 3600_000);
+    const t = new Date(now.getTime() + f * 3600_000);
     // IST is UTC+5:30; the half hour does not change which hour bucket we are in.
     const localHour = (t.getUTCHours() + 5) % 24;
     const dial = diurnal(localHour);
@@ -79,12 +96,18 @@ export function buildFrames(now: Date = new Date()): TerminalFrame[] {
         windSpeed: 1.1 + 3.4 * Math.max(0, Math.sin(((localHour - 8) / 14) * Math.PI)) + (idx % 3) * 0.25,
         o3: 18 + 74 * mixing + (idx % 4) * 4,
         nox: st.aqi * 0.34 * (1.25 - 0.4 * mixing),
-        alert: alertForAqi(st.aqi),
+        // The frame's own AQI, not the station's base reading. Keyed to the
+        // base, every pin held one alert state across the whole window — so
+        // scrubbing into a forecast hour at 350 left the map insisting the
+        // mesh was calm. The alert is a function of the reading; it has to
+        // move when the reading does.
+        alert: alertForAqi(Math.round(aqi)),
       };
     });
 
     frames.push({
-      offset: f - (FRAME_COUNT - 1),
+      /** Hours ahead of now: 0 … 72. */
+      offset: f,
       localHour,
       label: t.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
       nodes,

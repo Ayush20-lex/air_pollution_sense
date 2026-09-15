@@ -1,20 +1,20 @@
 import * as React from 'react';
-import { Pause, Play } from 'lucide-react';
+import { Flag, RotateCw, Square } from 'lucide-react';
 import { Label } from '@/components/terminal/TerminalPrimitives';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
-import type { TerminalFrame } from '@/lib/terminal/field';
+import { HORIZON_HOURS, type TerminalFrame } from '@/lib/terminal/field';
 import { cn } from '@/lib/utils';
 import { useTerminalStore, type PlaybackRate } from '@/store/useTerminalStore';
 
 /**
- * The 24-hour scrub for the plume map.
+ * The 72-hour forecast scrub for the plume map.
  *
  * It replaced a video transport: play, skip-back, skip-forward and an empty
- * grey rail. The rail was the problem — twenty-four hours of readings sat
- * behind it and it drew none of them, so finding the overnight peak meant
- * scrubbing until the map went red. A media player is the right shape for
- * media, where the content is only legible in motion; this content is a
- * series, and a series can be shown all at once.
+ * grey rail. The rail was the problem — the readings sat behind it and it drew
+ * none of them, so finding the overnight peak meant scrubbing until the map
+ * went red. A media player is the right shape for media, where the content is
+ * only legible in motion; this content is a series, and a series can be shown
+ * all at once.
  *
  * So the rail carries the data: one column per frame, height proportional to
  * that hour's mesh mean AQI, filled with its CPCB band colour. The shape of
@@ -30,6 +30,16 @@ import { useTerminalStore, type PlaybackRate } from '@/store/useTerminalStore';
  * it brings click-to-position, drag, arrow keys, Home/End and the correct
  * ARIA semantics with it. Re-implementing those on a div is how sliders end
  * up unreachable by keyboard.
+ *
+ * The controls beside it are the two questions a forecast is actually asked —
+ * when is it worst, and take me back to now — rather than a play triangle. A
+ * transport answers neither; PEAK answers the first in one press and names the
+ * hour on its face, so the answer is legible before the press. Auto-advance
+ * survives as SWEEP because it drives the map, not the strip: watching the
+ * plume cross the basin is the one thing 73 columns cannot show.
+ *
+ * Midnight divisions are marked, because three days of hourly columns read as
+ * an undifferentiated comb without them.
  */
 
 const RATES: PlaybackRate[] = [1, 4, 12];
@@ -62,7 +72,8 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
   const series = React.useMemo(() => frames.map(meanAqi), [frames]);
   const peak = React.useMemo(() => Math.max(...series, 1), [series]);
 
-  // Playback stops at the present rather than looping — the last frame is now.
+  // Stops at the horizon rather than looping: running off +72h back to NOW
+  // would imply the window wraps, and it does not.
   React.useEffect(() => {
     if (!playing) return;
     const id = setInterval(() => {
@@ -90,6 +101,21 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
     return Math.max(0, Math.min(last, Math.floor(ratio * count)));
   };
 
+  // Worst hour in the window. Recomputed with the series, not per render.
+  const peakIndex = React.useMemo(
+    () => series.reduce((best, v, i) => (v > series[best] ? i : best), 0),
+    [series],
+  );
+
+  // Local midnights, so three days of columns are readable as three days.
+  const midnights = React.useMemo(
+    () => frames.map((f, i) => (f.localHour === 0 ? i : -1)).filter((i) => i > 0),
+    [frames],
+  );
+
+  const peakBand = bandForAqi(series[peakIndex]);
+  const peakHour = `${pad2(frames[peakIndex].localHour)}:00`;
+
   const shown = hover ?? current;
   const shownFrame = frames[shown];
   const shownAqi = series[shown];
@@ -101,16 +127,34 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
           1.3px an hour, which is not a chart of anything — so it drops to its
           own full-width line and the controls keep the row above. */}
       <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
+        {/* Names the hour and its reading on its face, so the worst point in
+            the window is legible before anything is pressed. */}
         <button
           type="button"
-          onClick={() => {
-            if (!playing && current >= last) setFrameIndex(0);
-            togglePlay();
-          }}
-          aria-label={playing ? 'Pause timeline' : 'Play timeline'}
-          className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-term-primary/40 bg-term-primary/15 text-term-primary transition-colors hover:bg-term-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60"
+          onClick={() => setFrameIndex(peakIndex)}
+          aria-label={`Jump to the worst forecast hour, ${peakHour}, mesh mean AQI ${series[peakIndex]}`}
+          className={cn(
+            'flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-mono text-[10px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60',
+            current === peakIndex
+              ? 'border-term-primary/50 bg-term-primary/15 text-term-primary'
+              : 'border-term-outline-variant/60 bg-term-surface-high text-slate-300 hover:text-white',
+          )}
         >
-          {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
+          <Flag className="size-3" style={{ color: peakBand.color }} />
+          <span className="tabular-nums">PEAK {peakHour}</span>
+          <span className="tabular-nums" style={{ color: peakBand.color }}>
+            {series[peakIndex]}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFrameIndex(0)}
+          disabled={current === 0}
+          aria-label="Return to the present hour"
+          className="flex shrink-0 items-center rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-2.5 py-1.5 font-mono text-[10px] font-bold text-slate-300 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60 disabled:opacity-40 disabled:hover:text-slate-300"
+        >
+          NOW
         </button>
 
         <div
@@ -129,6 +173,10 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
             preserveAspectRatio="none"
             className="pointer-events-none absolute inset-0 size-full"
           >
+            {/* Day divisions first, so the columns sit over them. */}
+            {midnights.map((i) => (
+              <rect key={`mn-${i}`} x={i * 4 - 0.5} y={0} width={0.5} height={100} fill="#94a3b8" opacity={0.22} />
+            ))}
             {series.map((aqi, i) => {
               const h = (aqi / peak) * PEAK;
               return (
@@ -161,7 +209,7 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
             step={1}
             value={current}
             onChange={(e) => setFrameIndex(Number(e.target.value))}
-            aria-label="Hour of the 24-hour window"
+            aria-label="Hour of the 72-hour forecast"
             aria-valuetext={`${pad2(shownFrame.localHour)}:00 IST, mesh mean AQI ${shownAqi}, ${shownBand.label}`}
             className="peer absolute inset-0 size-full cursor-pointer appearance-none bg-transparent opacity-0"
           />
@@ -170,14 +218,38 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
 
         <div className="shrink-0 text-right">
           <div className="font-mono text-[11px] font-bold tabular-nums text-white">
-            {frames[current].offset === 0 ? 'NOW' : `T${frames[current].offset}h`}
+            {frames[current].offset === 0 ? 'NOW' : `+${frames[current].offset}h`}
           </div>
           <Label>
-            hour {current + 1} / {count}
+            hour {current} / {HORIZON_HOURS}
           </Label>
         </div>
 
-        <div className="flex shrink-0 gap-1">
+        {/* Demoted to a labelled toggle beside the speeds. It still drives the
+            map — the plume crossing the basin is worth watching — but it is no
+            longer the control the eye lands on first. */}
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              if (!playing && current >= last) setFrameIndex(0);
+              togglePlay();
+            }}
+            aria-pressed={playing}
+            className={cn(
+              'flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-[9px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60',
+              playing
+                ? 'border-term-primary/50 bg-term-primary/15 text-term-primary'
+                : 'border-term-outline-variant/60 bg-term-surface-high text-slate-400 hover:text-white',
+            )}
+          >
+            {playing ? (
+              <Square className="size-2.5 fill-current" />
+            ) : (
+              <RotateCw className="size-2.5" />
+            )}
+            {playing ? 'STOP' : 'SWEEP'}
+          </button>
           {RATES.map((r) => (
             <button
               key={r}
@@ -201,7 +273,7 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
           playhead otherwise, so hovering can answer "what was 3am" without
           moving the map away from the hour being watched. */}
       <div className="mt-1.5 flex items-center justify-between gap-3 font-mono text-[9px] text-slate-500">
-        <span>T-{last}h</span>
+        <span className="font-bold text-term-primary">NOW</span>
         <span className="flex min-w-0 items-center gap-1.5 truncate">
           <span
             className="size-1.5 shrink-0 rounded-full"
@@ -216,7 +288,7 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
           <span style={{ color: shownBand.color }}>{shownBand.label}</span>
           {hover !== null && <span className="text-slate-600">(hover)</span>}
         </span>
-        <span className="font-bold text-term-primary">NOW</span>
+        <span>+{HORIZON_HOURS}h</span>
       </div>
     </div>
   );
