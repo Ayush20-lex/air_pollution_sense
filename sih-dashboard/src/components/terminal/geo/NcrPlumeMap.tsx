@@ -35,7 +35,8 @@ import { TERM } from '@/lib/terminal/palette';
  *
  * Keyless OSM raster tiles; the dark treatment is a CSS filter on the tile
  * pane (see `app/terminal/terminal.css`) rather than a second, API-keyed
- * provider — same approach the console's NCRMap uses.
+ * provider. It is the only Leaflet map left in the app: the console's NCRMap
+ * was the other one, and it went with the console.
  */
 
 const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';

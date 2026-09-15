@@ -28,8 +28,10 @@ import { toast } from 'sonner';
 /**
  * Sidebar + header + footer chrome shared by every terminal page.
  *
- * The console at `/` is a fixed-height cockpit; this surface is a scrolling
- * public terminal, so it keeps its own shell rather than reusing Dashboard's.
+ * `/` is the intro scroll track and this is the terminal it hands off to, so
+ * the two keep separate chrome. There was a third surface, the fixed-height
+ * console at /console, whose Dashboard shell this deliberately did not reuse;
+ * it has since been removed.
  */
 
 type NavItem = {

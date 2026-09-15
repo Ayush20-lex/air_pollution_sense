@@ -9,7 +9,7 @@ import { Radio } from 'lucide-react';
  * The intro fires this the moment "Scan NCR" is pressed and it stays up until
  * the route actually changes, so the aerosol field never cuts to a blank frame
  * mid-navigation. It settles on the terminal's own ground (#040e1a) rather
- * than the console's, so arrival reads as one continuous move.
+ * than the intro's, so arrival reads as one continuous move.
  */
 
 const STEPS = [

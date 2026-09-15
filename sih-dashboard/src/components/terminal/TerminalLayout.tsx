@@ -11,7 +11,7 @@
  *
  * terminal.css is imported here rather than in index.css so it ships with the
  * terminal chunk. Everything in it is scoped under `.terminal-root`, which
- * TerminalShell applies, so the console keeps its own light/dark treatment.
+ * TerminalShell applies, so the intro keeps its own light/dark treatment.
  */
 import * as React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';

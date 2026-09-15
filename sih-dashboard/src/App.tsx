@@ -11,11 +11,14 @@
  *   - `export const metadata` → static <head> tags in index.html
  *   - the app-router file tree → the react-router routes below
  *
- * Routes mirror the Next app one-for-one:
+ * Routes:
  *   /                  the intro scroll track; Scan NCR hands off to /terminal
- *   /console           the engineering console (Leaflet + Recharts + Three)
  *   /terminal          public terminal, Live Telemetry
  *   /terminal/geo-map  public terminal, geospatial plume map
+ *
+ * /console — the engineering console, and the Next route tree's third surface
+ * — was removed. Anything still pointing at it falls through to the catch-all
+ * and lands on the intro rather than a blank screen.
  */
 import * as React from 'react';
 import {
@@ -37,11 +40,6 @@ import { ForecastStatus } from '@/components/ui/forecast-status';
 // Each of these pulls a heavy chunk — Leaflet, Recharts, Three — so they stay
 // out of the landing bundle. The fallback covers the chunk fetch so the scan
 // hand-off never lands on a blank frame.
-const Dashboard = dynamic(
-  () => import('@/components/dashboard/Dashboard').then((m) => m.Dashboard),
-  { ssr: false, loading: () => <BootSplash /> },
-);
-
 const TerminalLayout = dynamic(() => import('@/components/terminal/TerminalLayout').then((m) => m.default), {
   ssr: false,
   loading: () => <BootSplash />,
@@ -73,7 +71,7 @@ function BootSplash() {
  * Landing track: the aerosol particle field and its scroll choreography.
  *
  * "Scan NCR" plays the disperse animation behind the hand-off curtain, then
- * opens the public terminal. The console keeps its own route at /console.
+ * opens the public terminal.
  */
 function IntroRoute() {
   const navigate = useNavigate();
@@ -104,27 +102,6 @@ function IntroRoute() {
   return (
     <main className="relative w-full bg-base">
       <IntroScreen />
-    </main>
-  );
-}
-
-/** Engineering console — the forecast cockpit with the intervention levers. */
-function ConsoleRoute() {
-  const loadLiveForecast = useAppStore((s) => s.loadLiveForecast);
-
-  React.useEffect(() => {
-    void loadLiveForecast();
-  }, [loadLiveForecast]);
-
-  // Entering the console would otherwise inherit the intro track's scroll
-  // position once the page height collapses to a fixed console.
-  React.useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
-  return (
-    <main className="relative h-dvh w-full overflow-hidden bg-base">
-      <Dashboard />
     </main>
   );
 }
@@ -162,14 +139,13 @@ export default function App() {
 
               Sonner's `theme` defaults to 'light' and does not follow the OS,
               so it has to be handed the resolved theme or toasts render
-              white-on-white on this dark console. */}
+              white-on-white on the dark surfaces. */}
           <ThemedToaster />
           <ForecastStatus />
 
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<IntroRoute />} />
-              <Route path="/console" element={<ConsoleRoute />} />
               <Route path="/terminal" element={<TerminalLayout />}>
                 <Route index element={<TerminalOverview />} />
                 <Route path="geo-map" element={<TerminalGeoMap />} />

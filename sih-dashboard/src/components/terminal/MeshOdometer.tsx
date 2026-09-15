@@ -7,13 +7,15 @@ import { useTerminalStore } from '@/store/useTerminalStore';
 /**
  * Smooth AQI readouts for timeline playback.
  *
- * Not to be confused with `@/components/ui/rolling-number`, which is the
- * console's hero odometer. That one drives framer MotionValues per digit and
- * carries a colour tween and a fixed column count; this one runs every
- * instance off a single shared rAF ticker, because GeoSections renders these
- * across a 26-row table and 26 independent frame loops is not the same cost as
- * one. They were both called RollingNumber, which made the wrong import a
- * plausible mistake — hence the names.
+ * Runs every instance off a single shared rAF ticker, because GeoSections
+ * renders these across a 26-row table and 26 independent frame loops is not
+ * the same cost as one.
+ *
+ * It had a twin — `@/components/ui/rolling-number`, the console's hero
+ * odometer, which drove framer MotionValues per digit with a colour tween and
+ * a fixed column count. Both were called RollingNumber, which made the wrong
+ * import a plausible mistake; this one was renamed to end that. The twin was
+ * deleted with the console, so the name is now simply its own.
  *
  * Two treatments, because one size does not fit both jobs:
  *   `MeshOdometer`   — odometer digit columns, for the hero readout.

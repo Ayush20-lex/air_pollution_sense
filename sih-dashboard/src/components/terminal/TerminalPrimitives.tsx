@@ -114,7 +114,7 @@ export function Meter({ pct, color }: { pct: number; color: string }) {
 }
 
 /**
- * Dependency-free sparkline. The console has `MiniSparkline`, but that one
+ * Dependency-free sparkline. The intro has `MiniSparkline`, but that one
  * colours itself from PM2.5 concentration; this surface passes its own colour
  * and needs a flat-series fallback for constants like spatial resolution.
  */

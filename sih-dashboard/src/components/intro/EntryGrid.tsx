@@ -1,11 +1,11 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Gauge, LayoutDashboard, MapPin } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, Gauge, MapPin } from 'lucide-react';
 import { ScanButton } from './ScanButton';
-import { aqiColor, bandForPm25 } from '@/lib/aqi';
+import { ALERT_COLOR, aqiColor, bandForPm25 } from '@/lib/aqi';
 import { FORECAST_HOURS, MODEL_META, type Frame } from '@/lib/data';
 import { STATIONS } from '@/lib/terminal/stations';
-import { POLLUTANTS } from '@/lib/terminal/content';
+import { INCIDENTS, POLLUTANTS } from '@/lib/terminal/content';
 import { cn } from '@/lib/utils';
 
 /**
@@ -24,7 +24,16 @@ import { cn } from '@/lib/utils';
  * Every figure is real and pulled from the same source the destination uses —
  * the AQI is the live frame, the node count is STATIONS.length, the channel
  * count is POLLUTANTS.length. None of it is written down twice.
+ *
+ * All three tiles open the public terminal. They used to be three separate
+ * surfaces, but the engineering console was removed, so what is left is one
+ * destination entered at three different depths.
  */
+
+/** Worst level in the feed, so the count is not painted calmer than it reads. */
+const worstIncidentColor = INCIDENTS.some((i) => i.level === 'CRITICAL')
+  ? ALERT_COLOR.EMERGENCY
+  : ALERT_COLOR.WARNING;
 
 const rise = (i: number) => ({
   initial: { opacity: 0, y: 40 },
@@ -117,7 +126,7 @@ export function EntryGrid({
         icon={<Gauge className="size-3" />}
         eyebrow="Public terminal"
         title="Live telemetry"
-        body={`Composite AQI against the EPA benchmark, ${POLLUTANTS.length}-channel chemical grid with per-species trajectories, and the station mesh with its incident feed.`}
+        body={`Composite AQI on the CPCB National scale, ${POLLUTANTS.length}-channel chemical grid with per-species trajectories, and the station mesh with its incident feed.`}
         stat={String(frame.avgAqi)}
         statLabel={`NCR mean · ${band.label}`}
         statColor={aqiColor(frame.avgPm25)}
@@ -136,13 +145,14 @@ export function EntryGrid({
 
       <Tile
         index={2}
-        to="/console"
-        icon={<LayoutDashboard className="size-3" />}
-        eyebrow="Engineering"
-        title="Forecast console"
-        body="The cockpit behind the terminal: timeline scrub, per-district readouts and the intervention levers."
-        stat={`${FORECAST_HOURS}h`}
-        statLabel="Forecast horizon"
+        to="/terminal#alerts"
+        icon={<AlertTriangle className="size-3" />}
+        eyebrow="Public terminal"
+        title="Incident warnings"
+        body="The advisory feed: plume fronts, inversion events and the corridor each one threatens, newest first."
+        stat={String(INCIDENTS.length)}
+        statLabel="Open incidents"
+        statColor={worstIncidentColor}
       />
 
       {/* The CTA keeps its own tile so the scan hand-off stays the largest
@@ -154,7 +164,8 @@ export function EntryGrid({
             Open the <span className="text-accent">live terminal</span>
           </h3>
           <p className="mt-2 max-w-md text-pretty text-sm leading-relaxed text-muted">
-            {MODEL_META.model} on a {MODEL_META.resolution} grid, {MODEL_META.cycle} cycle.
+            {MODEL_META.model} on a {MODEL_META.resolution} grid, {MODEL_META.cycle} cycle,{' '}
+            {FORECAST_HOURS}-hour horizon.
           </p>
         </div>
         <div>

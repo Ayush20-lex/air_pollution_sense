@@ -6,7 +6,6 @@ import { useTheme } from 'next-themes';
 import {
   ArrowRight,
   Gauge,
-  LayoutDashboard,
   MapPin,
   Moon,
   Radio,
@@ -18,18 +17,21 @@ import { aqiColor } from '@/lib/aqi';
 import { cn } from '@/lib/utils';
 
 /**
- * ⌘K palette. Two jobs beyond the obvious one:
+ * ⌘K palette.
  *
- *  - the engineering console at /console had no link anywhere in the app, so
- *    the map, simulator, timeline and odometer were unreachable without typing
- *    the URL. This is its entry point.
- *  - the terminal's rail is `hidden md:flex`, so a phone had no navigation at
- *    all. The trigger button is visible at every width.
+ * Beyond the obvious job, it is how a phone navigates at all: the terminal's
+ * rail is `hidden md:flex`, so below that width this and the header's search
+ * button are the only routes to the geo map and the 26 stations.
+ *
+ * It also carried the only link to the engineering console, which had no
+ * entry point anywhere else. That console has since been removed, so "Go to"
+ * is down to the landing track and the terminal's two routes; the terminal's
+ * own sections are reachable from the rail, not from here.
  *
  * Navigation goes through react-router rather than `window.location`: a full
  * reload would re-fetch the ~880 kB particle chunk on every jump.
  *
- * Colours are the --as-* tokens, which resolve on all three surfaces. The
+ * Colours are the --as-* tokens, which resolve on both surfaces. The
  * terminal's term-* ramp is scoped to .terminal-root and would not.
  */
 
@@ -138,15 +140,6 @@ export function CommandPalette({ hideTrigger = false }: { hideTrigger?: boolean 
         run: () => go('/terminal/geo-map'),
         keywords: 'map plume heatmap contours wind geo mesh',
       },
-      {
-        id: 'go-console',
-        title: 'Engineering console',
-        hint: 'Forecast, timeline, what-if levers',
-        group: 'Go to',
-        icon: <LayoutDashboard className="size-4" />,
-        run: () => go('/console'),
-        keywords: 'console dashboard forecast simulator intervention timeline',
-      },
     ];
 
     const stations: Cmd[] = STATIONS.map((s) => ({
@@ -164,7 +157,7 @@ export function CommandPalette({ hideTrigger = false }: { hideTrigger?: boolean 
       {
         id: 'theme',
         title: resolvedTheme === 'dark' ? 'Switch to light' : 'Switch to dark',
-        hint: 'Console and landing track only',
+        hint: 'Landing track only',
         group: 'Appearance',
         icon: resolvedTheme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />,
         run: () => {

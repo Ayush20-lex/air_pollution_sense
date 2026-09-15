@@ -17,8 +17,8 @@ const rise = (i: number) => ({
 
 /**
  * The panel row that rises over the pinned particle field as the intro
- * scrolls. Every figure and every sentence is the same data the dashboard
- * shows — this is a preview of the console, not new content.
+ * scrolls. Every figure and every sentence is the same data the terminal
+ * shows — this is a preview of what Scan NCR opens, not new content.
  */
 export function ScrollPanels({
   frame,

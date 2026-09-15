@@ -398,7 +398,7 @@ export function IntroScreen() {
             Three ways <span className="text-accent">in</span>
           </motion.h2>
           <p className="mt-2 max-w-lg text-pretty text-sm leading-relaxed text-muted">
-            The public terminal is read-only; the console carries the levers.
+            Each one opens the public terminal. Everything it shows is read-only.
           </p>
           <div className="mt-6">
             <EntryGrid frame={frame} onScan={startScan} scanning={handingOff} />
