@@ -48,6 +48,13 @@ export function NcrPlumeMap({ frame }: { frame: TerminalFrame }) {
   const selectedId = useTerminalStore((s) => s.selectedId);
   const select = useTerminalStore((s) => s.select);
 
+  // No preferCanvas. It bought nothing here - the heat field builds its own
+  // canvas overlay rather than being a Leaflet vector - while forcing the canvas
+  // renderer on every Polyline that did not name one. Every vector layer below
+  // already passes renderer: L.svg(), because the dashes have to animate and CSS
+  // cannot animate a canvas draw. With preferCanvas set the SVG overlay pane came
+  // up empty in a production build; dev only looked right because StrictMode
+  // remounts each layer a second time.
   return (
     <MapContainer
       center={NCR_CENTER}
@@ -56,7 +63,6 @@ export function NcrPlumeMap({ frame }: { frame: TerminalFrame }) {
       maxZoom={13}
       zoomControl={false}
       attributionControl
-      preferCanvas
       className="size-full"
       style={{ background: 'transparent' }}
     >
@@ -388,8 +394,10 @@ function IsoContours({ frame }: { frame: TerminalFrame }) {
               dashArray: level.dash ?? undefined,
               lineCap: 'round',
               lineJoin: 'round',
+              // className here is inert; see classOnAdd.
               className: 'term-contour',
             }}
+            eventHandlers={classOnAdd('term-contour')}
           />
         )),
       )}
@@ -489,6 +497,7 @@ function SourceRibbons() {
               lineCap: 'round',
               className: 'term-ribbon',
             }}
+            eventHandlers={classOnAdd('term-ribbon')}
           />
           <Marker
             position={r.positions[0]}
@@ -509,6 +518,28 @@ function SourceRibbons() {
 }
 
 /** Cycled so neighbouring streamlines do not pulse in unison. */
+/**
+ * Puts a class on a vector's <path> once Leaflet has created it.
+ *
+ * `className` inside `pathOptions` does not survive react-leaflet: it applies
+ * path options through Leaflet's `setStyle()`, which handles stroke, weight and
+ * opacity but ignores `className` entirely. A development build hid this,
+ * because StrictMode mounts every layer twice and the second pass happened to
+ * leave the class attached; a production build mounts once and the class never
+ * appeared. The strokes were all correct, so the map looked right - only the
+ * CSS dash animations, which are keyed off these classes, were silently dead.
+ *
+ * Attaching on `add` is the one point where the element is guaranteed to exist.
+ */
+function classOnAdd(...names: string[]) {
+  return {
+    add(e: { target: { getElement?: () => Element | null } }) {
+      const el = e.target.getElement?.();
+      if (el) el.classList.add(...names);
+    },
+  };
+}
+
 const STREAM_PHASES = ['a', 'b', 'c'] as const;
 
 /**
@@ -548,6 +579,10 @@ function WindStreamlines({ frame }: { frame: TerminalFrame }) {
             lineJoin: 'round',
             className: `term-stream term-stream-${STREAM_PHASES[i % STREAM_PHASES.length]}`,
           }}
+          eventHandlers={classOnAdd(
+            'term-stream',
+            `term-stream-${STREAM_PHASES[i % STREAM_PHASES.length]}`,
+          )}
         />
       ))}
     </>
