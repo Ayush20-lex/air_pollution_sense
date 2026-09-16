@@ -1,49 +1,38 @@
-# SIH26082 - Render blueprint
+# SIH26082 - Render blueprint (API only)
 #
-# Deploys the API and the dashboard as two services from this one repository.
-# Point Render at this file (New -> Blueprint) and it provisions both.
+# The dashboard deploys to Vercel; see sih-dashboard/vercel.json and DEPLOY.md.
+# Keeping this file API-only means Render's one free instance is dedicated to
+# the service that actually needs a persistent process.
 #
-# The API serves the validated blend baseline. That baseline runs in
-# archive_replay mode - it replays the scored December 2025 archive rather than
-# polling a live feed - so the ~5.5 MB of data it reads is committed alongside
-# the code and there is nothing to fetch at boot. A demo that depends on a
-# third-party API being up on the day is a demo that fails on the day.
+# The API cannot go on Vercel. Vercel runs Python as serverless functions with
+# a 250 MB unzipped limit per function, and the torch CPU wheel alone unzips to
+# roughly 800 MB before geopandas, scipy and pyproj. Serverless also cannot
+# hold the /ws/live WebSocket open, and would re-run the ~1.6 s archive load
+# and IDW precompute on every cold start instead of once at boot.
+#
+# The API serves the validated blend baseline in archive_replay mode - it
+# replays the scored December 2025 archive rather than polling a live feed - so
+# the ~5.3 MB it reads is committed to the repository and the deployed service
+# makes no outbound calls. A demo that depends on a third-party API being up on
+# the day is a demo that can fail on the day.
 
 services:
   - type: web
     name: airsense-api
     runtime: python
     plan: free
-    region: singapore              # nearest to Delhi NCR of Render's regions
+    region: singapore              # nearest of Render's regions to Delhi NCR
     rootDir: backend
-    # The CPU wheel index is the whole point - see requirements-deploy.txt.
+
+    # The CPU index is load-bearing, not a preference - see
+    # backend/requirements-deploy.txt.
     buildCommand: >-
       pip install -r requirements-deploy.txt
       --extra-index-url https://download.pytorch.org/whl/cpu
+
     startCommand: uvicorn api_server:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
+
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
-      - key: PYTORCH_ENABLE_MPS_FALLBACK
-        value: "1"
-
-  - type: web
-    name: airsense-dashboard
-    runtime: static
-    plan: free
-    rootDir: sih-dashboard
-    buildCommand: npm ci && npm run build
-    staticPublishPath: dist
-    envVars:
-      # Set this to the API service's URL once it is live, then redeploy the
-      # dashboard. Without it the console silently falls back to its built-in
-      # synthetic forecast and the badge reads "Demo / Synthetic" - which looks
-      # like a working demo and is not one.
-      - key: VITE_API_BASE
-        value: https://airsense-api.onrender.com
-    routes:
-      # Single-page app: every path resolves to index.html or a refresh 404s.
-      - type: rewrite
-        source: /*
-        destination: /index.html
