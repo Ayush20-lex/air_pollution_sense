@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { aqiColor } from '@/lib/aqi';
 import { DISTRICTS, MODEL_META } from '@/lib/data';
 import { SEVERITY } from '@/lib/tokens';
+import { useProvenance } from '@/lib/useProvenance';
 import { useAppStore } from '@/store/useAppStore';
 import { formatLST } from '@/lib/utils';
 
@@ -61,6 +62,7 @@ function StaticField() {
 }
 
 export function IntroScreen() {
+  const provenance = useProvenance();
   const screen = useAppStore((s) => s.screen);
   const startScan = useAppStore((s) => s.startScan);
   const completeScan = useAppStore((s) => s.completeScan);
@@ -279,7 +281,24 @@ export function IntroScreen() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <Badge className="hidden sm:inline-flex">Demo / Synthetic</Badge>
+          {/* Derived, never asserted - see lib/useProvenance. This said
+              "Demo / Synthetic" over live CPCB readings for weeks. */}
+          {/* nowrap: "Demo / Synthetic" is long enough to wrap at ~800px,
+              and a two-line badge grows up into the wordmark subtitle. */}
+          <span className="hidden shrink-0 whitespace-nowrap sm:inline-flex" title={provenance.detail}>
+            <Badge
+              color={
+                provenance.tone === 'good'
+                  ? SEVERITY.good
+                  : provenance.tone === 'bad'
+                    ? SEVERITY.bad
+                    : SEVERITY.moderate
+              }
+              dot={provenance.tone === 'good'}
+            >
+              {provenance.label}
+            </Badge>
+          </span>
           <Badge color={SEVERITY.good} dot className="hidden md:inline-flex">
             {MODEL_META.cycle} cycle
           </Badge>
@@ -354,7 +373,7 @@ export function IntroScreen() {
         {/* second axis: lede left, action right, divided by a hairline */}
         <div className="flex flex-col gap-4 border-t border-hairline/60 pt-4 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
           <p className="max-w-md text-pretty text-sm leading-relaxed text-muted">
-            72-hour forecasts for Delhi NCR on a 3 km grid, resolving the
+            72-hour forecasts for Delhi NCR on a 1 km grid, resolving the
             aerosol-radiation-PBL feedback online rather than as an offline pass.
           </p>
 

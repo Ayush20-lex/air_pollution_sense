@@ -297,7 +297,14 @@ function TerminalHeader() {
             sheds it visually only: sr-only leaves the full phrase in the
             accessibility tree at every width, because "Demo" alone is a
             weaker claim than "Demo / Synthetic" and this badge is the one
-            place the page admits the readings are not measured. */}
+            place the page admits the readings are not measured.
+
+            Static on purpose, unlike the intro header, which derives its badge
+            from lib/useProvenance. This route does not read the forecast store
+            at all - it renders lib/terminal/content.ts, which labels itself
+            "Demo values" and "Synthetic sample". A badge here that reported the
+            backend would be claiming provenance for numbers the backend never
+            produced. */}
         <div className="flex shrink-0 items-center gap-2 rounded-full border border-term-primary/40 bg-term-primary/10 px-3 py-1.5 shadow-[0_0_15px_rgba(78,222,163,0.15)]">
           <span className="size-2.5 rounded-full bg-amber-400" />
           <span className="font-mono text-xs font-bold uppercase tracking-wide text-term-primary">

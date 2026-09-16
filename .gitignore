@@ -121,3 +121,6 @@ ml_pipeline/data/raw/observations/season=2025/*
 
 # The fitted CAMS bias factor is a four-kilobyte model parameter, not a cache.
 !ml_pipeline/data/processed/baseline_corrections.json
+
+# Failed training runs, kept on disk for the record but not worth 14 MB each.
+backend/weights_*/
