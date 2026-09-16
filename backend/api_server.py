@@ -48,6 +48,7 @@ from coupled_model import (
 )
 from physics_loss import compute_isi
 from grap_policy import calculate_indian_aqi_pm25, evaluate_grap_stage
+import gfs_reader
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────
@@ -478,6 +479,10 @@ async def model_status():
             ),
             "imd_met": "archive" if _state.forecast_meta else "synthetic",
             "nasa_firms": "synthetic",  # no live fire feed in either path
+            # Read-only side channel from the partner ingestion pipeline. It
+            # feeds no forecast: the blend baseline is validated at 84.89 and
+            # adding an input would invalidate that number.
+            "noaa_gfs": gfs_reader.describe(),
         },
         # Which engine produced the numbers being served.
         "forecast_engine": (
@@ -688,6 +693,27 @@ async def alerts_inversion(
     alerts.sort(key=lambda a: a.isi_score, reverse=True)
     _cache_set(cache_key, alerts)
     return alerts
+
+
+@app.get("/api/v1/met/gfs")
+async def met_gfs(response: Response):
+    """
+    NOAA GFS over the nine 0.25-degree cells inside the NCR domain.
+
+    A side channel, not a forecast input. Temperature and wind here duplicate
+    Open-Meteo at far lower density; the field worth having is precipitation,
+    which none of the twelve channels carries and which scavenges PM2.5.
+
+    204 when no usable extract is present. The file comes from a separate
+    repository on someone else's schedule, so absence is an ordinary state and
+    every consumer must treat it as one - nothing that works today depends on
+    this returning content.
+    """
+    data = gfs_reader.load()
+    if data is None:
+        response.status_code = 204
+        return None
+    return data
 
 
 @app.get("/api/v1/policy/grap")

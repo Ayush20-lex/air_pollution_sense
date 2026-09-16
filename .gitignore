@@ -124,3 +124,8 @@ ml_pipeline/data/raw/observations/season=2025/*
 
 # Failed training runs, kept on disk for the record but not worth 14 MB each.
 backend/weights_*/
+
+# Partner GFS extract: small, and the API degrades to 204 without it.
+!ml_pipeline/data/raw/gfs/
+ml_pipeline/data/raw/gfs/*
+!ml_pipeline/data/raw/gfs/gfs_ncr.parquet
