@@ -2,7 +2,9 @@ import * as React from 'react';
 import { HeartPulse, Hospital, Radio, Share2, Thermometer, Wind } from 'lucide-react';
 import { Label, Meter, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { ADVISORY_TEXT, BIOMETRIC_IMPACTS, CPCB_SCALE, HUB } from '@/lib/terminal/content';
-import { aqiColor } from '@/lib/terminal/bands';
+import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
+import { useHubStation, useMeshRange } from '@/lib/terminal/useMesh';
+import { isLive } from '@/lib/terminal/useMesh';
 import { cn } from '@/lib/utils';
 import { TERM } from '@/lib/terminal/palette';
 
@@ -20,6 +22,7 @@ export function OverviewHero() {
 }
 
 function StatusBanner() {
+  const { station, live } = useHubStation();
   return (
     <div className="flex flex-col justify-between gap-4 border-b border-term-outline-variant/40 pb-1 lg:flex-row lg:items-center">
       <div>
@@ -28,7 +31,7 @@ function StatusBanner() {
             AIR Quality Overview
           </h1>
           <span className="rounded border border-orange-500/40 bg-orange-500/15 px-2.5 py-0.5 font-mono text-xs font-bold text-orange-400">
-            {HUB.station}
+            {live ? `${station.name} • ${station.zone} zone • ${station.agency}` : HUB.station}
           </span>
         </div>
         <p className="mt-1 font-body text-sm text-term-ink-variant">
@@ -36,11 +39,15 @@ function StatusBanner() {
         </p>
       </div>
       <div className="flex items-center gap-3">
-        <StatPill icon={<Radio className="size-4 text-term-primary" />} label="Mesh Stream Sync" value={HUB.sampleRate} />
+        <StatPill
+          icon={<Radio className="size-4 text-term-primary" />}
+          label="Mesh Stream Sync"
+          value={live ? 'CPCB hourly' : HUB.sampleRate}
+        />
         <StatPill
           icon={<Thermometer className="size-4 text-term-secondary" />}
           label="Readings"
-          value="Demo values"
+          value={live ? 'Measured' : 'Demo values'}
           valueClass="text-term-primary"
         />
       </div>
@@ -71,10 +78,22 @@ function StatPill({
 
 /** Radial composite-index gauge with the CPCB category scale beside it. */
 function AqiGauge() {
-  const color = aqiColor(HUB.aqi);
+  const { station, live } = useHubStation();
+  const range = useMeshRange();
+
+  // Measured when the archive answered, the curated fallback when it did not.
+  // Every figure below comes off this one object so the gauge, the caption and
+  // the legend cannot disagree about which station is being described.
+  const aqi = station.aqi;
+  const band = bandForAqi(aqi);
+  const delta = station.delta;
+  const sub = isLive(station) ? station.subIndices : null;
+  const dominantSub = sub?.[station.dominant === 'PM2.5' ? 'PM2.5' : station.dominant];
+
+  const color = aqiColor(aqi);
   const circumference = 515;
   // 0-300 maps onto the arc; the track is drawn with the same dash geometry.
-  const offset = circumference - circumference * Math.min(1, HUB.aqi / 300) * 0.8;
+  const offset = circumference - circumference * Math.min(1, aqi / 300) * 0.8;
 
   return (
     <TelemetryCard focus className="relative flex flex-col justify-between overflow-hidden p-6 lg:col-span-7">
@@ -83,16 +102,22 @@ function AqiGauge() {
       <div className="relative z-10 flex items-start justify-between">
         <div>
           <Label>Composite Air Quality Index (CPCB National AQI)</Label>
-          <div className="mt-0.5 font-display text-xl font-bold text-term-ink">{HUB.sector}</div>
+          <div className="mt-0.5 font-display text-xl font-bold text-term-ink">
+            {live ? station.name : HUB.sector}
+          </div>
           <div className="mt-1 flex items-center gap-2 font-mono text-xs text-term-ink-variant">
-            <span>Updated {HUB.updatedSeconds}s ago</span>
+            <span>{live ? `${station.zone} zone · ${station.agency}` : `Updated ${HUB.updatedSeconds}s ago`}</span>
             <span className="inline-block size-1.5 rounded-full bg-slate-600" />
-            <span className="font-bold text-orange-400">↑ {HUB.delta}% Increased</span>
+            {/* Sign follows the measurement. The old copy said "Increased"
+                unconditionally, over a delta that can be and today is negative. */}
+            <span className={cn('font-bold', delta >= 0 ? 'text-orange-400' : 'text-term-primary')}>
+              {delta >= 0 ? '↑' : '↓'} {Math.abs(delta).toFixed(1)}% {delta >= 0 ? 'Increased' : 'Decreased'}
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-2 rounded-full border border-orange-500/50 bg-orange-500/20 px-3.5 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-orange-300 shadow-[0_0_15px_rgba(249,115,22,0.3)]">
           <span className="size-2.5 animate-pulse rounded-full bg-orange-500" />
-          {HUB.advisoryBand}
+          {band.label} air quality
         </div>
       </div>
 
@@ -128,12 +153,14 @@ function AqiGauge() {
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <Label>Current AQI</Label>
               <span className="font-display text-6xl font-extrabold leading-none text-term-ink">
-                {HUB.aqi}
+                {aqi}
               </span>
               <span className="mt-1 font-mono text-xs font-bold" style={{ color }}>
-                {HUB.band}
+                {band.label}
               </span>
-              <span className="font-mono text-[10px] text-term-ink-variant">PM2.5 Dominant</span>
+              <span className="font-mono text-[10px] text-term-ink-variant">
+                {station.dominant} Dominant
+              </span>
             </div>
           </div>
         </div>
@@ -145,7 +172,7 @@ function AqiGauge() {
               // Highlight the band the reading is actually in. The old scale
               // hardcoded the highlight on one row, so it stayed on Sensitive
               // Groups whatever the gauge said.
-              const active = HUB.aqi >= b.from && HUB.aqi <= b.to;
+              const active = aqi >= b.from && aqi <= b.to;
               return (
                 <li
                   key={b.label}
@@ -172,9 +199,30 @@ function AqiGauge() {
       </div>
 
       <div className="relative z-10 grid grid-cols-3 gap-3 border-t border-term-outline-variant/40 pt-4 text-center">
-        <MicroStat label="24h Min / Max" value={`${HUB.min24} / ${HUB.max24} AQI`} />
-        <MicroStat label="Dominant Stressor" value={HUB.dominant} valueClass="text-orange-400" />
-        <MicroStat label="Sensor Confidence" value={HUB.confidence} valueClass="text-term-primary" />
+        {/* Offline these were a hand-written 24h range for one station. Live,
+            the archive reports a single indexed hour per station, not a
+            per-station range — so this reports the spread across the mesh for
+            that hour, which is measured, and says which it is. */}
+        <MicroStat
+          label={live ? `Mesh Low / High · ${range.count} nodes` : '24h Min / Max'}
+          value={live ? `${range.low} / ${range.high} AQI` : `${HUB.min24} / ${HUB.max24} AQI`}
+        />
+        <MicroStat
+          label="Dominant Stressor"
+          value={
+            dominantSub
+              ? `${station.dominant} (${dominantSub.concentration.toFixed(0)} µg/m³)`
+              : live
+                ? station.dominant
+                : HUB.dominant
+          }
+          valueClass="text-orange-400"
+        />
+        <MicroStat
+          label={live ? 'Window Coverage' : 'Sensor Confidence'}
+          value={isLive(station) ? `${station.coveragePct.toFixed(0)}% of 24h` : HUB.confidence}
+          valueClass="text-term-primary"
+        />
       </div>
     </TelemetryCard>
   );

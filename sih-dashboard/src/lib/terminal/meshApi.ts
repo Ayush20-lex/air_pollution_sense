@@ -21,6 +21,21 @@ import { STATIONS } from './stations';
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') ?? '';
 
+/**
+ * One pollutant's contribution to a station's CPCB index.
+ *
+ * `concentration` is the measured value over `window_hours` — 24h for the
+ * particulates and NO2, 8h for ozone, per CPCB's averaging rules. It is what
+ * the pollutant grid shows; `sub_index` is that concentration mapped onto the
+ * 0-500 scale, and the largest across pollutants becomes the station AQI.
+ */
+export type SubIndex = {
+  sub_index: number;
+  concentration: number;
+  window_hours: number;
+  valid_hours: number;
+};
+
 /** One station as the backend reports it. Shape mirrors station_registry. */
 export type MeshStation = {
   id: number;
@@ -42,6 +57,9 @@ export type MeshStation = {
   aqi: number | null;
   category: string | null;
   prominent_pollutant: string | null;
+  /** Keyed "PM2.5" | "PM10" | "NO2" | "O3" | "SO2". Absent pollutants simply
+   *  have no entry — the archive has no reading, not a reading of zero. */
+  sub_indices: Record<string, SubIndex>;
   reasons: string[];
 };
 
@@ -164,6 +182,10 @@ export type LiveStation = Station & {
   category: string | null;
   /** How far the curated coordinate sits from the archive's. */
   matchKm: number;
+  /** Per-pollutant measurements behind this station's index. */
+  subIndices: Record<string, SubIndex>;
+  /** Share of the indexing window this station actually reported. */
+  coveragePct: number;
 };
 
 export type MergedMesh = {
@@ -211,6 +233,8 @@ export function mergeMesh(payload: MeshPayload, curated: Station[] = STATIONS): 
       pm25: mesh.pm25,
       category: mesh.category,
       matchKm: Math.round(d * 100) / 100,
+      subIndices: mesh.sub_indices ?? {},
+      coveragePct: mesh.coverage_pct,
     };
   });
 

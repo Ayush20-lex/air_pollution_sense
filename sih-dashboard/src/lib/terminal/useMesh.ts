@@ -139,6 +139,38 @@ function start() {
   });
 }
 
+/** True when this station carries the archive's own measurements. */
+export function isLive(s: Station | LiveStation): s is LiveStation {
+  return 'meshId' in s;
+}
+
+/**
+ * The node the overview reports against.
+ *
+ * `master` marks it in the curated list, so the hero follows the same station
+ * whether the readings are measured or the offline fallback. Falls back to the
+ * worst node if the master has no counterpart in the archive that hour —
+ * better a real station than an empty gauge.
+ */
+export function useHubStation(): { station: Station | LiveStation; live: boolean } {
+  const { stations, live } = useMesh();
+  const master = stations.find((s) => s.master);
+  const station =
+    master ?? [...stations].sort((a, b) => b.aqi - a.aqi)[0] ?? STATIONS[0];
+  return { station, live: live && isLive(station) };
+}
+
+/** Lowest and highest index across the mesh this hour. Measured when live. */
+export function useMeshRange(): { low: number; high: number; count: number } {
+  const { stations } = useMesh();
+  const values = stations.map((s) => s.aqi);
+  return {
+    low: values.length ? Math.min(...values) : 0,
+    high: values.length ? Math.max(...values) : 0,
+    count: values.length,
+  };
+}
+
 export function useMesh(): MeshState {
   const subscribe = React.useCallback((cb: () => void) => {
     start();
