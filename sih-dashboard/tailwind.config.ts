@@ -30,26 +30,31 @@ const config: Config = {
          * custom properties set in terminal.css so the terminal follows the
          * app-wide light/dark swap.
          */
+        // Wrapped in color-mix so Tailwind's <alpha-value> placeholder has
+        // somewhere to land. A bare `var(--x)` cannot take an opacity
+        // modifier: `bg-term-primary/15` silently generated no rule at all,
+        // which is what blanked the pollutant hover overlay and ~110 other
+        // backgrounds, borders and rings across both themes.
         term: {
-          primary: 'var(--t-primary)',
-          'primary-container': 'var(--t-primary-container)',
-          'on-primary': 'var(--t-on-primary)',
-          secondary: 'var(--t-secondary)',
-          'secondary-container': 'var(--t-secondary-container)',
-          tertiary: 'var(--t-tertiary)',
-          bg: 'var(--t-bg)',
-          surface: 'var(--t-surface-lowest)',
-          'surface-lowest': 'var(--t-surface-lowest)',
-          'surface-low': 'var(--t-surface-low)',
-          'surface-c': 'var(--t-surface-c)',
-          'surface-high': 'var(--t-surface-high)',
-          'surface-highest': 'var(--t-surface-highest)',
-          ink: 'var(--t-ink)',
-          'ink-variant': 'var(--t-ink-variant)',
-          outline: 'var(--t-outline)',
-          'outline-variant': 'var(--t-outline-variant)',
-          error: 'var(--t-error)',
-          'error-container': 'var(--t-error-container)',
+          primary: 'color-mix(in srgb, var(--t-primary) calc(<alpha-value> * 100%), transparent)',
+          'primary-container': 'color-mix(in srgb, var(--t-primary-container) calc(<alpha-value> * 100%), transparent)',
+          'on-primary': 'color-mix(in srgb, var(--t-on-primary) calc(<alpha-value> * 100%), transparent)',
+          secondary: 'color-mix(in srgb, var(--t-secondary) calc(<alpha-value> * 100%), transparent)',
+          'secondary-container': 'color-mix(in srgb, var(--t-secondary-container) calc(<alpha-value> * 100%), transparent)',
+          tertiary: 'color-mix(in srgb, var(--t-tertiary) calc(<alpha-value> * 100%), transparent)',
+          bg: 'color-mix(in srgb, var(--t-bg) calc(<alpha-value> * 100%), transparent)',
+          surface: 'color-mix(in srgb, var(--t-surface-lowest) calc(<alpha-value> * 100%), transparent)',
+          'surface-lowest': 'color-mix(in srgb, var(--t-surface-lowest) calc(<alpha-value> * 100%), transparent)',
+          'surface-low': 'color-mix(in srgb, var(--t-surface-low) calc(<alpha-value> * 100%), transparent)',
+          'surface-c': 'color-mix(in srgb, var(--t-surface-c) calc(<alpha-value> * 100%), transparent)',
+          'surface-high': 'color-mix(in srgb, var(--t-surface-high) calc(<alpha-value> * 100%), transparent)',
+          'surface-highest': 'color-mix(in srgb, var(--t-surface-highest) calc(<alpha-value> * 100%), transparent)',
+          ink: 'color-mix(in srgb, var(--t-ink) calc(<alpha-value> * 100%), transparent)',
+          'ink-variant': 'color-mix(in srgb, var(--t-ink-variant) calc(<alpha-value> * 100%), transparent)',
+          outline: 'color-mix(in srgb, var(--t-outline) calc(<alpha-value> * 100%), transparent)',
+          'outline-variant': 'color-mix(in srgb, var(--t-outline-variant) calc(<alpha-value> * 100%), transparent)',
+          error: 'color-mix(in srgb, var(--t-error) calc(<alpha-value> * 100%), transparent)',
+          'error-container': 'color-mix(in srgb, var(--t-error-container) calc(<alpha-value> * 100%), transparent)',
         },
       },
       fontFamily: {

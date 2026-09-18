@@ -36,7 +36,12 @@ const TERM_LIGHT = {
   inkVariant: '#475569',
 } as const;
 
-export type TermPalette = typeof TERM_DARK;
+/**
+ * Keys come from the dark palette, values widen to `string`. Without the
+ * widening `as const` pins each value to its own literal type, so the light
+ * palette — same keys, different hexes — fails to satisfy it.
+ */
+export type TermPalette = { readonly [K in keyof typeof TERM_DARK]: string };
 
 /** Returns true if the page is currently in dark mode. */
 function isDark(): boolean {
