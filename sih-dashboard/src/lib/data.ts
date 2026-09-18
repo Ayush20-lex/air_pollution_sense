@@ -17,6 +17,24 @@
 import { alertLevel, pm25ToAqi, type AlertLevel } from './aqi';
 import { clamp, seeded } from './utils';
 
+/**
+ * Loading scale for the synthetic field, so the offline console describes the
+ * same city as the live one.
+ *
+ * These coefficients were tuned to a moderate Delhi day and produced about
+ * 110 ug/m3. The archive the backend replays is a late-December episode
+ * averaging 330 at hour 0 and peaking near 374, so an unreachable backend used
+ * to drop the headline from Severe to Moderate - the page changed its story
+ * about the air rather than about its own connectivity, which is the more
+ * misleading of the two failures.
+ *
+ * Only the loading is scaled. The physics is untouched: ventilation, the
+ * aerosol-radiation feedback and the diurnal shape all still do the work, and
+ * the field still responds to the intervention sliders exactly as before.
+ * Nothing here is a forecast either way - the badge says so.
+ */
+export const REGIME = 2.95;
+
 export const FORECAST_HOURS = 72;
 export const STEP_HOURS = 1;
 
@@ -203,8 +221,8 @@ export function buildForecast(iv: Interventions = DEFAULT_INTERVENTIONS): Frame[
       // --- Ventilation-limited concentration --------------------------------
       // Ventilation coefficient, floored: a collapsed layer still exchanges a little.
       const ventilation = clamp((pbl / 900) * (0.42 + windSpeed / 4.5), 0.45, 1.15);
-      const regionalBg = 12 + 7 * Math.sin(h / 17);
-      const pm25 = clamp((41 * d.emission * ef + regionalBg) / ventilation, 6, 780);
+      const regionalBg = REGIME * (12 + 7 * Math.sin(h / 17));
+      const pm25 = clamp((REGIME * 41 * d.emission * ef + regionalBg) / ventilation, 6, 780);
 
       // --- Inversion trap index: shallow layer + calm air + heavy load ------
       const inversion = clamp(

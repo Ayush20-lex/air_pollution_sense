@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { CERTIFICATIONS, HUB, LOCATIONS } from '@/lib/terminal/content';
 import { STATIONS } from '@/lib/terminal/stations';
+import { useMesh } from '@/lib/terminal/useMesh';
 import { TerminalEnter } from './TerminalEnter';
 import { cn } from '@/lib/utils';
 import { useTerminalStore } from '@/store/useTerminalStore';
@@ -175,6 +176,7 @@ function TerminalSidebar() {
 }
 
 function TerminalHeader() {
+  const mesh = useMesh();
   // A printable key pressed on the focused search control opens the palette
   // carrying that character, so type-ahead doesn't lose its first keystroke.
   const handleTypeAhead = React.useCallback((e: React.KeyboardEvent) => {
@@ -299,21 +301,42 @@ function TerminalHeader() {
             weaker claim than "Demo / Synthetic" and this badge is the one
             place the page admits the readings are not measured.
 
-            Deliberately conservative, and no longer for the original reason.
-            The node ledger and the plume map now carry real measurements from
-            /api/v1/stations, but the rest of this route still renders
-            lib/terminal/content.ts, which labels itself "Demo values". A badge
-            reading LIVE would extend the mesh's provenance over panels that
-            have none, so the precise claim is made where it applies - the
-            ledger header states the index and the hour it measures - and this
-            one stays at the weaker reading for the page as a whole. */}
+            Derived, not asserted. It read DEMO permanently, which was true
+            while the mesh was hand-written and stopped being true when the
+            node ledger and plume map started carrying real CPCB measurements -
+            a page showing measured severe air while calling itself synthetic
+            invites a reader to discount figures that are real.
+
+            The claim is scoped rather than blanket: LIVE / MEASURED names the
+            mesh, and the title says which panels it covers, because the rest of
+            this route still renders lib/terminal/content.ts. Offline it returns
+            to DEMO / SYNTHETIC, which is then the honest reading - the station
+            list falls back to a frozen snapshot of the same archive, real but
+            no longer current. */}
         <div
-          title="The node ledger and plume map are measured; other panels on this route are demo content."
+          title={
+            mesh.live
+              ? `Node ledger and plume map are measured from CPCB stations (${mesh.index}). Other panels on this route are demo content.`
+              : 'Backend unreachable. The mesh is a frozen snapshot of the archive and other panels are demo content.'
+          }
           className="flex shrink-0 items-center gap-2 rounded-full border border-term-primary/40 bg-term-primary/10 px-3 py-1.5 shadow-[0_0_15px_rgba(78,222,163,0.15)]"
         >
-          <span className="size-2.5 rounded-full bg-amber-400" />
+          <span
+            className={cn(
+              'size-2.5 rounded-full',
+              mesh.live ? 'bg-term-primary' : 'bg-amber-400',
+            )}
+          />
           <span className="font-mono text-xs font-bold uppercase tracking-wide text-term-primary">
-            Demo<span className="sr-only xl:not-sr-only"> / Synthetic</span>
+            {mesh.live ? (
+              <>
+                Live<span className="sr-only xl:not-sr-only"> / Measured</span>
+              </>
+            ) : (
+              <>
+                Demo<span className="sr-only xl:not-sr-only"> / Synthetic</span>
+              </>
+            )}
           </span>
         </div>
         <LiveClock />
