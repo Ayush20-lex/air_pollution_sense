@@ -129,7 +129,7 @@ curl -s --compressed https://YOUR-API.onrender.com/api/v1/forecast/frames | head
 ```
 
 Expect `"engine": "blend_baseline"`, `"is_synthetic": false`,
-`"validated_rmse_ugm3": 66.35`, `"season": 2026`, `"stations": 68`.
+`"validated_rmse_ugm3": 63.35`, `"season": 2026`, `"stations": 68`.
 
 **Do not continue until both return what's above.**
 
@@ -169,7 +169,7 @@ Open the Vercel URL and look at the **badge in the header**.
 
 | Badge | Meaning |
 |---|---|
-| 🟢 **Baseline · RMSE 66.35** | Correct. Real data from 68 CPCB stations, confirmed with the backend within the last 5 minutes. |
+| 🟢 **Baseline · RMSE 63.35** | Correct. Real data from 68 CPCB stations, confirmed with the backend within the last 5 minutes. |
 | 🟡 **Baseline · backend down** | The figures on screen are real and came from the backend, but it has stopped answering. Usually Render asleep. |
 | 🟡 **Baseline · 12m old** | Real backend figures, not re-confirmed recently — normally a tab left open in the background. |
 | 🔴 **Demo / Synthetic** | The backend has never answered. `VITE_API_BASE` is wrong/missing, or the API was asleep at load. |
@@ -241,7 +241,7 @@ worth it for the final week.
 pipeline — 9 grid cells, f000 to f072 at 3-hourly steps, and precipitation,
 which none of the twelve forecast channels carries.
 
-It feeds nothing. The blend baseline is validated at 66.35 µg/m³ and adding an
+It feeds nothing. The blend baseline is validated at 63.35 µg/m³ and adding an
 input would invalidate that number, so `baseline_forecaster.py` does not read
 it. Breaking this endpoint cannot break the forecast; the reverse is also true.
 
@@ -269,12 +269,12 @@ this layer. Drop it at the same path; no code changes.
 ## What is deliberately not deployed
 
 `backend/weights/` is gitignored, so **no model weights ship**. That is correct
-as of today: no training run has beaten the blend baseline's 66.35 µg/m³, and
+as of today: no training run has beaten the blend baseline's 63.35 µg/m³, and
 the API is configured to serve the baseline until one does.
 
 If weights are ever placed at `backend/weights/forecaster_v1.pt`, the API loads
 them automatically and the badge changes to "Coupled model". **Do not put a
-checkpoint there until it has beaten 66.35 on the held-out window** —
+checkpoint there until it has beaten 63.35 on the held-out window** —
 that badge is a claim made to judges, and it should be true.
 
 ---

@@ -15,16 +15,16 @@ same tensor contract, so no endpoint or frontend code has to change.
 
 The method
 ----------
-Scored by ml_pipeline/scripts/14_baselines.py over 3,739,035 comparisons from
+Scored by ml_pipeline/scripts/14_baselines.py over 3,734,362 comparisons from
 1,112 origins across 68 CPCB stations, fitted on everything to 30 November 2025
 and tested on December 2025 through September 2026 - a full annual cycle rather
 than one winter month:
 
-    mean(diurnal_persistence, bias-corrected CAMS)   RMSE  66.35 ug/m3   <- this
-    diurnal persistence alone                        RMSE  72.72
-    persistence                                      RMSE  87.18
-    bias-corrected CAMS alone                        RMSE  86.90
-    raw CAMS                                         RMSE  88.98
+    mean(diurnal_persistence, bias-corrected CAMS)   RMSE  63.35 ug/m3   <- this
+    diurnal persistence alone                        RMSE  68.33
+    persistence                                      RMSE  84.14
+    bias-corrected CAMS alone                        RMSE  82.27
+    raw CAMS                                         RMSE  87.09
 
 CAMS reproduces Delhi's diurnal shape but is biased, so it is rescaled by a
 single factor fitted on the training window alone. The direction of that bias is
@@ -34,9 +34,9 @@ fits 0.937 - CAMS runs slightly high - where the winter-only 2025 window fits
 errors are largely uncorrelated with persistence, so the mean of the two beats
 both and beats raw CAMS by 25%.
 
-The error barely moves with lead time, which is the part worth knowing: 67.6 at
-+1-6h, 65.3 at +7-24h, 66.7 at +25-48h, 66.4 at +49-72h. Plain persistence
-degrades from 70.1 to 91.5 over the same span. A 72-hour forecast that is no
+The error barely moves with lead time, which is the part worth knowing: 64.4 at
++1-6h, 62.6 at +7-24h, 63.9 at +25-48h, 63.1 at +49-72h. Plain persistence
+degrades from 66.7 to 88.4 over the same span. A 72-hour forecast that is no
 worse than a 6-hour one is what makes it usable for a decision taken three days
 out.
 
@@ -61,6 +61,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+import observation_qc
 
 logger = logging.getLogger("baseline_forecaster")
 
@@ -106,13 +108,18 @@ VALIDATED: dict[int, dict[str, object]] = {
         "scored_comparisons": 462_323,
     },
     2026: {
-        "validated_rmse_ugm3": 66.35,
-        "beats_raw_cams_by": "25%",
+        "validated_rmse_ugm3": 63.35,
+        "beats_raw_cams_by": "27%",
         # A full annual cycle rather than one winter month, which is the
         # stronger claim even though the number is lower: part of the drop is
         # simply that monsoon months are cleaner, not that the method improved.
+        #
+        # 66.35 before observation QC. Dropping 394 network-contradicted sensor
+        # readings out of 925,344 moved it three points - a reminder that a
+        # handful of faults can carry an error metric, and that the score has to
+        # be recomputed on the data the service actually serves.
         "scored_window": "December 2025 - September 2026",
-        "scored_comparisons": 3_739_035,
+        "scored_comparisons": 3_734_362,
     },
 }
 
@@ -172,14 +179,26 @@ class BlendBaselineForecaster:
                                    freq="h", tz="UTC")
         self._t_index = {t: i for i, t in enumerate(self.times)}
 
-        def pivot(df: pd.DataFrame, col: str) -> np.ndarray:
-            """(n_times, n_stations), gaps filled so IDW weights stay constant."""
+        def pivot(df: pd.DataFrame, col: str, qc: bool = False) -> np.ndarray:
+            """(n_times, n_stations), gaps filled so IDW weights stay constant.
+
+            `qc` runs the network-contradiction filter before the gaps are
+            closed, which is the only order that works: filling first would
+            carry a faulty reading forward, and filtering after would leave a
+            hole the fill had already papered over.
+            """
             w = (df.pivot_table(index="timestamp_utc", columns="location_id", values=col,
                                 aggfunc="mean")
                    .reindex(index=self.times, columns=ids))
+            if qc:
+                w = pd.DataFrame(
+                    observation_qc.despike(w.to_numpy(dtype=np.float32), col),
+                    index=w.index, columns=w.columns,
+                )
             return w.ffill().bfill().to_numpy(dtype=np.float32)
 
-        self.obs_pm25 = pivot(obs.rename(columns={"value": "pm25"}), "pm25")
+        # Observations only. CAMS is a model field and has no faulty sensor.
+        self.obs_pm25 = pivot(obs.rename(columns={"value": "pm25"}), "pm25", qc=True)
         self.fields = {ch: pivot(fc, col) for ch, col in CHANNEL_SOURCE.items()
                        if col in fc.columns}
         self.cams_pm25 = pivot(fc, "cams_pm2_5")

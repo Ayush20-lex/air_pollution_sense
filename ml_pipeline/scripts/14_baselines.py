@@ -38,6 +38,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
+import observation_qc  # noqa: E402  - path set above
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
@@ -63,6 +66,26 @@ def load_pairs(season: int) -> pd.DataFrame:
     ).dropna(subset=["value"]).rename(columns={"value": "obs"})
     obs["timestamp_utc"] = pd.to_datetime(obs.timestamp_utc, utc=True).dt.floor("h")
     obs = obs.groupby(["location_id", "timestamp_utc"], as_index=False)["obs"].mean()
+
+    # The same network-contradiction filter the service applies, so the score
+    # describes the data that is actually served. Without this the two diverge
+    # silently: the API drops a 7080 ug/m3 sensor fault and this script keeps
+    # it, and the published RMSE then belongs to a dataset nobody uses.
+    wide = obs.pivot_table(index="timestamp_utc", columns="location_id", values="obs")
+    cleaned = observation_qc.despike(wide.to_numpy(dtype=np.float32), f"pm25 season {season}")
+    # dropna is load-bearing: stack() keeps NaN cells in this pandas version, so
+    # without it the frame comes back as the full time x station grid - 925,344
+    # rows where the observations are 743,682 - and the 181,662 empty ones ride
+    # into the CAMS scale fit as extra denominator. That alone moved the fitted
+    # scale from 0.937 to 0.707 and would have biased every forecast, from a
+    # filter that was only supposed to remove 394 readings.
+    obs = (
+        pd.DataFrame(cleaned, index=wide.index, columns=wide.columns)
+        .stack()
+        .rename("obs")
+        .reset_index()
+        .dropna(subset=["obs"])
+    )
 
     fc_path = DATA / "raw" / "forecast" / f"forecast_{season}.parquet"
     fc = pd.read_parquet(fc_path, columns=["timestamp_utc", "location_id", "cams_pm2_5"])

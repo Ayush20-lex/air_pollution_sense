@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     # Do NOT commit a real token value here.
     aqicn_token:    str   = ""
     # Serve the scored blend baseline while the network has no trained weights.
-    # Its output is measurements and an evaluated forecast (RMSE 66.35 ug/m3,
+    # Its output is measurements and an evaluated forecast (RMSE 63.35 ug/m3,
     # 30% better than raw CAMS) instead of random-weight noise. Set false to see
     # the untrained model's raw output.
     use_baseline:   bool  = True
@@ -322,7 +322,7 @@ def _generate_forecast_tensor() -> tuple[torch.Tensor, bool]:
     # With no trained weights the network below emits noise, and the inputs it
     # would run on are mock CPCB, mock FIRMS and np.random meteorology. Prefer a
     # forecast whose error is known: the mean of diurnal persistence and
-    # bias-corrected CAMS, scored at RMSE 66.35 ug/m3 across Dec 2025-Sep 2026 —
+    # bias-corrected CAMS, scored at RMSE 63.35 ug/m3 across Dec 2025-Sep 2026 —
     # 30% better than raw CAMS. Ten of the twelve channels are measurements or
     # archived forecast; FRP and smoke stay zero for want of a live fire feed.
     if cfg.use_baseline and not _state.weights_loaded:
@@ -488,7 +488,7 @@ async def model_status():
             "imd_met": "archive" if _state.forecast_meta else "synthetic",
             "nasa_firms": "synthetic",  # no live fire feed in either path
             # Read-only side channel from the partner ingestion pipeline. It
-            # feeds no forecast: the blend baseline is validated at 66.35 and
+            # feeds no forecast: the blend baseline is validated at 63.35 and
             # adding an input would invalidate that number.
             "noaa_gfs": gfs_reader.describe(),
             "station_mesh": station_registry.describe(
@@ -510,7 +510,7 @@ async def model_status():
             else (
                 "Model weights not loaded. Forecasts come from the blend baseline "
                 "(mean of diurnal persistence and bias-corrected CAMS), validated at "
-                "RMSE 66.35 ug/m3 over Dec 2025-Sep 2026 — 25% better than raw CAMS. "
+                "RMSE 63.35 ug/m3 over Dec 2025-Sep 2026 — 27% better than raw CAMS. "
                 "Values are real; FRP and smoke channels are zero. Replayed from the "
                 "archive, not a live feed."
             ) if _state.forecast_meta
@@ -777,41 +777,106 @@ async def met_gfs(response: Response):
     return data
 
 
+def _station_grid_index(lats, lons):
+    """Grid cell holding each station, matching forecast_station's lookup."""
+    lat_vec = np.linspace(NCR_LAT_MIN, NCR_LAT_MAX, GRID_H)
+    lon_vec = np.linspace(NCR_LON_MIN, NCR_LON_MAX, GRID_W)
+    hi = np.clip(np.searchsorted(lat_vec, lats), 0, GRID_H - 1)
+    wi = np.clip(np.searchsorted(lon_vec, lons), 0, GRID_W - 1)
+    return hi, wi
+
+
+def _rolling_24h_max(series: np.ndarray) -> np.ndarray:
+    """Worst 24-hour mean over the horizon, per station.
+
+    `series` is (hours, stations). CPCB indexes particulates on a 24-hour mean,
+    so the quantity a GRAP stage is set from is a mean over a day, never an
+    instantaneous value.
+    """
+    hours = series.shape[0]
+    if hours < 24:
+        return series.mean(axis=0)
+    csum = np.cumsum(np.vstack([np.zeros((1, series.shape[1]), series.dtype), series]), axis=0)
+    windows = (csum[24:] - csum[:-24]) / 24.0     # (hours-23, stations)
+    return windows.max(axis=0)
+
+
 @app.get("/api/v1/policy/grap")
 async def policy_grap():
     """
-    Evaluates the worst-case GRAP stage across the entire NCR spatial grid
-    for the next 72-hour forecast horizon.
+    GRAP stage for the next 72 hours, from the forecast city AQI.
+
+    This took the single largest PM2.5 value anywhere on the 70x80 grid at any
+    of the 72 hours and set the stage from it. Two things were wrong with that
+    and both inflated it. An instantaneous value is not what CPCB indexes -
+    particulates are indexed on a 24-hour mean - and a maximum over 5,600 cells
+    and 72 hours is whatever the single worst cell happens to be, so one faulty
+    sensor set national policy advice. On the September 2026 window it returned
+    Stage 4, "Severe+", while every station on the same page read Satisfactory
+    or Moderate: the page contradicted itself and the wrong half was the one
+    giving instructions.
+
+    The stage now comes from the forecast city AQI - the mean across stations of
+    each station's worst 24-hour window - which is the quantity CAQM actually
+    invokes GRAP on. The worst single station is reported alongside it as a
+    hotspot rather than being allowed to speak for the city.
     """
     cfg = get_settings()
-    cache_key = "policy:grap:worst_case"
+    cache_key = "policy:grap:city"
     cached = _cache_get(cache_key, cfg.cache_ttl_s)
     if cached:
         return cached
 
-    pred, _is_synthetic = await get_forecast_tensor()   # (1, 72, 12, 70, 80)
-    
-    # Evaluate worst-case PM2.5 across the entire grid and all 72 hours
-    # pred shape: (1, 72, 12, 70, 80)
-    pm25_max_norm = pred[0, :, CH_PM25].max().item()
-    pm25_max_ugm3 = pm25_max_norm * 500.0
-    
-    # Calculate AQI
-    aqi = calculate_indian_aqi_pm25(pm25_max_ugm3)
-    
-    # Get GRAP Stage
-    grap_policy = evaluate_grap_stage(aqi)
-    
-    now = datetime.now(timezone.utc)
-    
+    pred, is_synthetic = await get_forecast_tensor()     # (1, 72, 12, 70, 80)
+    pm25 = pred[0, :, CH_PM25].numpy() * 500.0           # (72, 70, 80) ug/m3
+
+    basis = "stations"
+    names: list[str] = []
+    try:
+        from baseline_forecaster import get_forecaster
+        fc = get_forecaster(cfg.baseline_season)
+        hi, wi = _station_grid_index(fc.lats, fc.lons)
+        series = pm25[:, hi, wi]                          # (72, n_stations)
+        names = [str(i) for i in fc.station_ids]
+    except Exception as exc:  # noqa: BLE001
+        # No station geometry available - the trained-model path, or a failed
+        # archive load. Fall back to a high spatial percentile rather than the
+        # maximum, so the answer is still not decided by one cell.
+        log.info("GRAP falling back to a grid percentile (%s)", exc)
+        basis = "grid_p95"
+        series = np.percentile(pm25.reshape(pm25.shape[0], -1), 95, axis=1)[:, None]
+
+    worst_24h = _rolling_24h_max(series)                  # (n_stations,)
+    city_pm25 = float(np.mean(worst_24h))
+    city_aqi = calculate_indian_aqi_pm25(city_pm25)
+    grap = evaluate_grap_stage(city_aqi)
+
+    k = int(np.argmax(worst_24h))
+    hotspot_pm25 = float(worst_24h[k])
+
     response = {
-        "timestamp": now.isoformat(),
-        "worst_case_pm25": round(pm25_max_ugm3, 2),
-        "worst_case_aqi": aqi,
-        "grap": grap_policy,
-        "message": "Evaluated across entire NCR spatial grid for the 72-hour forecast."
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "basis": basis,
+        "window_hours": 24,
+        "horizon_hours": int(pm25.shape[0]),
+        "city_pm25_ugm3": round(city_pm25, 2),
+        "city_aqi": city_aqi,
+        "grap": grap,
+        "hotspot": {
+            "station_id": names[k] if names else None,
+            "pm25_ugm3": round(hotspot_pm25, 2),
+            "aqi": calculate_indian_aqi_pm25(hotspot_pm25),
+        },
+        "stations_considered": int(worst_24h.size),
+        "is_synthetic": bool(is_synthetic),
+        "message": (
+            "Stage is set from the forecast city AQI - the mean across stations of "
+            "each station's worst 24-hour mean over the horizon, which is what CAQM "
+            "invokes GRAP on. The hotspot is reported separately and does not set "
+            "the stage."
+        ),
     }
-    
+
     _cache_set(cache_key, response)
     return response
 

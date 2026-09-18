@@ -49,6 +49,7 @@ import numpy as np
 import pandas as pd
 
 import aqi_cpcb
+import observation_qc
 
 logger = logging.getLogger("station_registry")
 
@@ -204,6 +205,16 @@ def _observations(season: int, pollutants: tuple[str, ...]) -> dict[str, pd.Data
         wide = df.pivot_table(
             index="timestamp_utc", columns="location_id", values="value", aggfunc="mean"
         )
+        if pol == "pm25":
+            # The same filter the forecaster applies, for the same reason: a
+            # faulty hour inside the 24-hour window moves the mean, and the mean
+            # is what the National AQI is computed from. Only PM2.5 for now -
+            # the thresholds are calibrated to it, and PM10 is legitimately
+            # several times higher during a dust event.
+            wide = pd.DataFrame(
+                observation_qc.despike(wide.to_numpy(dtype=np.float32), pol),
+                index=wide.index, columns=wide.columns,
+            )
         frames[pol] = wide
     return frames
 
