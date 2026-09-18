@@ -15,9 +15,23 @@ import type { Frame, Interventions } from '@/lib/data';
 import { buildForecast, DEFAULT_INTERVENTIONS } from '@/lib/data';
 import { alertLevel, pm25ToAqi } from '@/lib/aqi';
 
+/**
+ * Where the API lives. Empty means same-origin, which is the deployed case.
+ *
+ * The backend runs on a plain-HTTP host and the dashboard is served over
+ * HTTPS, so the browser blocks the call as mixed content before it is ever
+ * sent - no request, no CORS exchange, nothing in the network tab to explain
+ * it, just a red badge. Pointing VITE_API_BASE straight at http://<ip>:8000
+ * cannot work from an HTTPS page however correct the URL is.
+ *
+ * So the deployed build calls itself and vercel.json rewrites /api/* to the
+ * host server-side, where plain HTTP is fine. `?? ''` rather than `??
+ * 'http://localhost:8000'`: an unset variable now means same-origin instead of
+ * pointing every visitor's browser at port 8000 on their own machine, which is
+ * what the last deploy actually did. Local development sets it explicitly.
+ */
 const API_BASE =
-  (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') ??
-  'http://localhost:8000';
+  (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') ?? '';
 
 /** What produced the numbers currently on screen. */
 export type ForecastSource = {

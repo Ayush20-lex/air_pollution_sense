@@ -17,9 +17,9 @@
 import type { Station } from './stations';
 import { STATIONS } from './stations';
 
+/** Same contract as forecastApi's API_BASE - see the note there. */
 const API_BASE =
-  (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') ??
-  'http://localhost:8000';
+  (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') ?? '';
 
 /** One station as the backend reports it. Shape mirrors station_registry. */
 export type MeshStation = {
