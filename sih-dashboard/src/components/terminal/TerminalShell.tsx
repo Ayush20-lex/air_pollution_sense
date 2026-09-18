@@ -24,6 +24,7 @@ import { TerminalEnter } from './TerminalEnter';
 import { cn } from '@/lib/utils';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { CommandPalette, openCommandPalette } from '@/components/ui/command-palette';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { toast } from 'sonner';
 
 /**
@@ -96,7 +97,7 @@ function TerminalSidebar() {
             </span>
           </div>
           <div className="overflow-hidden">
-            <div className="font-display text-lg font-bold leading-tight tracking-tight text-white">
+            <div className="font-display text-lg font-bold leading-tight tracking-tight text-term-ink">
               AIR AQI Sense
             </div>
             <div className="font-mono text-[11px] font-semibold uppercase tracking-wider text-term-primary">
@@ -121,7 +122,7 @@ function TerminalSidebar() {
                   'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors',
                   active
                     ? 'border-l-2 border-term-primary bg-term-surface-high font-semibold text-term-primary shadow-sm'
-                    : 'text-slate-400 hover:bg-term-surface-c hover:text-white',
+                    : 'text-term-ink-variant hover:bg-term-surface-c hover:text-term-ink',
                 )}
               >
                 {item.icon}
@@ -150,7 +151,7 @@ function TerminalSidebar() {
       <div className="space-y-3 border-t border-term-outline-variant/60 pt-4">
         <div className="space-y-2 rounded-xl border border-term-outline-variant/60 bg-term-surface-low p-3">
           <div className="flex items-center justify-between">
-            <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-term-ink-variant">
               Open Telemetry Mesh
             </span>
             <span className="flex items-center gap-1.5 font-mono text-[10px] font-bold text-term-primary">
@@ -158,16 +159,16 @@ function TerminalSidebar() {
               {HUB.uptime}
             </span>
           </div>
-          <div className="flex justify-between font-mono text-xs text-white">
+          <div className="flex justify-between font-mono text-xs text-term-ink">
             <span>{HUB.name}</span>
             <span className="font-semibold text-term-secondary">{HUB.ping} ping</span>
           </div>
-          <div className="flex justify-between border-t border-term-outline-variant/40 pt-1.5 font-mono text-[10px] text-slate-400">
+          <div className="flex justify-between border-t border-term-outline-variant/40 pt-1.5 font-mono text-[10px] text-term-ink-variant">
             <span>Data source</span>
             <span className="font-semibold text-term-primary">SYNTHETIC</span>
           </div>
         </div>
-        <div className="rounded-lg border border-term-outline-variant/30 bg-term-surface-c/40 p-2 text-center font-mono text-[11px] text-slate-400">
+        <div className="rounded-lg border border-term-outline-variant/30 bg-term-surface-c/40 p-2 text-center font-mono text-[11px] text-term-ink-variant">
           PUBLIC ACCESS TERMINAL • READ-ONLY
         </div>
       </div>
@@ -233,7 +234,7 @@ function TerminalHeader() {
           <select
             aria-label="Monitoring location"
             defaultValue={LOCATIONS[0]}
-            className="w-full cursor-pointer appearance-none rounded-lg border border-term-outline bg-term-surface-high py-2 pl-9 pr-9 text-sm font-semibold text-white shadow-inner focus:border-term-primary focus:outline-none"
+            className="w-full cursor-pointer appearance-none rounded-lg border border-term-outline bg-term-surface-high py-2 pl-9 pr-9 text-sm font-semibold text-term-ink shadow-inner focus:border-term-primary focus:outline-none"
           >
             {LOCATIONS.map((l) => (
               <option key={l} value={l}>
@@ -241,7 +242,7 @@ function TerminalHeader() {
               </option>
             ))}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-term-ink-variant" />
         </div>
 
         {/* The header's single search control. It looks like a field but is a
@@ -265,11 +266,11 @@ function TerminalHeader() {
             onClick={() => openCommandPalette()}
             onKeyDown={handleTypeAhead}
             aria-label="Search stations and screens"
-            className="flex w-full items-center gap-2.5 rounded-lg border border-term-outline-variant/80 bg-term-surface-c py-2 pl-3.5 pr-2.5 text-left font-body text-sm text-slate-400 transition-colors hover:border-term-secondary/60 hover:text-slate-200 focus-visible:border-term-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-term-secondary"
+            className="flex w-full items-center gap-2.5 rounded-lg border border-term-outline-variant/80 bg-term-surface-c py-2 pl-3.5 pr-2.5 text-left font-body text-sm text-term-ink-variant transition-colors hover:border-term-secondary/60 hover:text-term-ink focus-visible:border-term-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-term-secondary"
           >
             <Search className="size-4 shrink-0" />
             <span className="flex-1 truncate">Find station, zone or coordinates</span>
-            <kbd className="shrink-0 rounded bg-term-surface-highest px-1.5 py-0.5 font-mono text-[11px] text-slate-300">
+            <kbd className="shrink-0 rounded bg-term-surface-highest px-1.5 py-0.5 font-mono text-[11px] text-term-ink-variant">
               ⌘K
             </kbd>
           </button>
@@ -339,11 +340,12 @@ function TerminalHeader() {
             )}
           </span>
         </div>
+        <ThemeToggle />
         <LiveClock />
         <Link
           to="/terminal#alerts"
           title="Active alerts"
-          className="relative flex size-9 items-center justify-center rounded-lg border border-term-outline bg-term-surface-c text-slate-200 transition-all hover:bg-term-surface-high hover:text-white"
+          className="relative flex size-9 items-center justify-center rounded-lg border border-term-outline bg-term-surface-c text-term-ink-variant transition-all hover:bg-term-surface-high hover:text-term-ink"
         >
           <Bell className="size-4" />
           <span className="absolute right-1.5 top-1.5 size-2.5 animate-pulse rounded-full bg-amber-400 ring-2 ring-term-surface-c" />
@@ -395,9 +397,9 @@ function LiveClock() {
     // isn't a control, so it yields to the search until there is room for
     // both. 1700 rather than 2xl: at 1536 it would come back while the search
     // is still growing, shrinking it again on the way up.
-    <div className="hidden items-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-low px-3 py-1.5 font-mono text-xs text-slate-200 min-[1700px]:flex">
+    <div className="hidden items-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-low px-3 py-1.5 font-mono text-xs text-term-ink-variant min-[1700px]:flex">
       <Clock className="size-4 text-term-secondary" />
-      <span suppressHydrationWarning className="font-semibold tracking-tight text-white">
+      <span suppressHydrationWarning className="font-semibold tracking-tight text-term-ink">
         {stamp}
       </span>
     </div>
@@ -469,7 +471,7 @@ function ResetViewButton() {
           description: 'Layers, field, playback and selection restored to defaults.',
         });
       }}
-      className="flex w-full items-center justify-center gap-2 rounded-lg border border-term-outline-variant/70 bg-term-surface-high px-3 py-2 font-mono text-xs uppercase tracking-wider text-slate-200 transition-all hover:border-term-primary/50 hover:bg-term-surface-highest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60"
+      className="flex w-full items-center justify-center gap-2 rounded-lg border border-term-outline-variant/70 bg-term-surface-high px-3 py-2 font-mono text-xs uppercase tracking-wider text-term-ink-variant transition-all hover:border-term-primary/50 hover:bg-term-surface-highest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60"
     >
       <SlidersHorizontal className="size-3.5 text-term-primary" />
       Reset Mesh View
@@ -479,14 +481,14 @@ function ResetViewButton() {
 
 function TerminalFooter() {
   return (
-    <footer className="mt-8 flex flex-col items-center justify-between gap-3 border-t border-term-outline-variant/60 bg-term-surface-lowest px-6 py-4 font-body text-xs text-slate-400 sm:flex-row lg:px-8">
+    <footer className="mt-8 flex flex-col items-center justify-between gap-3 border-t border-term-outline-variant/60 bg-term-surface-lowest px-6 py-4 font-body text-xs text-term-ink-variant sm:flex-row lg:px-8">
       <div className="flex items-center gap-2">
         <span className="size-2.5 rounded-full bg-term-primary shadow-[0_0_8px_rgba(78,222,163,0.7)]" />
-        <span className="font-medium text-slate-300">
+        <span className="font-medium text-term-ink">
           AIR AQI Sense Mission-Critical Environmental Telemetry System • Public Open Station Terminal
         </span>
       </div>
-      <div className="flex items-center gap-4 font-mono text-xs text-slate-400">
+      <div className="flex items-center gap-4 font-mono text-xs text-term-ink-variant">
         {CERTIFICATIONS.map((c) => (
           <span key={c}>{c}</span>
         ))}

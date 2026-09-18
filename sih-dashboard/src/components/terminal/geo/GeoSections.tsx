@@ -36,7 +36,7 @@ function ZoneStrip() {
       <SectionHead
         title="Zone Severity Index"
         right={
-          <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-slate-400">
+          <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-term-ink-variant">
             <span className="size-2 rounded-full bg-term-primary" />
             {stations.length} nodes aggregated
           </span>
@@ -58,7 +58,7 @@ function ZoneStrip() {
                 </span>
               </div>
               <div className="flex items-center justify-between font-mono text-[10px]">
-                <span className="rounded border border-term-outline-variant/60 bg-term-surface-high px-1.5 py-0.5 text-slate-300">
+                <span className="rounded border border-term-outline-variant/60 bg-term-surface-high px-1.5 py-0.5 text-term-ink-variant">
                   {z.dominant}
                 </span>
                 <Delta value={z.delta} />
@@ -95,19 +95,19 @@ function MeshRanking({ frame }: { frame: TerminalFrame }) {
   return (
     <TelemetryCard className="p-5 lg:col-span-7">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-display text-sm font-bold tracking-tight text-white">Mesh Ranking — Worst to Best</h3>
+        <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Mesh Ranking — Worst to Best</h3>
         <div className="flex items-center gap-2">
           {/* The filter sits here rather than in the header: this list is the
               only thing it narrows, so beside the rows is the one place its
               effect is visible as you type. */}
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3 -translate-y-1/2 text-term-ink-variant" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Filter nodes"
               aria-label="Filter the mesh ranking by station or zone"
-              className="w-36 rounded-md border border-term-outline-variant/70 bg-term-surface-c py-1 pl-7 pr-2 font-body text-[11px] text-white outline-none placeholder:text-slate-500 focus:border-term-secondary focus:ring-1 focus:ring-term-secondary"
+              className="w-36 rounded-md border border-term-outline-variant/70 bg-term-surface-c py-1 pl-7 pr-2 font-body text-[11px] text-term-ink outline-none placeholder:text-term-outline focus:border-term-secondary focus:ring-1 focus:ring-term-secondary"
             />
           </div>
           <Label>Click a row to locate</Label>
@@ -130,10 +130,10 @@ function MeshRanking({ frame }: { frame: TerminalFrame }) {
                 active ? 'border-orange-500 bg-term-surface-high' : 'border-transparent hover:bg-term-surface-c/60',
               )}
             >
-              <span className="w-6 shrink-0 font-mono text-[10px] text-slate-500">#{i + 1}</span>
+              <span className="w-6 shrink-0 font-mono text-[10px] text-term-outline">#{i + 1}</span>
               <span className="size-2.5 shrink-0 rounded-full" style={{ background: color }} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-semibold text-white">{s.name}</span>
+                <span className="block truncate text-xs font-semibold text-term-ink">{s.name}</span>
                 <Label className="block">
                   {s.zone} • {s.agency}
                 </Label>
@@ -155,7 +155,7 @@ function MeshRanking({ frame }: { frame: TerminalFrame }) {
           );
         })}
         {rows.length === 0 ? (
-          <p className="px-3 py-6 text-center font-mono text-xs text-slate-500">
+          <p className="px-3 py-6 text-center font-mono text-xs text-term-outline">
             No node matches “{query}”.
           </p>
         ) : null}
@@ -174,8 +174,8 @@ function TrappingProfile() {
     // Flex column so the cross-section absorbs whatever height the taller
     // ranking card forces on this one, instead of leaving a void at the foot.
     <TelemetryCard className="flex h-full flex-col gap-3 p-5 lg:col-span-5">
-      <h3 className="font-display text-sm font-bold tracking-tight text-white">Topographic Trapping Profile</h3>
-      <p className="font-body text-[11px] leading-relaxed text-slate-400">
+      <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Topographic Trapping Profile</h3>
+      <p className="font-body text-[11px] leading-relaxed text-term-ink-variant">
         Cross-section looking north. The Aravalli range to the south-west and the Himalayan foothills to
         the north-east form a closed basin; the winter inversion lid caps vertical mixing at{' '}
         {DISPERSION.boundaryLayer} m.
@@ -230,7 +230,7 @@ function TrappingProfile() {
       <div className="grid grid-cols-3 gap-2 border-t border-term-outline-variant/40 pt-2 text-center">
         <div>
           <Label className="block">Inversion height</Label>
-          <span className="font-mono text-sm font-bold text-white">{DISPERSION.boundaryLayer} m</span>
+          <span className="font-mono text-sm font-bold text-term-ink">{DISPERSION.boundaryLayer} m</span>
         </div>
         <div>
           <Label className="block">Mixing depth</Label>
@@ -238,7 +238,7 @@ function TrappingProfile() {
         </div>
         <div>
           <Label className="block">Ventilation idx</Label>
-          <span className="font-mono text-sm font-bold text-white">
+          <span className="font-mono text-sm font-bold text-term-ink">
             {DISPERSION.ventilationIndex.toLocaleString('en-IN')}
           </span>
         </div>
@@ -298,7 +298,7 @@ function NodeLedger({ frame }: { frame: TerminalFrame }) {
              being pinned either way — understating measured data invites a
              reader to discount it. */
           <span
-            className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-slate-400"
+            className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-term-ink-variant"
             title={mesh.note ?? undefined}
           >
             <span className={`size-2 rounded-full ${mesh.live ? 'bg-term-primary' : 'bg-amber-400'}`} />
@@ -310,7 +310,7 @@ function NodeLedger({ frame }: { frame: TerminalFrame }) {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1100px] border-collapse text-left">
             <thead className="bg-term-surface-high">
-              <tr className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+              <tr className="font-mono text-[10px] uppercase tracking-wider text-term-ink-variant">
                 {columns.map((c) => (
                   <th key={c} scope="col" className="px-4 py-3 font-semibold">
                     {c}
@@ -332,24 +332,24 @@ function NodeLedger({ frame }: { frame: TerminalFrame }) {
                       active && 'border-l-2 border-l-orange-500 bg-orange-500/5',
                     )}
                   >
-                    <td className="whitespace-nowrap px-4 py-2.5 text-xs font-semibold text-white">{s.name}</td>
-                    <td className="px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-slate-400">{s.zone}</td>
-                    <td className="px-4 py-2.5 font-mono text-[10px] text-slate-300">{s.agency}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-xs font-semibold text-term-ink">{s.name}</td>
+                    <td className="px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-term-ink-variant">{s.zone}</td>
+                    <td className="px-4 py-2.5 font-mono text-[10px] text-term-ink-variant">{s.agency}</td>
                     <td className="px-4 py-2.5 font-mono text-[11px] text-term-secondary">{s.lat.toFixed(4)}°N</td>
                     <td className="px-4 py-2.5 font-mono text-[11px] text-term-secondary">{s.lng.toFixed(4)}°E</td>
                     <td className="px-4 py-2.5 font-mono text-sm font-bold" style={{ color }}>
                       <AnimatedNumber value={sample.aqi} duration={rollMs} />
                     </td>
                     <td className="px-4 py-2.5">
-                      <span className="rounded border border-term-outline-variant/60 bg-term-surface-high px-1.5 py-0.5 font-mono text-[10px] text-slate-300">
+                      <span className="rounded border border-term-outline-variant/60 bg-term-surface-high px-1.5 py-0.5 font-mono text-[10px] text-term-ink-variant">
                         {s.dominant}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 font-body text-[11px] text-slate-400">{s.source}</td>
+                    <td className="px-4 py-2.5 font-body text-[11px] text-term-ink-variant">{s.source}</td>
                     <td className="px-4 py-2.5 text-[11px]">
                       <Delta value={s.delta} />
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-[11px] text-white">{s.sensors}</td>
+                    <td className="px-4 py-2.5 font-mono text-[11px] text-term-ink">{s.sensors}</td>
                     <td className="px-4 py-2.5 font-mono text-[11px] text-term-primary">{s.uptime}</td>
                     <td className="px-4 py-2.5">
                       <span className={cn('rounded border px-2 py-0.5 font-mono text-[10px] font-bold', STATUS_PILL[s.status])}>
@@ -413,12 +413,12 @@ function SpatialAlerts() {
                     <span className={cn('rounded border px-2 py-0.5 font-mono text-[10px] font-bold', style.pill)}>
                       {a.level}
                     </span>
-                    <span className="font-mono text-[10px] text-slate-400">{a.time}</span>
-                    <span className="rounded border border-term-outline-variant/60 bg-term-surface-high px-1.5 py-0.5 font-mono text-[10px] text-slate-300">
+                    <span className="font-mono text-[10px] text-term-ink-variant">{a.time}</span>
+                    <span className="rounded border border-term-outline-variant/60 bg-term-surface-high px-1.5 py-0.5 font-mono text-[10px] text-term-ink-variant">
                       {a.zone}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm font-medium text-white">{a.text}</p>
+                  <p className="mt-1 text-sm font-medium text-term-ink">{a.text}</p>
                 </div>
               </div>
               <button
@@ -427,7 +427,7 @@ function SpatialAlerts() {
                   select(a.station);
                   document.getElementById('map')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }}
-                className="shrink-0 rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white transition-colors hover:border-term-primary"
+                className="shrink-0 rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-term-ink transition-colors hover:border-term-primary"
               >
                 Locate on map
               </button>
@@ -445,9 +445,9 @@ function CoverageStrip() {
       {COVERAGE_KPIS.map((k) => (
         <TelemetryCard key={k.label} className="space-y-2 rounded-xl p-4">
           <Label className="block">{k.label}</Label>
-          <div className="font-display text-2xl font-extrabold text-white">
+          <div className="font-display text-2xl font-extrabold text-term-ink">
             {k.value}
-            <span className="font-mono text-sm font-normal text-slate-400">{k.unit}</span>
+            <span className="font-mono text-sm font-normal text-term-ink-variant">{k.unit}</span>
           </div>
           <Spark values={k.series} color={k.color} className="h-10 w-full" />
         </TelemetryCard>

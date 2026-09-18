@@ -64,7 +64,7 @@ export function GeoMapView() {
       <div className="flex flex-col justify-between gap-4 border-b border-term-outline-variant/40 pb-1 lg:flex-row lg:items-center">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-display text-2xl font-extrabold tracking-tight text-white lg:text-3xl">
+            <h1 className="font-display text-2xl font-extrabold tracking-tight text-term-ink lg:text-3xl">
               Geospatial Plume Map
             </h1>
             <span className="rounded border border-orange-500/40 bg-orange-500/15 px-2.5 py-0.5 font-mono text-xs font-bold text-orange-400">
@@ -72,19 +72,19 @@ export function GeoMapView() {
               {mesh.live ? 'REPORTING' : 'ONLINE'}
             </span>
           </div>
-          <p className="mt-1 font-body text-sm text-slate-400">
+          <p className="mt-1 font-body text-sm text-term-ink-variant">
             Regional plume tracking, topographic trapping analysis &amp; pollution source attribution
             across the National Capital Region
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="flex items-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-c px-3 py-1.5 font-mono text-xs text-slate-300">
+          <span className="flex items-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-c px-3 py-1.5 font-mono text-xs text-term-ink-variant">
             <Radio className="size-4 text-term-primary" />
-            Interpolation: <strong className="text-white">IDW 250m</strong>
+            Interpolation: <strong className="text-term-ink">IDW 250m</strong>
           </span>
-          <span className="flex items-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-c px-3 py-1.5 font-mono text-xs text-slate-300">
+          <span className="flex items-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-c px-3 py-1.5 font-mono text-xs text-term-ink-variant">
             <Crosshair className="size-4 text-term-secondary" />
-            WGS-84 / <strong className="text-white">EPSG:4326</strong>
+            WGS-84 / <strong className="text-term-ink">EPSG:4326</strong>
           </span>
         </div>
       </div>

@@ -12,8 +12,8 @@ export function OverviewMetrics() {
           <TelemetryCard key={k.label} className="space-y-2 p-4">
             <Label className="block">{k.label}</Label>
             <div className="flex items-baseline gap-1">
-              <span className="font-display text-2xl font-extrabold text-white">{k.value}</span>
-              <span className="font-mono text-[10px] text-slate-400">{k.unit}</span>
+              <span className="font-display text-2xl font-extrabold text-term-ink">{k.value}</span>
+              <span className="font-mono text-[10px] text-term-ink-variant">{k.unit}</span>
             </div>
             <Spark values={k.series} color={k.color} className="h-8 w-full" fill />
             <Delta value={k.delta} className="text-[10px]" />
@@ -26,7 +26,7 @@ export function OverviewMetrics() {
           title="8-Pollutant Chemical Telemetry Grid"
           sub="Continuous spectrometry • Hover any card for its 24-hour trajectory, sampled every 2 hours"
           right={
-            <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-slate-400">
+            <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-term-ink-variant">
               <span className="size-2 rounded-full bg-amber-400" />
               CPCB National AQI · demo values
             </span>
@@ -62,7 +62,7 @@ function PollutantCard({ reading: p }: { reading: PollutantReading }) {
             <div className="font-mono text-xs font-bold" style={{ color: p.color }}>
               {p.symbol}
             </div>
-            <div className="text-sm font-semibold text-white">{p.name}</div>
+            <div className="text-sm font-semibold text-term-ink">{p.name}</div>
           </div>
           <span
             className="rounded border px-2 py-0.5 font-mono text-[10px] font-bold"
@@ -73,11 +73,11 @@ function PollutantCard({ reading: p }: { reading: PollutantReading }) {
         </div>
 
         <div className="flex items-baseline justify-between">
-          <span className="font-display text-3xl font-extrabold text-white">
+          <span className="font-display text-3xl font-extrabold text-term-ink">
             {p.value.toFixed(p.value < 10 ? 1 : 0)}
           </span>
-          <span className="font-mono text-xs text-slate-400">
-            {p.unit} <span className="font-normal text-slate-500">(Ref: {p.reference})</span>
+          <span className="font-mono text-xs text-term-ink-variant">
+            {p.unit} <span className="font-normal text-term-outline">(Ref: {p.reference})</span>
           </span>
         </div>
 
@@ -85,7 +85,7 @@ function PollutantCard({ reading: p }: { reading: PollutantReading }) {
 
         <div className="flex items-center justify-between pt-1 font-mono text-xs">
           <Delta value={p.delta} />
-          <span className="text-slate-400">{p.note}</span>
+          <span className="text-term-ink-variant">{p.note}</span>
         </div>
       </div>
 
@@ -105,7 +105,7 @@ function PollutantCard({ reading: p }: { reading: PollutantReading }) {
 
         <TrendChart values={p.trend} color={p.color} />
 
-        <div className="flex items-center justify-between border-t border-term-outline-variant/40 pt-1 font-mono text-[10px] text-slate-400">
+        <div className="flex items-center justify-between border-t border-term-outline-variant/40 pt-1 font-mono text-[10px] text-term-ink-variant">
           <span>T-22h</span>
           <span>T-12h</span>
           <span className="font-bold" style={{ color: p.color }}>

@@ -1,20 +1,12 @@
 /**
  * Terminal palette as JS values.
  *
- * The terminal's colours live in tailwind.config.ts under the `term-` key, but
- * a Tailwind class cannot reach an SVG `fill` / `stroke` attribute or a canvas
- * 2D context. Before this module those call sites carried raw hex — 59 of them
- * across the geo views — so the palette had two sources of truth and changing
- * the accent updated only half the surface.
- *
- * These are the same values the Tailwind config declares, named the same way.
- * Change one, change the other.
- *
- * Deliberately literal rather than read from CSS custom properties: the
- * terminal is dark-only by design (see terminal.css) and does not follow the
- * console's light/dark swap, so there is nothing to resolve at runtime.
+ * Used for SVG `fill`/`stroke` attributes and canvas 2D contexts where CSS
+ * variables can't reach directly. The palette now comes in light and dark
+ * variants, with a resolver function that reads the current theme.
  */
-export const TERM = {
+
+const TERM_DARK = {
   primary: '#4edea3',
   secondary: '#7bd0ff',
   tertiary: '#a855f7',
@@ -25,9 +17,52 @@ export const TERM = {
   surfaceHigh: '#1c2b3c',
   outline: '#64748b',
   outlineVariant: '#233549',
-  ink: '#ffffff',
+  ink: '#f1f5f9',
   inkVariant: '#94a3b8',
 } as const;
+
+const TERM_LIGHT = {
+  primary: '#059669',
+  secondary: '#0284c7',
+  tertiary: '#7c3aed',
+  bgDeep: '#f8fafc',
+  surfaceLowest: '#f1f5f9',
+  surfaceLow: '#e2e8f0',
+  surfaceRaised: '#e8ecf2',
+  surfaceHigh: '#f1f5f9',
+  outline: '#94a3b8',
+  outlineVariant: '#cbd5e1',
+  ink: '#0f172a',
+  inkVariant: '#475569',
+} as const;
+
+export type TermPalette = typeof TERM_DARK;
+
+/** Returns true if the page is currently in dark mode. */
+function isDark(): boolean {
+  if (typeof document === 'undefined') return true;
+  return document.documentElement.classList.contains('dark');
+}
+
+/**
+ * Resolves the current terminal palette based on the active theme.
+ * Call at render time in components that pass colours to SVG/canvas.
+ */
+export function getTermPalette(): TermPalette {
+  return isDark() ? TERM_DARK : TERM_LIGHT;
+}
+
+/**
+ * Legacy export — kept for call sites that only need a snapshot.
+ * Reads the current theme at import time. Prefer `getTermPalette()` in
+ * components that need to react to theme changes.
+ */
+export const TERM = new Proxy({} as TermPalette, {
+  get(_target, prop: string) {
+    const palette = getTermPalette();
+    return palette[prop as keyof TermPalette];
+  },
+});
 
 /**
  * Severity ramp for the plume and dispersion views. Distinct from the console's

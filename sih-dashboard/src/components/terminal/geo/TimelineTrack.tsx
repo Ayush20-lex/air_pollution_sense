@@ -137,7 +137,7 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
             'flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-mono text-[10px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60',
             current === peakIndex
               ? 'border-term-primary/50 bg-term-primary/15 text-term-primary'
-              : 'border-term-outline-variant/60 bg-term-surface-high text-slate-300 hover:text-white',
+              : 'border-term-outline-variant/60 bg-term-surface-high text-term-ink-variant hover:text-term-ink',
           )}
         >
           <Flag className="size-3" style={{ color: peakBand.color }} />
@@ -152,7 +152,7 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
           onClick={() => setFrameIndex(0)}
           disabled={current === 0}
           aria-label="Return to the present hour"
-          className="flex shrink-0 items-center rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-2.5 py-1.5 font-mono text-[10px] font-bold text-slate-300 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60 disabled:opacity-40 disabled:hover:text-slate-300"
+          className="flex shrink-0 items-center rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-2.5 py-1.5 font-mono text-[10px] font-bold text-term-ink-variant transition-colors hover:text-term-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60 disabled:opacity-40 disabled:hover:text-term-ink-variant"
         >
           NOW
         </button>
@@ -217,7 +217,7 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
         </div>
 
         <div className="shrink-0 text-right">
-          <div className="font-mono text-[11px] font-bold tabular-nums text-white">
+          <div className="font-mono text-[11px] font-bold tabular-nums text-term-ink">
             {frames[current].offset === 0 ? 'NOW' : `+${frames[current].offset}h`}
           </div>
           <Label>
@@ -240,7 +240,7 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
               'flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-[9px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60',
               playing
                 ? 'border-term-primary/50 bg-term-primary/15 text-term-primary'
-                : 'border-term-outline-variant/60 bg-term-surface-high text-slate-400 hover:text-white',
+                : 'border-term-outline-variant/60 bg-term-surface-high text-term-ink-variant hover:text-term-ink',
             )}
           >
             {playing ? (
@@ -260,7 +260,7 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
                 'rounded border px-2 py-1 font-mono text-[9px] font-bold transition-colors',
                 rate === r
                   ? 'border-term-primary/40 bg-term-primary/15 text-term-primary'
-                  : 'border-term-outline-variant/60 bg-term-surface-high text-slate-400 hover:text-white',
+                  : 'border-term-outline-variant/60 bg-term-surface-high text-term-ink-variant hover:text-term-ink',
               )}
             >
               {r}×
@@ -272,21 +272,21 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
       {/* One readout line, following the pointer when there is one and the
           playhead otherwise, so hovering can answer "what was 3am" without
           moving the map away from the hour being watched. */}
-      <div className="mt-1.5 flex items-center justify-between gap-3 font-mono text-[9px] text-slate-500">
+      <div className="mt-1.5 flex items-center justify-between gap-3 font-mono text-[9px] text-term-outline">
         <span className="font-bold text-term-primary">NOW</span>
         <span className="flex min-w-0 items-center gap-1.5 truncate">
           <span
             className="size-1.5 shrink-0 rounded-full"
             style={{ backgroundColor: shownBand.color }}
           />
-          <span className="tabular-nums text-slate-300">
+          <span className="tabular-nums text-term-ink-variant">
             {pad2(shownFrame.localHour)}:00 IST
           </span>
-          <span className="text-slate-600">·</span>
-          <span className="tabular-nums text-slate-300">mesh mean {shownAqi}</span>
-          <span className="text-slate-600">·</span>
+          <span className="text-term-outline">·</span>
+          <span className="tabular-nums text-term-ink-variant">mesh mean {shownAqi}</span>
+          <span className="text-term-outline">·</span>
           <span style={{ color: shownBand.color }}>{shownBand.label}</span>
-          {hover !== null && <span className="text-slate-600">(hover)</span>}
+          {hover !== null && <span className="text-term-outline">(hover)</span>}
         </span>
         <span>+{HORIZON_HOURS}h</span>
       </div>

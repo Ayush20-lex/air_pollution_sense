@@ -26,30 +26,30 @@ const config: Config = {
         emergency: '#FF3B30',
         severe: '#A855F7',
         /**
-         * AIR AQI Sense public terminal (`/terminal`). A self-contained,
-         * dark-only Material-3 style ramp — literal values, not `--as-*`
-         * variables, because this surface never follows the light/dark swap.
+         * AIR AQI Sense public terminal (`/terminal`). Now driven by CSS
+         * custom properties set in terminal.css so the terminal follows the
+         * app-wide light/dark swap.
          */
         term: {
-          primary: '#4edea3',
-          'primary-container': '#10b981',
-          'on-primary': '#003824',
-          secondary: '#7bd0ff',
-          'secondary-container': '#00a6e0',
-          tertiary: '#d0bcff',
-          bg: '#040e1a',
-          surface: '#051424',
-          'surface-lowest': '#010f1f',
-          'surface-low': '#0d1c2d',
-          'surface-c': '#122131',
-          'surface-high': '#1c2b3c',
-          'surface-highest': '#273647',
-          ink: '#f1f5f9',
-          'ink-variant': '#94a3b8',
-          outline: '#64748b',
-          'outline-variant': '#233549',
-          error: '#ffb4ab',
-          'error-container': '#93000a',
+          primary: 'var(--t-primary)',
+          'primary-container': 'var(--t-primary-container)',
+          'on-primary': 'var(--t-on-primary)',
+          secondary: 'var(--t-secondary)',
+          'secondary-container': 'var(--t-secondary-container)',
+          tertiary: 'var(--t-tertiary)',
+          bg: 'var(--t-bg)',
+          surface: 'var(--t-surface-lowest)',
+          'surface-lowest': 'var(--t-surface-lowest)',
+          'surface-low': 'var(--t-surface-low)',
+          'surface-c': 'var(--t-surface-c)',
+          'surface-high': 'var(--t-surface-high)',
+          'surface-highest': 'var(--t-surface-highest)',
+          ink: 'var(--t-ink)',
+          'ink-variant': 'var(--t-ink-variant)',
+          outline: 'var(--t-outline)',
+          'outline-variant': 'var(--t-outline-variant)',
+          error: 'var(--t-error)',
+          'error-container': 'var(--t-error-container)',
         },
       },
       fontFamily: {

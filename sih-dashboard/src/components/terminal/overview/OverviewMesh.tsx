@@ -32,7 +32,7 @@ function StationMesh() {
         right={
           <Link
             to="/terminal/geo-map"
-            className="rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white transition-colors hover:border-term-primary/60"
+            className="rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-term-ink transition-colors hover:border-term-primary/60"
           >
             Open geo map
           </Link>
@@ -54,7 +54,7 @@ function StationMesh() {
                       className={cn('size-2.5 rounded-full', s.master && 'animate-ping')}
                       style={{ background: color }}
                     />
-                    <h4 className="text-base font-bold text-white">{s.name}</h4>
+                    <h4 className="text-base font-bold text-term-ink">{s.name}</h4>
                   </div>
                   <Label className="block">
                     {s.zone} zone • {s.agency}
@@ -73,7 +73,7 @@ function StationMesh() {
               <div className="grid grid-cols-3 gap-2 border-y border-term-outline-variant/40 py-2 text-center font-mono text-xs">
                 <div>
                   <Label className="block">Dominant</Label>
-                  <span className="font-bold text-white">{s.dominant}</span>
+                  <span className="font-bold text-term-ink">{s.dominant}</span>
                 </div>
                 <div>
                   <Label className="block">Uptime</Label>
@@ -90,7 +90,7 @@ function StationMesh() {
                   <CheckCircle2 className="size-3.5" />
                   {s.sensors} sensors active
                 </span>
-                <span className="rounded bg-term-surface-high px-2 py-0.5 font-mono text-[10px] text-slate-300">
+                <span className="rounded bg-term-surface-high px-2 py-0.5 font-mono text-[10px] text-term-ink-variant">
                   {s.status}
                 </span>
               </div>
@@ -128,17 +128,17 @@ function IncidentBanners() {
                     <span className={cn('rounded border px-2 py-0.5 font-mono text-[10px] font-bold', style.pill)}>
                       {a.level}
                     </span>
-                    <span className="font-mono text-[10px] text-slate-400">{a.time}</span>
-                    <span className="rounded border border-term-outline-variant/60 bg-term-surface-high px-1.5 py-0.5 font-mono text-[10px] text-slate-300">
+                    <span className="font-mono text-[10px] text-term-ink-variant">{a.time}</span>
+                    <span className="rounded border border-term-outline-variant/60 bg-term-surface-high px-1.5 py-0.5 font-mono text-[10px] text-term-ink-variant">
                       {a.zone}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm font-medium text-white">{a.text}</p>
+                  <p className="mt-1 text-sm font-medium text-term-ink">{a.text}</p>
                 </div>
               </div>
               <Link
                 to={`/terminal/geo-map?station=${a.station}`}
-                className="shrink-0 rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-3 py-1.5 text-center font-mono text-[10px] font-bold uppercase tracking-wider text-white transition-colors hover:border-term-primary"
+                className="shrink-0 rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-3 py-1.5 text-center font-mono text-[10px] font-bold uppercase tracking-wider text-term-ink transition-colors hover:border-term-primary"
               >
                 Locate on map
               </Link>
@@ -161,7 +161,7 @@ function SpectrometryLedger() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] border-collapse text-left">
             <thead className="bg-term-surface-high">
-              <tr className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+              <tr className="font-mono text-[10px] uppercase tracking-wider text-term-ink-variant">
                 {['Channel', 'Formula', 'Reading', 'Threshold', 'Status', 'Δ24h', 'Trajectory', 'Calibration', ''].map((h) => (
                   <th key={h} scope="col" className="px-4 py-3 font-semibold">
                     {h}
@@ -172,14 +172,14 @@ function SpectrometryLedger() {
             <tbody>
               {POLLUTANTS.map((p) => (
                 <tr key={p.id} className="border-b border-term-outline-variant/40 transition-colors hover:bg-term-surface-c/60">
-                  <td className="px-4 py-2.5 text-xs font-semibold text-white">{p.name}</td>
+                  <td className="px-4 py-2.5 text-xs font-semibold text-term-ink">{p.name}</td>
                   <td className="px-4 py-2.5 font-mono text-xs" style={{ color: p.color }}>
                     {p.symbol}
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-sm font-bold text-white">
-                    {p.value} <span className="text-[10px] font-normal text-slate-400">{p.unit}</span>
+                  <td className="px-4 py-2.5 font-mono text-sm font-bold text-term-ink">
+                    {p.value} <span className="text-[10px] font-normal text-term-ink-variant">{p.unit}</span>
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-slate-400">{p.reference}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-term-ink-variant">{p.reference}</td>
                   <td className="px-4 py-2.5">
                     <span
                       className="rounded border px-2 py-0.5 font-mono text-[10px] font-bold"
@@ -196,11 +196,11 @@ function SpectrometryLedger() {
                   </td>
                   {/* Was "VERIFIED" on every row — a calibration state this
                       project cannot attest to for readings it did not measure. */}
-                  <td className="px-4 py-2.5 font-mono text-xs text-slate-400">SYNTHETIC</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-term-ink-variant">SYNTHETIC</td>
                   <td className="px-4 py-2.5">
                     <button
                       type="button"
-                      className="rounded border border-term-outline-variant/60 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-slate-300 transition-colors hover:border-term-primary hover:text-white"
+                      className="rounded border border-term-outline-variant/60 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-term-ink-variant transition-colors hover:border-term-primary hover:text-term-ink"
                     >
                       Inspect
                     </button>

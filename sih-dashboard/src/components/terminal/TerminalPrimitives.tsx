@@ -28,7 +28,7 @@ export function Label({ className, children }: { className?: string; children: R
   return (
     <span
       className={cn(
-        'font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-400',
+        'font-mono text-[10px] font-semibold uppercase tracking-wider text-term-ink-variant',
         className,
       )}
     >
@@ -50,8 +50,8 @@ export function SectionHead({
   return (
     <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
       <div>
-        <h2 className="font-display text-xl font-bold tracking-tight text-white">{title}</h2>
-        {sub ? <p className="font-body text-xs text-slate-400">{sub}</p> : null}
+        <h2 className="font-display text-xl font-bold tracking-tight text-term-ink">{title}</h2>
+        {sub ? <p className="font-body text-xs text-term-ink-variant">{sub}</p> : null}
       </div>
       {right}
     </div>

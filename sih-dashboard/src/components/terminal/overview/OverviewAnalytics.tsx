@@ -35,7 +35,7 @@ function TemporalTrend() {
     <TelemetryCard className="space-y-3 p-5 lg:col-span-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="font-display text-sm font-bold tracking-tight text-white">
+          <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">
             Continuous Temporal AQI Gradient
           </h3>
           <Label>Composite index · rolling window</Label>
@@ -50,7 +50,7 @@ function TemporalTrend() {
                 'rounded-full border px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors',
                 range === t
                   ? 'border-orange-500/50 bg-orange-500/20 text-orange-300'
-                  : 'border-term-outline-variant/60 bg-term-surface-c/80 text-slate-400 hover:text-white',
+                  : 'border-term-outline-variant/60 bg-term-surface-c/80 text-term-ink-variant hover:text-term-ink',
               )}
             >
               {t}
@@ -88,7 +88,7 @@ function TemporalTrend() {
         </circle>
       </svg>
 
-      <div className="flex justify-between border-t border-term-outline-variant/40 pt-2 font-mono text-[10px] text-slate-400">
+      <div className="flex justify-between border-t border-term-outline-variant/40 pt-2 font-mono text-[10px] text-term-ink-variant">
         {['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', 'NOW'].map((t) => (
           <span key={t} className={cn(t === 'NOW' && 'font-bold text-orange-400')}>
             {t}
@@ -107,7 +107,7 @@ function StressorDonut() {
   return (
     <TelemetryCard className="space-y-4 p-5 lg:col-span-4">
       <div>
-        <h3 className="font-display text-sm font-bold tracking-tight text-white">Stressor Contribution</h3>
+        <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Stressor Contribution</h3>
         <Label>Share of composite index</Label>
       </div>
 
@@ -139,7 +139,7 @@ function StressorDonut() {
             })}
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-display text-3xl font-extrabold text-white">{STRESSORS[0].share}%</span>
+            <span className="font-display text-3xl font-extrabold text-term-ink">{STRESSORS[0].share}%</span>
             <Label>PM2.5 lead</Label>
           </div>
         </div>
@@ -148,7 +148,7 @@ function StressorDonut() {
       <ul className="space-y-1.5 border-t border-term-outline-variant/40 pt-3">
         {STRESSORS.map((s) => (
           <li key={s.label} className="flex items-center justify-between font-mono text-xs">
-            <span className="flex items-center gap-2 text-slate-300">
+            <span className="flex items-center gap-2 text-term-ink-variant">
               <span className="size-2.5 rounded-full" style={{ background: s.color }} />
               {s.label}
             </span>
@@ -188,7 +188,7 @@ function Correlator() {
                 key={p.id}
                 className={cn(
                   'flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors',
-                  on ? 'text-white' : 'border-term-outline-variant/60 bg-term-surface-c/80 text-slate-400',
+                  on ? 'text-term-ink' : 'border-term-outline-variant/60 bg-term-surface-c/80 text-term-ink-variant',
                 )}
                 style={on ? { borderColor: `${p.color}80`, background: `${p.color}1f` } : undefined}
               >
@@ -239,14 +239,14 @@ function Correlator() {
 
       <TelemetryCard className="space-y-3 p-5 lg:col-span-4">
         <div>
-          <h3 className="font-display text-sm font-bold tracking-tight text-white">30-Day Exposure Frequency</h3>
+          <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">30-Day Exposure Frequency</h3>
           <Label>Days spent in each band</Label>
         </div>
         <ul className="space-y-2.5 pt-1">
           {EXPOSURE_HISTORY.map((e) => (
             <li key={e.label} className="space-y-1">
               <div className="flex items-center justify-between font-mono text-xs">
-                <span className="flex items-center gap-2 text-slate-300">
+                <span className="flex items-center gap-2 text-term-ink-variant">
                   <span className="size-2.5 rounded-full" style={{ background: e.color }} />
                   {e.label}
                 </span>
@@ -260,7 +260,7 @@ function Correlator() {
             </li>
           ))}
         </ul>
-        <div className="border-t border-term-outline-variant/40 pt-3 font-mono text-[10px] text-slate-400">
+        <div className="border-t border-term-outline-variant/40 pt-3 font-mono text-[10px] text-term-ink-variant">
           20 of 30 days above the sensitive-group threshold
         </div>
       </TelemetryCard>

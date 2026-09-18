@@ -12,7 +12,7 @@ const NcrPlumeMap = dynamic(() => import('./NcrPlumeMap').then((m) => m.NcrPlume
   ssr: false,
   loading: () => (
     <div className="flex size-full items-center justify-center bg-term-surface-c/40">
-      <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">
+      <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-term-outline">
         Loading spatial grid…
       </span>
     </div>
@@ -53,7 +53,7 @@ export function GeoMapPanel({
 
         {/* layer switcher */}
         <div className="absolute left-3 top-3 z-[500] flex flex-col gap-1 rounded-lg border border-term-outline-variant/70 bg-term-surface-lowest/80 p-1 backdrop-blur-xl">
-          <span className="flex items-center gap-1 px-1.5 pb-0.5 pt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+          <span className="flex items-center gap-1 px-1.5 pb-0.5 pt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-term-outline">
             <Layers className="size-3" />
             Layers
           </span>
@@ -68,7 +68,7 @@ export function GeoMapPanel({
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60',
                 layers[l.id]
                   ? 'bg-term-primary/15 text-term-primary'
-                  : 'text-slate-500 hover:bg-term-surface-c hover:text-slate-300',
+                  : 'text-term-outline hover:bg-term-surface-c hover:text-term-ink-variant',
               )}
             >
               {l.icon}
@@ -94,12 +94,12 @@ export function GeoMapPanel({
         {/* domain readout */}
         <div className="pointer-events-none absolute right-3 top-3 z-[500] space-y-1 text-right">
           <div className="inline-flex items-center gap-2 rounded-md border border-term-outline-variant/70 bg-term-surface-lowest/80 px-2.5 py-1.5 backdrop-blur-xl">
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">Field</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-term-outline">Field</span>
             <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-term-primary">
               {field}
             </span>
           </div>
-          <div className="rounded-md border border-term-outline-variant/70 bg-term-surface-lowest/80 px-2.5 py-1.5 text-left font-mono text-[10px] leading-relaxed text-slate-500 backdrop-blur-xl">
+          <div className="rounded-md border border-term-outline-variant/70 bg-term-surface-lowest/80 px-2.5 py-1.5 text-left font-mono text-[10px] leading-relaxed text-term-outline backdrop-blur-xl">
             <div>IDW interpolation · 250 m</div>
             <div>28.28–28.92°N · 76.82–77.62°E</div>
           </div>
@@ -107,7 +107,7 @@ export function GeoMapPanel({
 
         {/* PM2.5 legend */}
         <div className="pointer-events-none absolute bottom-7 left-3 z-[500] rounded-lg border border-term-outline-variant/70 bg-term-surface-lowest/80 p-2 backdrop-blur-xl">
-          <div className="mb-1 font-mono text-[10px] tracking-[0.18em] text-slate-500">
+          <div className="mb-1 font-mono text-[10px] tracking-[0.18em] text-term-outline">
             {field === 'PBL' ? 'MIXING DEPTH' : field === 'WIND' ? 'VENTILATION' : `${field} DISPERSION`}
           </div>
           {/* One continuous bar, straight off the ramp the canvas samples. */}
@@ -115,7 +115,7 @@ export function GeoMapPanel({
             className="h-2.5 w-[216px] rounded-sm"
             style={{ background: dispersionGradientCss() }}
           />
-          <div className="mt-1 flex w-[216px] justify-between font-mono text-[8px] uppercase tracking-wider text-slate-500">
+          <div className="mt-1 flex w-[216px] justify-between font-mono text-[8px] uppercase tracking-wider text-term-outline">
             <span>Clean</span>
             <span>Moderate</span>
             <span>High</span>
@@ -125,7 +125,7 @@ export function GeoMapPanel({
 
         {/* frame stamp */}
         <div className="pointer-events-none absolute bottom-7 right-3 z-[500] rounded-md border border-term-outline-variant/70 bg-term-surface-lowest/80 px-2.5 py-1.5 backdrop-blur-xl">
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">Valid </span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-term-outline">Valid </span>
           <span className="font-mono text-[10px] font-semibold tabular-nums text-term-primary">
             {frame.label} · {String(frame.localHour).padStart(2, '0')}:00 IST
           </span>
@@ -134,7 +134,7 @@ export function GeoMapPanel({
 
       {/* field selector */}
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">Field</span>
+        <span className="mr-1 font-mono text-[10px] uppercase tracking-[0.18em] text-term-outline">Field</span>
         {TERMINAL_FIELDS.map((f) => (
           <FieldChip key={f} value={f} active={field === f} onSelect={setField} />
         ))}
@@ -163,7 +163,7 @@ function FieldChip({
         'rounded-full border px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors',
         active
           ? 'border-orange-500/50 bg-orange-500/20 text-orange-300'
-          : 'border-term-outline-variant/60 bg-term-surface-c/80 text-slate-400 hover:text-white',
+          : 'border-term-outline-variant/60 bg-term-surface-c/80 text-term-ink-variant hover:text-term-ink',
       )}
     >
       {value}

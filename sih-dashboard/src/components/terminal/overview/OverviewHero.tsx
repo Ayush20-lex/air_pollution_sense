@@ -24,14 +24,14 @@ function StatusBanner() {
     <div className="flex flex-col justify-between gap-4 border-b border-term-outline-variant/40 pb-1 lg:flex-row lg:items-center">
       <div>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-display text-2xl font-extrabold tracking-tight text-white lg:text-3xl">
+          <h1 className="font-display text-2xl font-extrabold tracking-tight text-term-ink lg:text-3xl">
             AIR Quality Overview
           </h1>
           <span className="rounded border border-orange-500/40 bg-orange-500/15 px-2.5 py-0.5 font-mono text-xs font-bold text-orange-400">
             {HUB.station}
           </span>
         </div>
-        <p className="mt-1 font-body text-sm text-slate-400">
+        <p className="mt-1 font-body text-sm text-term-ink-variant">
           High-frequency optical spectrometry stream &amp; distributed meteorological telemetry
         </p>
       </div>
@@ -60,10 +60,10 @@ function StatPill({
   valueClass?: string;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-c px-3 py-1.5 font-mono text-xs text-slate-300">
+    <div className="flex items-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-c px-3 py-1.5 font-mono text-xs text-term-ink-variant">
       {icon}
       <span>
-        {label}: <strong className={cn('text-white', valueClass)}>{value}</strong>
+        {label}: <strong className={cn('text-term-ink', valueClass)}>{value}</strong>
       </span>
     </div>
   );
@@ -83,8 +83,8 @@ function AqiGauge() {
       <div className="relative z-10 flex items-start justify-between">
         <div>
           <Label>Composite Air Quality Index (CPCB National AQI)</Label>
-          <div className="mt-0.5 font-display text-xl font-bold text-white">{HUB.sector}</div>
-          <div className="mt-1 flex items-center gap-2 font-mono text-xs text-slate-400">
+          <div className="mt-0.5 font-display text-xl font-bold text-term-ink">{HUB.sector}</div>
+          <div className="mt-1 flex items-center gap-2 font-mono text-xs text-term-ink-variant">
             <span>Updated {HUB.updatedSeconds}s ago</span>
             <span className="inline-block size-1.5 rounded-full bg-slate-600" />
             <span className="font-bold text-orange-400">↑ {HUB.delta}% Increased</span>
@@ -127,13 +127,13 @@ function AqiGauge() {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <Label>Current AQI</Label>
-              <span className="font-display text-6xl font-extrabold leading-none text-white">
+              <span className="font-display text-6xl font-extrabold leading-none text-term-ink">
                 {HUB.aqi}
               </span>
               <span className="mt-1 font-mono text-xs font-bold" style={{ color }}>
                 {HUB.band}
               </span>
-              <span className="font-mono text-[10px] text-slate-400">PM2.5 Dominant</span>
+              <span className="font-mono text-[10px] text-term-ink-variant">PM2.5 Dominant</span>
             </div>
           </div>
         </div>
@@ -152,8 +152,8 @@ function AqiGauge() {
                   className={cn(
                     'flex items-center justify-between rounded-lg border px-3 py-1.5 font-mono text-xs transition-colors',
                     active
-                      ? 'border-term-primary/40 bg-term-primary/10 text-white'
-                      : 'border-transparent text-slate-400',
+                      ? 'border-term-primary/40 bg-term-primary/10 text-term-ink'
+                      : 'border-transparent text-term-ink-variant',
                   )}
                 >
                   <span className="flex items-center gap-2">
@@ -184,7 +184,7 @@ function MicroStat({ label, value, valueClass }: { label: string; value: string;
   return (
     <div>
       <Label className="block">{label}</Label>
-      <span className={cn('font-mono text-sm font-bold text-white', valueClass)}>{value}</span>
+      <span className={cn('font-mono text-sm font-bold text-term-ink', valueClass)}>{value}</span>
     </div>
   );
 }
@@ -196,7 +196,7 @@ function HealthAdvisory() {
   return (
     <TelemetryCard className="space-y-4 p-6 lg:col-span-5">
       <div className="flex items-center justify-between">
-        <h2 className="flex items-center gap-2 font-display text-lg font-bold tracking-tight text-white">
+        <h2 className="flex items-center gap-2 font-display text-lg font-bold tracking-tight text-term-ink">
           <Hospital className="size-5 text-term-secondary" />
           Air Quality Advisory
         </h2>
@@ -205,8 +205,8 @@ function HealthAdvisory() {
         </span>
       </div>
 
-      <p className="font-body text-xs leading-relaxed text-slate-400">
-        <span className="font-semibold text-white">Notice: </span>
+      <p className="font-body text-xs leading-relaxed text-term-ink-variant">
+        <span className="font-semibold text-term-ink">Notice: </span>
         {ADVISORY_TEXT}
       </p>
 
@@ -221,7 +221,7 @@ function HealthAdvisory() {
                 className="space-y-1.5 rounded-xl border border-term-outline-variant/60 bg-term-surface-low p-2.5"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-300">
+                  <span className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-term-ink-variant">
                     <Icon className="size-3.5" style={{ color: b.color }} />
                     {b.label}
                   </span>
@@ -239,14 +239,14 @@ function HealthAdvisory() {
       <div className="flex items-center justify-between gap-3 border-t border-term-outline-variant/40 pt-3">
         <button
           type="button"
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-white transition-colors hover:border-term-primary/50"
+          className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-term-ink transition-colors hover:border-term-primary/50"
         >
           <Share2 className="size-3.5 text-term-primary" />
           Broadcast Advisory
         </button>
         <button
           type="button"
-          className="rounded-lg border border-term-outline-variant/60 px-3 py-2 font-mono text-[11px] uppercase tracking-wider text-slate-300 transition-colors hover:text-white"
+          className="rounded-lg border border-term-outline-variant/60 px-3 py-2 font-mono text-[11px] uppercase tracking-wider text-term-ink-variant transition-colors hover:text-term-ink"
         >
           Details
         </button>

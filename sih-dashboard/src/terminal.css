@@ -2,19 +2,76 @@
  * AIR AQI Sense — public terminal surface.
  *
  * Everything here is scoped under `.terminal-root` (or `.term-map` for the
- * Leaflet instance) so the console at `/` keeps its own light/dark treatment
- * untouched. This surface is deliberately dark-only.
+ * Leaflet instance). The terminal now follows the app-wide ThemeProvider
+ * light/dark swap via CSS custom properties.
  */
 
+/* ---- Terminal design token layer ---- */
 .terminal-root {
-  background: #040e1a;
-  color: #f1f5f9;
+  /* Light palette (default) */
+  --t-bg: #f8fafc;
+  --t-surface-lowest: #f1f5f9;
+  --t-surface-low: #e2e8f0;
+  --t-surface-c: #e8ecf2;
+  --t-surface-high: #f1f5f9;
+  --t-surface-highest: #e2e8f0;
+  --t-ink: #0f172a;
+  --t-ink-variant: #475569;
+  --t-muted: #64748b;
+  --t-outline: #94a3b8;
+  --t-outline-variant: #cbd5e1;
+  --t-primary: #059669;
+  --t-primary-container: #10b981;
+  --t-on-primary: #003824;
+  --t-secondary: #0284c7;
+  --t-secondary-container: #00a6e0;
+  --t-tertiary: #7c3aed;
+  --t-error: #dc2626;
+  --t-error-container: #fef2f2;
+  --t-glass-bg: rgb(255 255 255 / 0.82);
+  --t-glass-border: rgb(203 213 225 / 0.65);
+  --t-glass-shadow: 0 4px 20px -6px rgb(15 23 42 / 0.12);
+  --t-glass-inset: 0 1px 0 0 rgb(255 255 255 / 0.9);
+  --t-map-bg: #f1f5f9;
+  color-scheme: light;
+}
+
+.dark .terminal-root {
+  --t-bg: #040e1a;
+  --t-surface-lowest: #010f1f;
+  --t-surface-low: #0d1c2d;
+  --t-surface-c: #122131;
+  --t-surface-high: #1c2b3c;
+  --t-surface-highest: #273647;
+  --t-ink: #f1f5f9;
+  --t-ink-variant: #94a3b8;
+  --t-muted: #64748b;
+  --t-outline: #64748b;
+  --t-outline-variant: #233549;
+  --t-primary: #4edea3;
+  --t-primary-container: #10b981;
+  --t-on-primary: #003824;
+  --t-secondary: #7bd0ff;
+  --t-secondary-container: #00a6e0;
+  --t-tertiary: #d0bcff;
+  --t-error: #ffb4ab;
+  --t-error-container: #93000a;
+  --t-glass-bg: rgb(14 26 42 / 0.75);
+  --t-glass-border: rgb(51 65 85 / 0.65);
+  --t-glass-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.5);
+  --t-glass-inset: 0 1px 0 0 rgb(255 255 255 / 0.05);
+  --t-map-bg: #04101d;
   color-scheme: dark;
 }
 
+.terminal-root {
+  background: var(--t-bg);
+  color: var(--t-ink);
+}
+
 .terminal-root ::selection {
-  background: #10b981;
-  color: #00422b;
+  background: var(--t-primary);
+  color: var(--t-on-primary);
 }
 
 .terminal-root ::-webkit-scrollbar {
@@ -22,24 +79,24 @@
   height: 6px;
 }
 .terminal-root ::-webkit-scrollbar-track {
-  background: #040e1a;
+  background: var(--t-bg);
 }
 .terminal-root ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--t-outline-variant);
   border-radius: 4px;
 }
 .terminal-root ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: var(--t-outline);
 }
 
 /* ---- Core panel: frosted glass with an inset top highlight ---- */
 .telemetry-card {
-  background: rgb(14 26 42 / 0.75);
+  background: var(--t-glass-bg);
   backdrop-filter: blur(20px);
-  border: 1px solid rgb(51 65 85 / 0.65);
+  border: 1px solid var(--t-glass-border);
   box-shadow:
-    0 10px 30px -10px rgb(0 0 0 / 0.5),
-    inset 0 1px 0 0 rgb(255 255 255 / 0.05);
+    var(--t-glass-shadow),
+    var(--t-glass-inset);
 }
 
 /* Severity-driven focus, not a selection state. */
@@ -47,7 +104,7 @@
   border: 1px solid rgb(249 115 22 / 0.5);
   box-shadow:
     0 0 25px -5px rgb(249 115 22 / 0.2),
-    inset 0 1px 0 0 rgb(255 255 255 / 0.08);
+    var(--t-glass-inset);
 }
 
 .pulse-live {
@@ -78,49 +135,43 @@
   pointer-events: auto;
 }
 
-/* ---- Leaflet, scoped to the terminal map only ------------------------
-   The global rules in globals.css paint Leaflet from the `--as-*` console
-   palette; this surface needs its own navy treatment. --------------- */
+/* ---- Leaflet, scoped to the terminal map only ---- */
 .term-map .leaflet-container {
-  background: #04101d !important;
+  background: var(--t-map-bg) !important;
   font-family: var(--font-body), sans-serif;
 }
+/* Light: desaturated natural tiles */
 .term-map .leaflet-tile-pane {
-  filter: invert(1) hue-rotate(188deg) brightness(0.58) contrast(1.08) saturate(0.55);
+  filter: saturate(0.35) brightness(1.02) contrast(0.92);
 }
+/* Dark: inverted dark cartography */
 .dark .term-map .leaflet-tile-pane {
   filter: invert(1) hue-rotate(188deg) brightness(0.58) contrast(1.08) saturate(0.55);
 }
 .term-map .leaflet-control-attribution {
-  background: rgb(1 15 31 / 0.82) !important;
-  color: #64748b !important;
+  background: var(--t-glass-bg) !important;
+  color: var(--t-muted) !important;
   font-family: var(--font-mono), monospace !important;
   font-size: 9px !important;
   padding: 2px 6px !important;
   border-top-left-radius: 6px;
 }
 .term-map .leaflet-control-attribution a {
-  color: #7bd0ff !important;
+  color: var(--t-secondary) !important;
 }
 
-/* Dispersion overlay: a light blur feathers the gradient seams so the field
-   reads as atmosphere rather than a rendered image, and `screen` keeps the
-   road network and labels legible through the colour. */
+/* Dispersion overlay */
 .term-map .term-heat {
-  /* Feathers the gradient seams so the field reads as atmosphere rather than a
-     rendered image. Normal alpha compositing, not `screen`: screen blending
-     washes the deep crimson cores out to nothing against a dark basemap, and
-     the ramp already carries its own per-stop opacity to keep roads legible. */
   filter: blur(7px) saturate(1.06);
   pointer-events: none;
 }
 
-/* Iso-contour labels: a small mono chip sitting on the line it names. */
+/* Iso-contour labels */
 .term-contour-label {
   display: inline-block;
   padding: 1px 5px;
   border-radius: 4px;
-  background: rgb(1 15 31 / 0.82);
+  background: var(--t-glass-bg);
   border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
   color: var(--c);
   font-family: var(--font-mono), monospace;
@@ -131,9 +182,7 @@
   white-space: nowrap;
 }
 
-/* Wind streamlines: the dash runs downwind at a slower cadence than the source
-   ribbons, so the two read as different systems rather than competing arrows.
-   dashoffset equals the full 10+14 pattern, so each cycle loops seamlessly. */
+/* Wind streamlines */
 .term-stream {
   stroke-dasharray: 10 14;
   animation-name: term-stream-flow;
@@ -155,8 +204,7 @@
   }
 }
 
-/* Transport ribbons: the dash runs downwind, so direction reads without an
-   arrowhead cluttering the basin. */
+/* Transport ribbons */
 .term-ribbon {
   stroke-dasharray: 13 11;
   animation: term-ribbon-flow 1.9s linear infinite;
@@ -171,7 +219,7 @@
   display: inline-block;
   padding: 1px 6px;
   border-radius: 999px;
-  background: rgb(1 15 31 / 0.85);
+  background: var(--t-glass-bg);
   border: 1px solid color-mix(in srgb, var(--c) 50%, transparent);
   color: var(--c);
   font-family: var(--font-mono), monospace;
@@ -185,47 +233,48 @@
   .term-ribbon {
     animation: none;
   }
-  /* Solid strokes still show the flow pattern without any motion. */
   .term-stream {
     animation: none;
     stroke-dasharray: none;
   }
 }
 
-/* Station pins — same class contract as the console's district pins, but
-   painted from the terminal palette. */
+/* Station pins */
 .term-map .as-pin-body {
-  background: rgb(1 15 31 / 0.88);
+  background: var(--t-glass-bg);
   border: 1px solid var(--pin);
+  box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.3);
+}
+.dark .term-map .as-pin-body {
   box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.8);
 }
 .term-map .as-pin-selected {
   border-width: 2px !important;
-  background: rgb(1 15 31 / 0.96);
+  background: var(--t-glass-bg);
   box-shadow: 0 0 16px -2px var(--pin) !important;
 }
 .term-map .as-pin-name {
-  color: #cbd5e1;
+  color: var(--t-ink-variant);
   max-width: 78px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .term-map .leaflet-tooltip.as-tip {
-  background: rgb(14 26 42 / 0.94) !important;
-  border: 1px solid rgb(51 65 85 / 0.8) !important;
-  color: #e2e8f0 !important;
+  background: var(--t-glass-bg) !important;
+  border: 1px solid var(--t-glass-border) !important;
+  color: var(--t-ink) !important;
   border-radius: 10px;
+  box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.3);
+}
+.dark .term-map .leaflet-tooltip.as-tip {
   box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.7);
 }
 .term-map .leaflet-tooltip.as-tip::before {
-  border-top-color: rgb(51 65 85 / 0.8) !important;
+  border-top-color: var(--t-glass-border) !important;
 }
 
-/* ---- Odometer readout ----
-   Each digit is a 0-9 strip sliding under a 1em window, so a digit change
-   scrolls through the values between. `em` units keep it tied to whatever
-   font-size the call site sets. */
+/* ---- Odometer readout ---- */
 .term-odo {
   display: inline-flex;
   line-height: 1;
@@ -261,7 +310,7 @@
   appearance: none;
   height: 4px;
   border-radius: 999px;
-  background: #1c2b3c;
+  background: var(--t-surface-high);
   outline: none;
 }
 .tele-range::-webkit-slider-thumb {
@@ -270,16 +319,16 @@
   width: 14px;
   height: 14px;
   border-radius: 999px;
-  background: #4edea3;
-  border: 2px solid #010f1f;
+  background: var(--t-primary);
+  border: 2px solid var(--t-bg);
   cursor: pointer;
 }
 .tele-range::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 999px;
-  background: #4edea3;
-  border: 2px solid #010f1f;
+  background: var(--t-primary);
+  border: 2px solid var(--t-bg);
   cursor: pointer;
 }
 .tele-range:focus-visible {

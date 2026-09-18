@@ -24,7 +24,7 @@ function SourceAttribution() {
   return (
     <TelemetryCard className="space-y-3 p-5">
       <div className="flex items-center justify-between">
-        <h3 className="font-display text-sm font-bold tracking-tight text-white">Source Attribution</h3>
+        <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Source Attribution</h3>
         <Label>Last 24h</Label>
       </div>
 
@@ -34,7 +34,7 @@ function SourceAttribution() {
             <div className="mb-1 flex items-center justify-between text-xs">
               <span className="flex items-center gap-2">
                 <span className="size-2.5 rounded-full" style={{ background: s.color }} />
-                <span className="font-medium text-slate-200">{s.label}</span>
+                <span className="font-medium text-term-ink">{s.label}</span>
               </span>
               <span className="font-mono font-bold" style={{ color: s.color }}>
                 {s.share}%
@@ -78,7 +78,7 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
   return (
     <TelemetryCard className="space-y-3 p-5">
       <div className="flex items-center justify-between">
-        <h3 className="font-display text-sm font-bold tracking-tight text-white">Selected Node</h3>
+        <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Selected Node</h3>
         {station.master ? (
           <span className="rounded border border-term-primary/40 bg-term-primary/15 px-2 py-0.5 font-mono text-[10px] font-bold text-term-primary">
             MASTER
@@ -108,7 +108,7 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
             <MeshOdometer
               value={sample.aqi}
               duration={rollMs}
-              className="font-display text-3xl font-extrabold leading-none text-white"
+              className="font-display text-3xl font-extrabold leading-none text-term-ink"
               aria-label={`AQI ${sample.aqi}`}
             />
             <span className="font-mono text-[9px] font-bold uppercase tracking-wider" style={{ color }}>
@@ -118,14 +118,14 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
         </div>
 
         <div className="min-w-0 flex-1 space-y-1">
-          <div className="truncate text-base font-bold leading-tight text-white">{station.name}</div>
+          <div className="truncate text-base font-bold leading-tight text-term-ink">{station.name}</div>
           <Label className="block">
             {station.zone} zone • {station.agency}
           </Label>
           <div className="pt-1 font-mono text-[10px] text-term-secondary">
             {station.lat.toFixed(4)}°N, {station.lng.toFixed(4)}°E
           </div>
-          <div className="font-mono text-[10px] text-slate-400">
+          <div className="font-mono text-[10px] text-term-ink-variant">
             PBL {sample.pbl} m • {station.sensors} sensors
           </div>
         </div>
@@ -135,8 +135,8 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
         {channels.map((c) => (
           <div key={c.label}>
             <div className="mb-1 flex justify-between font-mono text-[10px]">
-              <span className="text-slate-400">{c.label}</span>
-              <span className="font-bold text-white">
+              <span className="text-term-ink-variant">{c.label}</span>
+              <span className="font-bold text-term-ink">
                 {c.value.toFixed(c.value < 10 ? 1 : 0)} {c.unit}
               </span>
             </div>
@@ -150,16 +150,16 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
 
 function TrappingDispersion() {
   const rows = [
-    { label: 'Wind', value: `${DISPERSION.windSpeed} km/h ${DISPERSION.windDir}`, cls: 'text-white' },
-    { label: 'Boundary layer', value: `${DISPERSION.boundaryLayer} m`, cls: 'text-white' },
+    { label: 'Wind', value: `${DISPERSION.windSpeed} km/h ${DISPERSION.windDir}`, cls: 'text-term-ink' },
+    { label: 'Boundary layer', value: `${DISPERSION.boundaryLayer} m`, cls: 'text-term-ink' },
     { label: 'Dispersion idx', value: `${DISPERSION.dispersionIndex} ${DISPERSION.dispersionLabel}`, cls: 'text-orange-400' },
     { label: 'Inversion risk', value: DISPERSION.inversionRisk, cls: 'text-amber-400' },
-    { label: 'Bowl retention', value: `${DISPERSION.bowlRetentionDays} days`, cls: 'text-white' },
+    { label: 'Bowl retention', value: `${DISPERSION.bowlRetentionDays} days`, cls: 'text-term-ink' },
   ];
 
   return (
     <TelemetryCard className="space-y-3 p-5">
-      <h3 className="font-display text-sm font-bold tracking-tight text-white">Trapping &amp; Dispersion</h3>
+      <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Trapping &amp; Dispersion</h3>
 
       <div className="flex items-center gap-4">
         <svg viewBox="0 0 100 100" className="size-24 shrink-0" aria-label="Wind direction north-west">
@@ -178,17 +178,17 @@ function TrappingDispersion() {
         <dl className="flex-1 space-y-1.5 font-mono text-[11px]">
           {rows.map((r) => (
             <div key={r.label} className="flex justify-between">
-              <dt className="text-slate-400">{r.label}</dt>
+              <dt className="text-term-ink-variant">{r.label}</dt>
               <dd className={`font-bold ${r.cls}`}>{r.value}</dd>
             </div>
           ))}
         </dl>
       </div>
 
-      <div className="flex items-center gap-1.5 border-t border-term-outline-variant/40 pt-2 font-mono text-[10px] uppercase tracking-wider text-slate-400">
+      <div className="flex items-center gap-1.5 border-t border-term-outline-variant/40 pt-2 font-mono text-[10px] uppercase tracking-wider text-term-ink-variant">
         <Wind className="size-3.5 text-term-secondary" />
         Plume drift → {DISPERSION.driftDir} at {DISPERSION.driftSpeed} km/h
-        <Compass className="ml-auto size-3.5 text-slate-600" />
+        <Compass className="ml-auto size-3.5 text-term-outline" />
       </div>
     </TelemetryCard>
   );
