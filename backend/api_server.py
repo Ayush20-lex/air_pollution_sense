@@ -484,7 +484,9 @@ async def model_status():
             # feeds no forecast: the blend baseline is validated at 84.89 and
             # adding an input would invalidate that number.
             "noaa_gfs": gfs_reader.describe(),
-            "station_mesh": station_registry.describe(get_settings().baseline_season),
+            "station_mesh": station_registry.describe(
+                get_settings().baseline_season, _mesh_origin()
+            ),
         },
         # Which engine produced the numbers being served.
         "forecast_engine": (
@@ -697,6 +699,25 @@ async def alerts_inversion(
     return alerts
 
 
+def _mesh_origin() -> str | None:
+    """The hour the station mesh should describe.
+
+    Pinned to the forecast origin so the mesh and the console describe the same
+    hour. Left to itself the registry falls back to the observations' own last
+    hour, which is three days later in this archive - and every caller has to
+    pin it the same way or they disagree: /api/v1/status reported the mesh at
+    2025-12-31T22:00 while /api/v1/stations served 2025-12-28T23:00, which is
+    the exact drift the pinning exists to prevent, reintroduced one function
+    over.
+    """
+    try:
+        from baseline_forecaster import get_forecaster
+        return str(get_forecaster(get_settings().baseline_season).valid_origins()[-1])
+    except Exception as exc:  # noqa: BLE001 - the mesh still stands alone
+        log.info("no forecast origin to pin the mesh to (%s)", exc)
+        return None
+
+
 @app.get("/api/v1/stations")
 async def stations(response: Response):
     """
@@ -715,16 +736,7 @@ async def stations(response: Response):
     rather than a number. Read that field before reading `aqi`.
     """
     cfg = get_settings()
-    # Pinned to the forecast origin so the mesh and the console describe the
-    # same hour. Falling back to the observations' own last hour would drift
-    # the two pages apart by days without either of them saying so.
-    as_of = None
-    try:
-        from baseline_forecaster import get_forecaster
-        as_of = str(get_forecaster(cfg.baseline_season).valid_origins()[-1])
-    except Exception as exc:  # noqa: BLE001 - the mesh still stands alone
-        log.info("no forecast origin to pin the mesh to (%s)", exc)
-    data = station_registry.build(cfg.baseline_season, as_of)
+    data = station_registry.build(cfg.baseline_season, _mesh_origin())
     if not data["stations"]:
         response.status_code = 204
         return None
