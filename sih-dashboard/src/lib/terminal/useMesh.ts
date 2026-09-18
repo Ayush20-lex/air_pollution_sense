@@ -66,8 +66,13 @@ function publish(next: MeshState) {
   listeners.forEach((l) => l());
 }
 
-async function refresh() {
-  if (document.visibilityState !== 'visible') return;
+async function refresh(force = false) {
+  // The recurring poll skips a hidden tab - nobody is reading it, and Render's
+  // free instance has a finite number of hours. The *first* fetch is not
+  // optional though: gating it meant a page opened in a background tab never
+  // asked for measurements at all and sat on the hand-written mesh, labelled
+  // "demo values", until something happened to make it visible.
+  if (!force && document.visibilityState !== 'visible') return;
   const payload = await fetchMesh();
   if (!payload) {
     // Keep whatever is on screen. If real readings already arrived they stay —
@@ -97,10 +102,10 @@ async function refresh() {
 function start() {
   if (started) return;
   started = true;
-  void refresh();
+  void refresh(true);
   setInterval(() => void refresh(), REFRESH_MS);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && !current.live) void refresh();
+    if (document.visibilityState === 'visible' && !current.live) void refresh(true);
   });
 }
 

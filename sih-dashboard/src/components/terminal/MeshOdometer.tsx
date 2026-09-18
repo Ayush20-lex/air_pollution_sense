@@ -96,7 +96,7 @@ export function useAnimatedNumber(value: number, duration: number): number {
     from.current = shownRef.current;
     start.current = performance.now();
 
-    return subscribe((now) => {
+    const stop = subscribe((now) => {
       const t = (now - start.current) / duration;
       const next = t >= 1 ? value : tween(from.current, value, t);
       shownRef.current = next;
@@ -104,6 +104,26 @@ export function useAnimatedNumber(value: number, duration: number): number {
       setShown((prev) => (prev === rounded ? prev : rounded));
       return t < 1;
     });
+
+    // requestAnimationFrame does not run in a backgrounded or occluded tab, so
+    // a value that changes while the page is not being composited would sit on
+    // screen at its old reading indefinitely - the tween never starts and
+    // nothing says so. That is tolerable for a decorative counter and not
+    // tolerable here, where these cells are station measurements and a stale
+    // one is indistinguishable from a current one.
+    //
+    // Landing it on a timer as well costs nothing when frames are running: the
+    // tween has already finished by then and setShown bails on the unchanged
+    // value.
+    const settle = setTimeout(() => {
+      shownRef.current = value;
+      setShown((prev) => (prev === Math.round(value) ? prev : Math.round(value)));
+    }, duration + 120);
+
+    return () => {
+      stop();
+      clearTimeout(settle);
+    };
   }, [value, duration]);
 
   return Math.round(shown);
