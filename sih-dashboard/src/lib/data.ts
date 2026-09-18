@@ -19,21 +19,28 @@ import { clamp, seeded } from './utils';
 
 /**
  * Loading scale for the synthetic field, so the offline console describes the
- * same city as the live one.
+ * same air as the live one.
  *
- * These coefficients were tuned to a moderate Delhi day and produced about
- * 110 ug/m3. The archive the backend replays is a late-December episode
- * averaging 330 at hour 0 and peaking near 374, so an unreachable backend used
- * to drop the headline from Severe to Moderate - the page changed its story
- * about the air rather than about its own connectivity, which is the more
- * misleading of the two failures.
+ * These coefficients were tuned to a moderate Delhi day and produce about
+ * 110 ug/m3 unscaled. What the backend replays is a real window, and its level
+ * depends entirely on which window: the December 2025 archive averages 330 at
+ * hour 0, the September 2026 one averages 23. Left unscaled the offline console
+ * would claim a different city from the live one - and in December it claimed a
+ * far cleaner one, which is the more dangerous direction.
  *
- * Only the loading is scaled. The physics is untouched: ventilation, the
- * aerosol-radiation feedback and the diurnal shape all still do the work, and
- * the field still responds to the intervention sliders exactly as before.
- * Nothing here is a forecast either way - the badge says so.
+ * This tracks the season in backend/api_server.py (`baseline_season`), and it
+ * has to be re-derived whenever that moves, alongside the station snapshot in
+ * ./terminal/stations.ts. Both are frozen views of one replayed window; a
+ * mismatch between them and the backend is silent, which is why they are
+ * regenerated together and the season is named here rather than left implicit.
+ *
+ * Season 2026, origin 2026-09-04T23:00Z: target ~23 ug/m3 at hour 0.
+ *
+ * Only the loading is scaled. The physics is untouched - ventilation, the
+ * aerosol-radiation feedback, the diurnal shape and the intervention sliders
+ * all still do the work.
  */
-export const REGIME = 2.95;
+export const REGIME = 0.21;
 
 export const FORECAST_HOURS = 72;
 export const STEP_HOURS = 1;

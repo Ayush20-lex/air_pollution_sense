@@ -112,6 +112,7 @@ ml_pipeline/data/raw/stations/*
 !ml_pipeline/data/raw/forecast/
 ml_pipeline/data/raw/forecast/*
 !ml_pipeline/data/raw/forecast/forecast_2025.parquet
+!ml_pipeline/data/raw/forecast/forecast_2026.parquet
 
 !ml_pipeline/data/raw/observations/
 ml_pipeline/data/raw/observations/*
@@ -124,6 +125,15 @@ ml_pipeline/data/raw/observations/season=2025/*
 !ml_pipeline/data/raw/observations/season=2025/no2_*.parquet
 !ml_pipeline/data/raw/observations/season=2025/o3_*.parquet
 !ml_pipeline/data/raw/observations/season=2025/so2_*.parquet
+# Season 2026 is what the service replays: it runs to 2026-09-07 rather than
+# stopping in December. ~46 MB. No SO2 was fetched for this season, which costs
+# one sub-index and still leaves four - CPCB requires three.
+!ml_pipeline/data/raw/observations/season=2026/
+ml_pipeline/data/raw/observations/season=2026/*
+!ml_pipeline/data/raw/observations/season=2026/pm25_*.parquet
+!ml_pipeline/data/raw/observations/season=2026/pm10_*.parquet
+!ml_pipeline/data/raw/observations/season=2026/no2_*.parquet
+!ml_pipeline/data/raw/observations/season=2026/o3_*.parquet
 
 # The fitted CAMS bias factor is a four-kilobyte model parameter, not a cache.
 !ml_pipeline/data/processed/baseline_corrections.json

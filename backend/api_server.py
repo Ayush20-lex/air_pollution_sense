@@ -66,11 +66,14 @@ class Settings(BaseSettings):
     # Do NOT commit a real token value here.
     aqicn_token:    str   = ""
     # Serve the scored blend baseline while the network has no trained weights.
-    # Its output is measurements and an evaluated forecast (RMSE 84.89 ug/m3,
+    # Its output is measurements and an evaluated forecast (RMSE 66.35 ug/m3,
     # 30% better than raw CAMS) instead of random-weight noise. Set false to see
     # the untrained model's raw output.
     use_baseline:   bool  = True
-    baseline_season: int  = 2025
+    # 2026 runs to 2026-09-07 - eleven days behind today rather than nine
+    # months. 2025 remains scored and servable; the season decides its own
+    # CAMS correction and its own published RMSE, so switching back is safe.
+    baseline_season: int  = 2026
 
     class Config:
         env_file = ".env"
@@ -319,7 +322,7 @@ def _generate_forecast_tensor() -> tuple[torch.Tensor, bool]:
     # With no trained weights the network below emits noise, and the inputs it
     # would run on are mock CPCB, mock FIRMS and np.random meteorology. Prefer a
     # forecast whose error is known: the mean of diurnal persistence and
-    # bias-corrected CAMS, scored at RMSE 84.89 ug/m3 against December 2025 —
+    # bias-corrected CAMS, scored at RMSE 66.35 ug/m3 across Dec 2025-Sep 2026 —
     # 30% better than raw CAMS. Ten of the twelve channels are measurements or
     # archived forecast; FRP and smoke stay zero for want of a live fire feed.
     if cfg.use_baseline and not _state.weights_loaded:
@@ -328,8 +331,12 @@ def _generate_forecast_tensor() -> tuple[torch.Tensor, bool]:
 
             result = get_forecaster(cfg.baseline_season).forecast()
             _state.forecast_meta = result.meta
-            log.info("forecast from blend baseline (origin %s, RMSE 84.89 ug/m3)",
-                     result.meta["origin"])
+            log.info(
+                "forecast from blend baseline (season %s, origin %s, RMSE %s ug/m3)",
+                result.meta.get("season"),
+                result.meta.get("origin"),
+                result.meta.get("validated_rmse_ugm3"),
+            )
             # Not synthetic: these are real observations and a scored forecast.
             return torch.from_numpy(result.tensor[None]).float(), False
         except Exception as exc:
@@ -481,7 +488,7 @@ async def model_status():
             "imd_met": "archive" if _state.forecast_meta else "synthetic",
             "nasa_firms": "synthetic",  # no live fire feed in either path
             # Read-only side channel from the partner ingestion pipeline. It
-            # feeds no forecast: the blend baseline is validated at 84.89 and
+            # feeds no forecast: the blend baseline is validated at 66.35 and
             # adding an input would invalidate that number.
             "noaa_gfs": gfs_reader.describe(),
             "station_mesh": station_registry.describe(
@@ -503,7 +510,7 @@ async def model_status():
             else (
                 "Model weights not loaded. Forecasts come from the blend baseline "
                 "(mean of diurnal persistence and bias-corrected CAMS), validated at "
-                "RMSE 84.89 ug/m3 over December 2025 — 30% better than raw CAMS. "
+                "RMSE 66.35 ug/m3 over Dec 2025-Sep 2026 — 25% better than raw CAMS. "
                 "Values are real; FRP and smoke channels are zero. Replayed from the "
                 "archive, not a live feed."
             ) if _state.forecast_meta

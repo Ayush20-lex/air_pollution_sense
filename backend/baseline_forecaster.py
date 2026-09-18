@@ -15,19 +15,30 @@ same tensor contract, so no endpoint or frontend code has to change.
 
 The method
 ----------
-Scored over 480,283 forecasts from 112 origins across 68 CPCB stations
-(ml_pipeline/scripts/14_baselines.py), December 2025 held out:
+Scored by ml_pipeline/scripts/14_baselines.py over 3,739,035 comparisons from
+1,112 origins across 68 CPCB stations, fitted on everything to 30 November 2025
+and tested on December 2025 through September 2026 - a full annual cycle rather
+than one winter month:
 
-    mean(diurnal_persistence, bias-corrected CAMS)   RMSE  84.89 ug/m3   <- this
-    diurnal persistence alone                        RMSE  99.34
-    bias-corrected CAMS alone                        RMSE 113.81
-    raw CAMS                                         RMSE 120.81
-    persistence                                      RMSE 123.48
+    mean(diurnal_persistence, bias-corrected CAMS)   RMSE  66.35 ug/m3   <- this
+    diurnal persistence alone                        RMSE  72.72
+    persistence                                      RMSE  87.18
+    bias-corrected CAMS alone                        RMSE  86.90
+    raw CAMS                                         RMSE  88.98
 
-CAMS reproduces Delhi's diurnal shape but runs ~42% low, so it is rescaled by a
-factor fitted on October-November only. On its own it is the weaker signal, but
-its errors are largely uncorrelated with persistence, so the mean of the two
-beats both parents by 15% and beats raw CAMS by 30%.
+CAMS reproduces Delhi's diurnal shape but is biased, so it is rescaled by a
+single factor fitted on the training window alone. The direction of that bias is
+seasonal and is why the factor is stored per season: across the 2026 window it
+fits 0.937 - CAMS runs slightly high - where the winter-only 2025 window fits
+1.717, CAMS running badly low. On its own CAMS is the weaker parent, but its
+errors are largely uncorrelated with persistence, so the mean of the two beats
+both and beats raw CAMS by 25%.
+
+The error barely moves with lead time, which is the part worth knowing: 67.6 at
++1-6h, 65.3 at +7-24h, 66.7 at +25-48h, 66.4 at +49-72h. Plain persistence
+degrades from 70.1 to 91.5 over the same span. A 72-hour forecast that is no
+worse than a 6-hour one is what makes it usable for a decision taken three days
+out.
 
 Honesty of the output
 ---------------------
@@ -80,6 +91,29 @@ CHANNEL_SOURCE: dict[int, str] = {
     CH_RH: "fcst_relative_humidity_2m",
     CH_SOLAR: "fcst_shortwave_radiation",
     CH_PBL: "fcst_boundary_layer_height",
+}
+
+#: What blend(diurnal_persistence, cams_bias) actually scored, per season, from
+#: ml_pipeline/scripts/14_baselines.py. Keyed by season on purpose: this was a
+#: bare 84.89 literal, measured on December 2025, sitting in a payload whose
+#: season is configurable - point the service at another year and the figure
+#: would have followed it unchanged and described nothing.
+VALIDATED: dict[int, dict[str, object]] = {
+    2025: {
+        "validated_rmse_ugm3": 84.89,
+        "beats_raw_cams_by": "30%",
+        "scored_window": "December 2025",
+        "scored_comparisons": 462_323,
+    },
+    2026: {
+        "validated_rmse_ugm3": 66.35,
+        "beats_raw_cams_by": "25%",
+        # A full annual cycle rather than one winter month, which is the
+        # stronger claim even though the number is lower: part of the drop is
+        # simply that monsoon months are cleaner, not that the method improved.
+        "scored_window": "December 2025 - September 2026",
+        "scored_comparisons": 3_739_035,
+    },
 }
 
 REAL_CHANNELS = sorted({CH_PM25, CH_U, CH_V, *CHANNEL_SOURCE})
@@ -160,7 +194,19 @@ class BlendBaselineForecaster:
         else:
             self.u = self.v = None
 
-        corr_path = self.data / "processed" / "baseline_corrections.json"
+        # Per season first. The CAMS scale is fitted on one season's training
+        # window and does not transfer: 2025 fits 1.717 (winter, CAMS runs low)
+        # and 2026 fits 0.937. Serving one season under the other's correction
+        # is an 83% error applied silently to every value, which is exactly
+        # what a single shared file invites.
+        corr_path = self.data / "processed" / f"baseline_corrections_{self.season}.json"
+        if not corr_path.exists():
+            corr_path = self.data / "processed" / "baseline_corrections.json"
+            if corr_path.exists():
+                logger.warning(
+                    "no corrections for season %d; falling back to the shared file, "
+                    "whose scale was fitted on a different window", self.season,
+                )
         if corr_path.exists():
             self.scale = float(json.loads(corr_path.read_text())["global_scale"])
         else:
@@ -253,8 +299,7 @@ class BlendBaselineForecaster:
             "origin": origin.isoformat(),
             "cams_scale": round(self.scale, 4),
             "stations": len(self.station_ids),
-            "validated_rmse_ugm3": 84.89,
-            "beats_raw_cams_by": "30%",
+            **VALIDATED.get(self.season, {}),
             "real_channels": REAL_CHANNELS,
             "synthetic_channels": SYNTHETIC_CHANNELS,
         }
