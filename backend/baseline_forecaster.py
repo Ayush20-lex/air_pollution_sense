@@ -123,6 +123,9 @@ VALIDATED: dict[int, dict[str, object]] = {
     },
 }
 
+#: Lowest boundary-layer height treated as physical, in metres.
+PBL_FLOOR_M = 50.0
+
 REAL_CHANNELS = sorted({CH_PM25, CH_U, CH_V, *CHANNEL_SOURCE})
 SYNTHETIC_CHANNELS = [CH_FRP, CH_SMOKE]
 
@@ -201,6 +204,15 @@ class BlendBaselineForecaster:
         self.obs_pm25 = pivot(obs.rename(columns={"value": "pm25"}), "pm25", qc=True)
         self.fields = {ch: pivot(fc, col) for ch, col in CHANNEL_SOURCE.items()
                        if col in fc.columns}
+
+        # The archive reports boundary-layer heights down to 10 m, which the
+        # inversion endpoint was passing through as `pbl_min: 14.0`. A real
+        # nocturnal layer over Delhi bottoms out near 50 m; below that the
+        # reanalysis is reporting its own floor, not the atmosphere. Clamping
+        # here keeps every consumer physical - ISI divides by this, so a 10 m
+        # layer makes the inversion index saturate on a model artefact.
+        if CH_PBL in self.fields:
+            self.fields[CH_PBL] = np.maximum(self.fields[CH_PBL], PBL_FLOOR_M)
         self.cams_pm25 = pivot(fc, "cams_pm2_5")
 
         # Wind speed/direction -> u, v components (meteorological convention:
