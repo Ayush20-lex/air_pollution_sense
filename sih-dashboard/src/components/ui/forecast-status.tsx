@@ -35,6 +35,18 @@ const LIVE_ID = 'forecast-live';
  */
 const REFRESH_MS = 120_000;
 
+/**
+ * Backoff after a failed attempt, in ms, before settling back to REFRESH_MS.
+ *
+ * A cold Render instance takes about 90 seconds to wake, and the fetch gives up
+ * after 8. So the opening request of the day always fails, and with a flat
+ * two-minute poll the console then showed "Demo / Synthetic" for the rest of
+ * that window - long enough to open a demo on, and the one moment where a red
+ * badge costs the most. Retrying on a curve catches the instance within seconds
+ * of it answering instead of at the next fixed tick.
+ */
+const RETRY_MS = [4_000, 8_000, 15_000, 30_000, 60_000];
+
 export function ForecastStatus() {
   const liveStatus = useAppStore((s) => s.liveStatus);
   const source = useAppStore((s) => s.source);
@@ -46,25 +58,54 @@ export function ForecastStatus() {
 
   // --- keep the forecast current -------------------------------------------
   React.useEffect(() => {
-    const refresh = () => {
-      if (document.visibilityState !== 'visible') return;
-      void loadLiveForecast();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let failures = 0;
+    let cancelled = false;
+
+    // Self-scheduling rather than a fixed interval, so the delay can depend on
+    // whether the last attempt actually worked.
+    const tick = async (force = false) => {
+      if (cancelled) return;
+      // The recurring poll skips a hidden tab - nobody is reading it, and
+      // Render's free instance has a finite number of hours. The opening
+      // request is not optional, so it passes `force`.
+      if (!force && document.visibilityState !== 'visible') {
+        timer = setTimeout(() => void tick(), REFRESH_MS);
+        return;
+      }
+      await loadLiveForecast();
+      if (cancelled) return;
+      const ok = useAppStore.getState().liveStatus === 'live';
+      failures = ok ? 0 : failures + 1;
+      const wait = ok
+        ? REFRESH_MS
+        : RETRY_MS[Math.min(failures - 1, RETRY_MS.length - 1)];
+      // A retry runs even in a hidden tab. Skipping hidden tabs is about not
+      // spending Render's hours on a steady poll nobody is reading; it is not
+      // a reason to leave the console with no data at all, which is the state
+      // a failed opening request leaves it in. The backoff bounds the cost,
+      // and the page is then right the moment someone looks at it.
+      timer = setTimeout(() => void tick(failures > 0), wait);
     };
+
     // Covers a deep link straight to a route that never fetches, and recovers
     // a console that was left open while the backend was down.
-    refresh();
-    const id = setInterval(refresh, REFRESH_MS);
+    void tick(true);
+
     const onVisible = () => {
       // A tab restored after hours holds figures from before it was hidden;
       // re-confirm immediately rather than waiting out the interval.
-      const stale =
-        useAppStore.getState().lastFetchedAt == null ||
-        Date.now() - (useAppStore.getState().lastFetchedAt ?? 0) >= STALE_AFTER_MS;
-      if (document.visibilityState === 'visible' && stale) refresh();
+      const last = useAppStore.getState().lastFetchedAt;
+      const stale = last == null || Date.now() - last >= STALE_AFTER_MS;
+      if (document.visibilityState === 'visible' && stale) {
+        if (timer) clearTimeout(timer);
+        void tick(true);
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
-      clearInterval(id);
+      cancelled = true;
+      if (timer) clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [loadLiveForecast]);

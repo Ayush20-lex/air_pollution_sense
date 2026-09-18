@@ -106,7 +106,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   loadLiveForecast: async () => {
     if (get().loadingLive) return;
-    set({ loadingLive: true, liveStatus: 'loading' });
+    // Only the very first attempt reports "loading". Once we already know the
+    // answer - offline, or live - a retry keeps showing it until the retry
+    // itself resolves. Otherwise the backoff made the badge oscillate: every
+    // few seconds it dropped from "Demo / Synthetic" back to "Connecting",
+    // which reads as progress rather than as the repeated failure it is.
+    set((st) => ({
+      loadingLive: true,
+      liveStatus: st.liveStatus === 'idle' ? 'loading' : st.liveStatus,
+    }));
     const live = await fetchLiveForecast();
     if (!live) {
       // Backend unreachable. Keep whatever frames are in place - synthetic on a

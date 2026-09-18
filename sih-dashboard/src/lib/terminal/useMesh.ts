@@ -18,6 +18,15 @@ import { fetchMesh, mergeMesh, type LiveStation, type MergedMesh } from './meshA
 /** Kept in step with the console's refresh so the two pages age together. */
 const REFRESH_MS = 120_000;
 
+/**
+ * Backoff after a failed attempt, before settling back to REFRESH_MS. Same
+ * curve and same reason as forecast-status: a cold Render instance takes about
+ * 90 seconds to wake and the fetch gives up after 8, so the first request of
+ * the day always fails and a flat two-minute poll leaves the mesh on
+ * hand-written values for the whole of that window.
+ */
+const RETRY_MS = [4_000, 8_000, 15_000, 30_000, 60_000];
+
 export type MeshState = {
   /** The stations to render. Measured when `live`, curated when not. */
   stations: (Station | LiveStation)[];
@@ -102,10 +111,31 @@ async function refresh(force = false) {
 function start() {
   if (started) return;
   started = true;
-  void refresh(true);
-  setInterval(() => void refresh(), REFRESH_MS);
+
+  let failures = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  // Self-scheduling rather than a fixed interval, so the delay can depend on
+  // whether the last attempt actually worked.
+  const tick = async (force = false) => {
+    await refresh(force);
+    const ok = current.live && current.status === 'live';
+    failures = ok ? 0 : failures + 1;
+    const wait = ok
+      ? REFRESH_MS
+      : RETRY_MS[Math.min(failures - 1, RETRY_MS.length - 1)];
+    // Retries run even in a hidden tab; see forecast-status for why. Once a
+    // fetch succeeds the schedule drops back to the visibility-gated poll.
+    timer = setTimeout(() => void tick(failures > 0), wait);
+  };
+
+  void tick(true);
+
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && !current.live) void refresh(true);
+    if (document.visibilityState === 'visible' && !current.live) {
+      if (timer) clearTimeout(timer);
+      void tick(true);
+    }
   });
 }
 
