@@ -3,16 +3,18 @@ NOAA GFS reader - Air Pollution Sense
 SIH26082 - MoES / NCMRWF
 
 Reads the NCR-clipped GFS extract produced by the partner ingestion pipeline
-(yadavarpit9833-cpu/Data-Pipeline, exports/gfs_ncr.parquet) and hands it to the
-API as a forecast-hour series over the nine 0.25-degree grid cells that fall
-inside the domain.
+(yadavarpit9833-cpu/Data-Pipeline, exports/gfs_ncr_forecast.parquet) and hands
+it to the API as a forecast-hour series - f000 to f072 at 3-hourly steps - over
+the nine 0.25-degree grid cells that fall inside the domain.
 
 Why this exists, and what it is not
 -----------------------------------
 GFS duplicates almost everything already on hand: temperature and wind arrive
 from Open-Meteo at 68 station points, which is far denser than nine grid cells.
 The one field it adds is **precipitation** - rain scavenges PM2.5 and none of
-the twelve channels can see it.
+the twelve channels can see it. It arrives as `precipitation_mm_3h`, the
+accumulation over the three hours ending at valid_time, which is why the
+window is carried in the column name rather than assumed by the reader.
 
 So this is a read-only side channel, not a forecast input. It deliberately does
 not touch baseline_forecaster or channel_spec: the blend baseline is validated
@@ -42,7 +44,15 @@ import pandas as pd
 logger = logging.getLogger("gfs_reader")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-GFS_PATH = REPO_ROOT / "ml_pipeline" / "data" / "raw" / "gfs" / "gfs_ncr.parquet"
+GFS_DIR = REPO_ROOT / "ml_pipeline" / "data" / "raw" / "gfs"
+
+#: Preference order. The forecast export runs f000 to f072 at 3-hourly steps
+#: and is what this side channel is for; the analysis export is f000 only and
+#: stays as a fallback so an older checkout still answers rather than 204ing.
+GFS_CANDIDATES = (
+    GFS_DIR / "gfs_ncr_forecast.parquet",
+    GFS_DIR / "gfs_ncr.parquet",
+)
 
 # Same domain as the forecast grid, so the cells line up with everything else.
 LAT_MIN, LAT_MAX = 28.20, 28.90
@@ -55,8 +65,18 @@ FIELDS: dict[str, str] = {
     "temperature_c": "C",
     "u_wind_ms": "m/s",
     "v_wind_ms": "m/s",
-    "precipitation_mm": "mm",
+    # Accumulated over the three hours *ending* at valid_time - not a rate,
+    # and not the run total since f000. The window is in the name for the
+    # same reason the units are: a 3-hour bucket read as an hourly rate is
+    # wrong by 3x and nothing downstream would raise.
+    "precipitation_mm_3h": "mm/3h",
 }
+
+#: Flags that mark a value structurally absent rather than bad. GFS accumulates
+#: precipitation over an interval and f000 has no interval before it, so the
+#: null there is the correct answer - counting it as a quality failure would
+#: misreport a clean file, and filling it would invent rain.
+STRUCTURAL_FLAGS = frozenset({"no_accumulation_window"})
 
 
 def _flag_columns(df: pd.DataFrame, field: str) -> tuple[str | None, str | None]:
@@ -72,8 +92,11 @@ def _quality(df: pd.DataFrame, field: str) -> dict[str, Any]:
     qc, imp = _flag_columns(df, field)
     out: dict[str, Any] = {"unit": FIELDS[field], "rows": int(df[field].notna().sum())}
     if qc:
-        bad = int((df[qc].astype(str) != "ok").sum())
-        out["rows_flagged"] = bad
+        flags = df[qc].astype(str)
+        structural = flags.isin(STRUCTURAL_FLAGS)
+        out["rows_flagged"] = int(((flags != "ok") & ~structural).sum())
+        if structural.any():
+            out["rows_no_window"] = int(structural.sum())
     if imp:
         out["rows_imputed"] = int(df[imp].astype(bool).sum())
     return out
@@ -86,9 +109,14 @@ def load(path: str | None = None) -> dict[str, Any] | None:
     Cached: the file only changes when the partner repository is pulled, and the
     API has no way to notice that mid-process.
     """
-    p = Path(path) if path else GFS_PATH
-    if not p.exists():
-        logger.info("no GFS extract at %s; the met side channel stays off", p)
+    if path:
+        p: Path | None = Path(path)
+    else:
+        p = next((c for c in GFS_CANDIDATES if c.exists()), None)
+    if p is None or not p.exists():
+        logger.info(
+            "no GFS extract in %s; the met side channel stays off", GFS_DIR
+        )
         return None
 
     try:
@@ -128,7 +156,14 @@ def load(path: str | None = None) -> dict[str, Any] | None:
         series.append(
             {
                 "valid_time": ts.isoformat(),
-                "lead_hours": int((ts - origin).total_seconds() // 3600),
+                # fhr is the cycle's own lead and is authoritative when the
+                # export carries it; the subtraction is only a fallback, and
+                # it silently reads 0 for an analysis-only file.
+                "lead_hours": (
+                    int(group.fhr.iloc[0])
+                    if "fhr" in group.columns
+                    else int((ts - origin).total_seconds() // 3600)
+                ),
                 "cells": cells,
             }
         )
@@ -138,6 +173,7 @@ def load(path: str | None = None) -> dict[str, Any] | None:
 
     return {
         "source": "noaa_gfs",
+        "export": p.name,
         "via": "partner ingestion pipeline (medallion silver layer)",
         "resolution_deg": 0.25,
         "grid_points": int(df.groupby(["lat", "lon"]).ngroups),
@@ -164,6 +200,9 @@ def describe() -> dict[str, Any]:
     return {
         "available": True,
         "source": data["source"],
+        # Which export answered: the forecast file runs to +72h, the
+        # analysis fallback carries f000 only and no precipitation.
+        "export": data["export"],
         "grid_points": data["grid_points"],
         "steps": data["steps"],
         "fields": sorted(data["fields"]),

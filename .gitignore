@@ -129,3 +129,4 @@ backend/weights_*/
 !ml_pipeline/data/raw/gfs/
 ml_pipeline/data/raw/gfs/*
 !ml_pipeline/data/raw/gfs/gfs_ncr.parquet
+!ml_pipeline/data/raw/gfs/gfs_ncr_forecast.parquet
