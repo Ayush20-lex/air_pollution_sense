@@ -708,6 +708,12 @@ async def met_gfs(response: Response):
     repository on someone else's schedule, so absence is an ordinary state and
     every consumer must treat it as one - nothing that works today depends on
     this returning content.
+
+    Presence is not freshness. The extract is committed to the repository and
+    refreshes only when someone re-runs the partner fetcher and pushes, so a
+    200 here can carry a cycle whose forecast window has already passed. Check
+    `freshness.status` - fresh, aging, stale or expired - rather than assuming
+    that a body means current data.
     """
     data = gfs_reader.load()
     if data is None:

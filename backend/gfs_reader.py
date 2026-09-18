@@ -78,6 +78,71 @@ FIELDS: dict[str, str] = {
 #: misreport a clean file, and filling it would invent rain.
 STRUCTURAL_FLAGS = frozenset({"no_accumulation_window"})
 
+#: NCEP issues GFS at 00/06/12/18z, so a newer cycle exists upstream within six
+#: hours of the one on disk. These bounds describe the file, not the weather:
+#: this extract is committed to the repository and refreshes only when someone
+#: re-runs the partner fetcher and pushes.
+AGING_AFTER_H = 6.0
+STALE_AFTER_H = 24.0
+
+
+def _cycle_init(cycles: list[str]) -> datetime | None:
+    """Init time from a cycle id like ``20260916_00z``.
+
+    The cycle is what ages - not the first valid time, which for an
+    analysis-only export is the same thing but for a forecast is not.
+    """
+    for c in reversed(cycles):  # newest wins if an export ever carries several
+        try:
+            stem = str(c).lower().rstrip("z")
+            return datetime.strptime(stem, "%Y%m%d_%H").replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
+def _freshness(data: dict[str, Any]) -> dict[str, Any]:
+    """How old the cycle is, and whether its window has run out.
+
+    Computed per call and deliberately outside the cache on `_parse`: a cached
+    age would be the age at first read and would never move again, which is a
+    worse answer than no age at all.
+    """
+    now = datetime.now(timezone.utc)
+    last = datetime.fromisoformat(data["last_valid"])
+    remaining = (last - now).total_seconds() / 3600.0
+    expired = remaining <= 0
+
+    init = _cycle_init(data.get("cycles") or [])
+    age = (now - init).total_seconds() / 3600.0 if init else None
+
+    if expired:
+        status = "expired"
+    elif age is None:
+        status = "unknown"
+    elif age > STALE_AFTER_H:
+        status = "stale"
+    elif age > AGING_AFTER_H:
+        status = "aging"
+    else:
+        status = "fresh"
+
+    out: dict[str, Any] = {
+        "status": status,
+        "cycle_init": init.isoformat() if init else None,
+        "cycle_age_hours": round(age, 1) if age is not None else None,
+        # Negative once the window has passed; the sign is the point.
+        "hours_remaining": round(remaining, 1),
+        "expired": expired,
+        "evaluated_at": now.isoformat(),
+    }
+    if expired:
+        out["note"] = (
+            "the whole forecast window is in the past; re-run the partner "
+            "fetcher and commit a fresh cycle"
+        )
+    return out
+
 
 def _flag_columns(df: pd.DataFrame, field: str) -> tuple[str | None, str | None]:
     """QC and imputation columns for a field, whichever naming the export used."""
@@ -103,11 +168,12 @@ def _quality(df: pd.DataFrame, field: str) -> dict[str, Any]:
 
 
 @lru_cache(maxsize=1)
-def load(path: str | None = None) -> dict[str, Any] | None:
-    """The extract as a JSON-ready payload, or None when it is unusable.
+def _parse(path: str | None = None) -> dict[str, Any] | None:
+    """Parse the extract into a JSON-ready payload, or None when unusable.
 
     Cached: the file only changes when the partner repository is pulled, and the
-    API has no way to notice that mid-process.
+    API has no way to notice that mid-process. Nothing time-dependent belongs in
+    here - see `_freshness`.
     """
     if path:
         p: Path | None = Path(path)
@@ -192,6 +258,16 @@ def load(path: str | None = None) -> dict[str, Any] | None:
     }
 
 
+def load(path: str | None = None) -> dict[str, Any] | None:
+    """The extract, with its age measured at the moment of the call."""
+    data = _parse(path)
+    if data is None:
+        return None
+    # Shallow copy: the cached payload must not acquire a timestamp that then
+    # sticks to it for the life of the process.
+    return {**data, "freshness": _freshness(data)}
+
+
 def describe() -> dict[str, Any]:
     """Short summary for /api/v1/status, without the payload."""
     data = load()
@@ -209,4 +285,5 @@ def describe() -> dict[str, Any]:
         "fields_absent": data["fields_absent"],
         "first_valid": data["first_valid"],
         "last_valid": data["last_valid"],
+        "freshness": data["freshness"],
     }
