@@ -49,6 +49,7 @@ from coupled_model import (
 from physics_loss import compute_isi
 from grap_policy import calculate_indian_aqi_pm25, evaluate_grap_stage
 import gfs_reader
+import station_registry
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────
@@ -483,6 +484,7 @@ async def model_status():
             # feeds no forecast: the blend baseline is validated at 84.89 and
             # adding an input would invalidate that number.
             "noaa_gfs": gfs_reader.describe(),
+            "station_mesh": station_registry.describe(get_settings().baseline_season),
         },
         # Which engine produced the numbers being served.
         "forecast_engine": (
@@ -693,6 +695,40 @@ async def alerts_inversion(
     alerts.sort(key=lambda a: a.isi_score, reverse=True)
     _cache_set(cache_key, alerts)
     return alerts
+
+
+@app.get("/api/v1/stations")
+async def stations(response: Response):
+    """
+    The real monitoring mesh, with a National AQI per station.
+
+    Every figure is measured at the station it is attributed to - PM2.5,
+    PM10, NO2, O3 and SO2 from its own sensors, indexed under CPCB's 2014
+    National AQI. Nothing here is interpolated from a neighbour.
+
+    The AQI is the worst of the sub-indices, so it is greater than or equal
+    to the console's PM2.5-only figure; `prominent_pollutant` names which
+    one is responsible, which is how the two pages reconcile.
+
+    A station that cannot meet CPCB's rules - three pollutants, one of them
+    particulate, enough valid hours - reports `valid: false` and its reasons
+    rather than a number. Read that field before reading `aqi`.
+    """
+    cfg = get_settings()
+    # Pinned to the forecast origin so the mesh and the console describe the
+    # same hour. Falling back to the observations' own last hour would drift
+    # the two pages apart by days without either of them saying so.
+    as_of = None
+    try:
+        from baseline_forecaster import get_forecaster
+        as_of = str(get_forecaster(cfg.baseline_season).valid_origins()[-1])
+    except Exception as exc:  # noqa: BLE001 - the mesh still stands alone
+        log.info("no forecast origin to pin the mesh to (%s)", exc)
+    data = station_registry.build(cfg.baseline_season, as_of)
+    if not data["stations"]:
+        response.status_code = 204
+        return None
+    return data
 
 
 @app.get("/api/v1/met/gfs")

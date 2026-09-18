@@ -118,6 +118,12 @@ ml_pipeline/data/raw/observations/*
 !ml_pipeline/data/raw/observations/season=2025/
 ml_pipeline/data/raw/observations/season=2025/*
 !ml_pipeline/data/raw/observations/season=2025/pm25_*.parquet
+# The other AQI pollutants ship too: the National AQI is the worst of six
+# sub-indices, so PM2.5 alone cannot produce one. ~12 MB.
+!ml_pipeline/data/raw/observations/season=2025/pm10_*.parquet
+!ml_pipeline/data/raw/observations/season=2025/no2_*.parquet
+!ml_pipeline/data/raw/observations/season=2025/o3_*.parquet
+!ml_pipeline/data/raw/observations/season=2025/so2_*.parquet
 
 # The fitted CAMS bias factor is a four-kilobyte model parameter, not a cache.
 !ml_pipeline/data/processed/baseline_corrections.json
