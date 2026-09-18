@@ -184,7 +184,18 @@ def _catalogue() -> dict[int, dict[str, Any]]:
     return out
 
 
-def _observations(season: int, pollutants: tuple[str, ...]) -> dict[str, pd.DataFrame]:
+#: Days of history the registry keeps. It indexes a 24-hour window ending at
+#: `as_of` and compares it with the 24 hours before that, so two days would do;
+#: 400 days costs no more memory than 14 and keeps every station that reports
+#: anywhere in the season - a shorter window silently drops stations whose feed
+#: went quiet, changing a published count. Reading the file whole is what the
+#: memory work was about; the bound is here so it cannot creep back.
+KEEP_DAYS = 400
+
+
+def _observations(
+    season: int, pollutants: tuple[str, ...], end: pd.Timestamp | None = None
+) -> dict[str, pd.DataFrame]:
     """Hourly station measurements, one wide frame per pollutant.
 
     Gaps are left as NaN rather than filled. The forecaster fills them because
@@ -198,10 +209,16 @@ def _observations(season: int, pollutants: tuple[str, ...]) -> dict[str, pd.Data
         if not files:
             logger.info("no %s observations for season %d", pol, season)
             continue
-        df = pd.concat(
-            [pd.read_parquet(f, columns=["timestamp_utc", "location_id", "value"]) for f in files]
-        ).dropna(subset=["value"])
-        df["timestamp_utc"] = pd.to_datetime(df.timestamp_utc, utc=True).dt.floor("h")
+        def _read(path: Path) -> pd.DataFrame:
+            d = pd.read_parquet(path, columns=["timestamp_utc", "location_id", "value"])
+            d = d.dropna(subset=["value"])
+            d["timestamp_utc"] = pd.to_datetime(d.timestamp_utc, utc=True).dt.floor("h")
+            if end is not None:
+                d = d[(d.timestamp_utc <= end)
+                      & (d.timestamp_utc >= end - pd.Timedelta(days=KEEP_DAYS))]
+            return d
+
+        df = pd.concat([_read(f) for f in files], ignore_index=True)
         wide = df.pivot_table(
             index="timestamp_utc", columns="location_id", values="value", aggfunc="mean"
         )
@@ -236,13 +253,15 @@ def build(season: int = 2025, as_of: str | None = None) -> dict[str, Any]:
     runs once for the life of the process.
     """
     meta = _catalogue()
-    obs = _observations(season, AQI_POLLUTANTS)
+    end = pd.Timestamp(as_of).tz_convert("UTC").floor("h") if as_of else None
+    obs = _observations(season, AQI_POLLUTANTS, end)
     if "pm25" not in obs:
         logger.warning("no PM2.5 observations for season %d; registry empty", season)
         return {"stations": [], "season": season, "as_of": None, "count": 0}
 
     pm25 = obs["pm25"]
-    end = pd.Timestamp(as_of).tz_convert("UTC").floor("h") if as_of else pm25.index.max()
+    if end is None:
+        end = pm25.index.max()
 
     stations: list[dict[str, Any]] = []
     for sid in sorted(set(pm25.columns) & set(meta)):

@@ -61,6 +61,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 
 import observation_qc
 
@@ -126,6 +127,16 @@ VALIDATED: dict[int, dict[str, object]] = {
 #: Lowest boundary-layer height treated as physical, in metres.
 PBL_FLOOR_M = 50.0
 
+#: How much of a season the *service* loads, in days.
+#:
+#: Scoring reads the whole season; serving replays one origin and needs only a
+#: 24-hour history behind it and a 72-hour lead ahead. Season 2026 spans 19
+#: months, and loading all of it put the forecaster at 520 MB against Render's
+#: 512 MB limit - every data endpoint returned 502 while /health, which loads
+#: nothing, stayed green. Trimming to the tail keeps the same served origin and
+#: the same numbers; it only discards history no request can reach.
+SERVE_WINDOW_DAYS = 365
+
 REAL_CHANNELS = sorted({CH_PM25, CH_U, CH_V, *CHANNEL_SOURCE})
 SYNTHETIC_CHANNELS = [CH_FRP, CH_SMOKE]
 
@@ -158,16 +169,39 @@ class BlendBaselineForecaster:
         }
 
         fc_path = self.data / "raw" / "forecast" / f"forecast_{self.season}.parquet"
-        fc = pd.read_parquet(fc_path)
+
+        # Columns and rows are both selected at read time, not after. The file
+        # carries 21 columns over 925,344 rows and reading all of it cost 336 MB
+        # - on its own two thirds of Render's 512 MB limit, and the reason every
+        # data endpoint was returning 502 while /health stayed green. Twelve of
+        # those columns are used.
+        wanted = ["timestamp_utc", "location_id", "cams_pm2_5", *CHANNEL_SOURCE.values(),
+                  "fcst_wind_speed_10m", "fcst_wind_direction_10m"]
+        available = set(pq.ParquetFile(fc_path).schema.names)
+        cols = [c for c in dict.fromkeys(wanted) if c in available]
+
+        stamps = pd.read_parquet(fc_path, columns=["timestamp_utc"])
+        last = pd.to_datetime(stamps.timestamp_utc, utc=True).max()
+        del stamps
+        cutoff = last.floor("h") - pd.Timedelta(days=SERVE_WINDOW_DAYS or 3650)
+
+        fc = pd.read_parquet(fc_path, columns=cols,
+                             filters=[("timestamp_utc", ">=", cutoff)])
         fc["timestamp_utc"] = pd.to_datetime(fc.timestamp_utc, utc=True).dt.floor("h")
 
         obs_files = sorted(
             (self.data / "raw" / "observations" / f"season={self.season}").glob("pm25_*.parquet")
         )
-        obs = pd.concat(
-            [pd.read_parquet(f, columns=["timestamp_utc", "location_id", "value"]) for f in obs_files]
-        ).dropna(subset=["value"])
-        obs["timestamp_utc"] = pd.to_datetime(obs.timestamp_utc, utc=True).dt.floor("h")
+        # Filtered per file, then concatenated. Concatenating 68 whole-season
+        # frames first and trimming after is what put the load at 520 MB against
+        # Render's 512 MB limit: the peak is the intermediate, not what is kept.
+        def _read_trimmed(path: Path) -> pd.DataFrame:
+            d = pd.read_parquet(path, columns=["timestamp_utc", "location_id", "value"])
+            d = d.dropna(subset=["value"])
+            d["timestamp_utc"] = pd.to_datetime(d.timestamp_utc, utc=True).dt.floor("h")
+            return d[d.timestamp_utc >= cutoff] if SERVE_WINDOW_DAYS else d
+
+        obs = pd.concat([_read_trimmed(f) for f in obs_files], ignore_index=True)
         obs = obs.groupby(["location_id", "timestamp_utc"], as_index=False)["value"].mean()
 
         # Stations present in the forecast, the observations and the catalogue.
