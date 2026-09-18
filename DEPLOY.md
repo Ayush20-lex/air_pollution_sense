@@ -41,6 +41,8 @@ ml_pipeline/data/raw/stations/catalog.json            232 KB
 ml_pipeline/data/raw/forecast/forecast_2025.parquet   2.3 MB
 ml_pipeline/data/raw/observations/season=2025/pm25_*  2.9 MB   68 sensors
 ml_pipeline/data/processed/baseline_corrections.json    4 KB
+ml_pipeline/data/raw/gfs/gfs_ncr_forecast.parquet      21 KB   NOAA GFS
+ml_pipeline/data/raw/gfs/gfs_ncr.parquet               17 KB   fallback
 ```
 
 That is deliberate. A demo that needs OpenAQ to be up on presentation day is a
@@ -84,7 +86,25 @@ First build takes **5–10 minutes** — torch is large.
 
 ### 1.3 Verify before moving on
 
-Copy your API URL (e.g. `https://airsense-api.onrender.com`), then:
+Copy your API URL from the Render dashboard — **the one Render gave you**,
+not the one in this document.
+
+> ### Check the URL is actually yours
+>
+> Render subdomains are global and first-come. `airsense-api.onrender.com` is
+> already taken by an unrelated project — an "AirSense Cameroon API v2.0" — so
+> Render appends a suffix when the name is gone. Ours is
+> `airsense-api-cieo.onrender.com`.
+>
+> This has already caught us once, and it is nasty because the wrong URL does
+> **not** 404. It answers 200 with a stranger's JSON, which parses fine and has
+> no `frames` array, so the dashboard discards it exactly as it would a dead
+> backend — red badge, no error, nothing in the console to explain it.
+>
+> Open the URL yourself and confirm the response says
+> `"data_mode":"archive_replay"` before you paste it anywhere.
+
+Then:
 
 ```bash
 curl -s https://YOUR-API.onrender.com/health
@@ -148,8 +168,19 @@ Open the Vercel URL and look at the **badge in the header**.
 
 | Badge | Meaning |
 |---|---|
-| 🟢 **Baseline · RMSE 84.89** | Correct. Real data from 68 CPCB stations. |
-| 🔴 **Demo / Synthetic** | `VITE_API_BASE` is wrong/missing, or the API is asleep. |
+| 🟢 **Baseline · RMSE 84.89** | Correct. Real data from 68 CPCB stations, confirmed with the backend within the last 5 minutes. |
+| 🟡 **Baseline · backend down** | The figures on screen are real and came from the backend, but it has stopped answering. Usually Render asleep. |
+| 🟡 **Baseline · 12m old** | Real backend figures, not re-confirmed recently — normally a tab left open in the background. |
+| 🔴 **Demo / Synthetic** | The backend has never answered. `VITE_API_BASE` is wrong/missing, or the API was asleep at load. |
+
+**Amber is not a failure.** It means the numbers are genuine but their
+currency is no longer vouched for, which is a different and weaker claim
+than green. It is safe to present from; say "served from the last backend
+response" if anyone asks. Only red means the numbers are synthetic.
+
+The dashboard re-checks the backend every 2 minutes while the tab is
+visible, so a red badge caused by a sleeping instance **turns green on its
+own** once Render wakes. You no longer have to reload to recover it.
 
 ### The failure that looks like success
 
@@ -187,13 +218,50 @@ console is wired to live data.
 
 ## Free-tier caveat — know this before the room
 
-Render free instances **sleep after ~15 minutes idle** and take **30–60 seconds
-to wake**. A judge opening a cold link sees synthetic data until the API
-answers, then it swaps.
+Render free instances **sleep after ~15 minutes idle**. Waking one was timed
+at **92 seconds** on 18 September 2026 — Render's own figure of 30–60 s is
+optimistic, so plan for a minute and a half.
 
-**Open the API URL yourself 2–3 minutes before presenting.** If the budget
-allows, Render's $7/month removes this entirely and is worth it for the final
-week.
+The dashboard's fetch gives up after 8 seconds, so a cold link **will** show the
+red synthetic badge at first. It then re-checks every 2 minutes and swaps itself
+to green once the API answers, with no reload needed. Left alone, a cold open
+corrects itself inside about two minutes.
+
+**Do not rely on that in the room.** Open the API URL yourself and wait for
+`/health` to answer **before** you open the dashboard — three minutes ahead, not
+one. If the budget allows, Render's $7/month removes the sleep entirely and is
+worth it for the final week.
+
+---
+
+## The GFS side channel
+
+`/api/v1/met/gfs` serves a NOAA GFS extract from the partner ingestion
+pipeline — 9 grid cells, f000 to f072 at 3-hourly steps, and precipitation,
+which none of the twelve forecast channels carries.
+
+It feeds nothing. The blend baseline is validated at 84.89 µg/m³ and adding an
+input would invalidate that number, so `baseline_forecaster.py` does not read
+it. Breaking this endpoint cannot break the forecast; the reverse is also true.
+
+**Absence is a normal state.** The file comes from a separate repository on
+someone else's schedule. If it is missing the endpoint answers **204** and
+`/api/v1/status` reports `noaa_gfs.available: false`. Nothing else changes.
+
+**Presence is not freshness.** The extract is committed, so it only refreshes
+when someone re-runs the partner fetcher and pushes. Check
+`freshness.status` — `fresh` / `aging` / `stale` / `expired`:
+
+```bash
+curl -s https://YOUR-API.onrender.com/api/v1/met/gfs | python -c "import sys,json; print(json.load(sys.stdin)['freshness'])"
+```
+
+The cycle committed on 16 September (`20260916_00z`) covers up to **19
+September 2026, 00:00 UTC**. As of 18 September it reads `stale` with ~12 hours
+left; after that it reads `expired` and says so in a `note` field. Expired is
+honest rather than broken — the endpoint keeps serving and keeps admitting the
+window has passed — but get a fresh cycle before demo day if you intend to show
+this layer. Drop it at the same path; no code changes.
 
 ---
 
@@ -218,7 +286,9 @@ that badge is a claim made to judges, and it should be true.
 | Render build exceeds image limit | torch CUDA build | add `--extra-index-url .../whl/cpu` |
 | `/health` says `synthetic` | archive parquets missing | check they're committed, not gitignored |
 | Badge red, API healthy | `VITE_API_BASE` unset/wrong | fix it, then **redeploy** |
-| Badge red on first open | free instance asleep | open `/health`, wait 60 s, reload |
+| Badge red on first open | free instance asleep | open `/health`, wait ~90 s — the badge recovers itself, no reload needed |
+| Badge red, `/health` fine in a browser | wrong Render subdomain — you have a stranger's service | confirm the response says `archive_replay`, fix `VITE_API_BASE`, redeploy |
+| Badge amber | backend unconfirmed; figures are still real | fine to present; check the API is awake if it persists |
 | Refresh 404s on a sub-path | SPA rewrite missing | confirm `sih-dashboard/vercel.json` is deployed |
 | Vercel builds the wrong thing | Root Directory not set | set it to `sih-dashboard` |
 
@@ -238,7 +308,7 @@ If you'd rather not use Vercel, add this back to `render.yaml`:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE
-        value: https://airsense-api.onrender.com
+        value: https://YOUR-API.onrender.com   # yours, not this placeholder
     routes:
       - type: rewrite
         source: /*
