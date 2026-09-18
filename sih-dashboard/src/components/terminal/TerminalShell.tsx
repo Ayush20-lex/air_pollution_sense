@@ -299,13 +299,18 @@ function TerminalHeader() {
             weaker claim than "Demo / Synthetic" and this badge is the one
             place the page admits the readings are not measured.
 
-            Static on purpose, unlike the intro header, which derives its badge
-            from lib/useProvenance. This route does not read the forecast store
-            at all - it renders lib/terminal/content.ts, which labels itself
-            "Demo values" and "Synthetic sample". A badge here that reported the
-            backend would be claiming provenance for numbers the backend never
-            produced. */}
-        <div className="flex shrink-0 items-center gap-2 rounded-full border border-term-primary/40 bg-term-primary/10 px-3 py-1.5 shadow-[0_0_15px_rgba(78,222,163,0.15)]">
+            Deliberately conservative, and no longer for the original reason.
+            The node ledger and the plume map now carry real measurements from
+            /api/v1/stations, but the rest of this route still renders
+            lib/terminal/content.ts, which labels itself "Demo values". A badge
+            reading LIVE would extend the mesh's provenance over panels that
+            have none, so the precise claim is made where it applies - the
+            ledger header states the index and the hour it measures - and this
+            one stays at the weaker reading for the page as a whole. */}
+        <div
+          title="The node ledger and plume map are measured; other panels on this route are demo content."
+          className="flex shrink-0 items-center gap-2 rounded-full border border-term-primary/40 bg-term-primary/10 px-3 py-1.5 shadow-[0_0_15px_rgba(78,222,163,0.15)]"
+        >
           <span className="size-2.5 rounded-full bg-amber-400" />
           <span className="font-mono text-xs font-bold uppercase tracking-wide text-term-primary">
             Demo<span className="sr-only xl:not-sr-only"> / Synthetic</span>

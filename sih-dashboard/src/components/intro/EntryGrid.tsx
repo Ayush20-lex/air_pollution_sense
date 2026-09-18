@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowUpRight, Gauge, MapPin } from 'lucide-react';
 import { ScanButton } from './ScanButton';
 import { ALERT_COLOR, aqiColor, bandForPm25 } from '@/lib/aqi';
 import { FORECAST_HOURS, MODEL_META, type Frame } from '@/lib/data';
-import { STATIONS } from '@/lib/terminal/stations';
+import { useMesh } from '@/lib/terminal/useMesh';
 import { INCIDENTS, POLLUTANTS } from '@/lib/terminal/content';
 import { cn } from '@/lib/utils';
 
@@ -111,6 +111,7 @@ export function EntryGrid({
   onScan: () => void;
   scanning: boolean;
 }) {
+  const mesh = useMesh();
   const band = bandForPm25(frame.avgPm25);
 
   return (
@@ -139,7 +140,7 @@ export function EntryGrid({
         eyebrow="Public terminal"
         title="Geospatial plume"
         body="Dispersion field, PM2.5 iso-contours, source-to-receptor ribbons and wind streamlines over the NCR basin."
-        stat={String(STATIONS.length)}
+        stat={String(mesh.stations.length)}
         statLabel="Mesh nodes"
       />
 

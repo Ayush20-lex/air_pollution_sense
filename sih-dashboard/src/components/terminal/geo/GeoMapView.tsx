@@ -5,7 +5,8 @@ import { GeoMapPanel } from './GeoMapPanel';
 import { GeoRail } from './GeoRail';
 import { GeoSections } from './GeoSections';
 import { buildFrames, type TerminalFrame } from '@/lib/terminal/field';
-import { STATIONS, stationById } from '@/lib/terminal/stations';
+import { findById } from '@/lib/terminal/stations';
+import { useMesh } from '@/lib/terminal/useMesh';
 import { useTerminalStore } from '@/store/useTerminalStore';
 
 export function GeoMapView() {
@@ -18,17 +19,35 @@ export function GeoMapView() {
   // actually move rather than the button merely spinning.
   const refreshedAt = useTerminalStore((s) => s.refreshedAt);
 
+  // The measured mesh, or the curated one while the backend is unreachable.
+  const mesh = useMesh();
+  const stations = mesh.stations;
+
+  // Hour 0 is the hour the readings were taken, not the hour the page was
+  // opened. Anchoring the window to the wall clock put "VALID 18 Sept 17:00"
+  // under measurements from 29 December, and drove the diurnal shape off a
+  // local hour the data never saw. Offline there is nothing measured to
+  // anchor to, so the clock stands in as it always did.
+  const origin = React.useMemo(
+    () => (mesh.asOf ? new Date(mesh.asOf) : new Date()),
+    [mesh.asOf],
+  );
+
   // Seeded from a lazy initialiser rather than null-then-effect: the first
   // window is available on the first render, so the map never paints an empty
   // frame and there is no state write during mount. The effect then covers
   // only the refresh, and skips the run that fires alongside mount.
-  const [frames, setFrames] = React.useState<TerminalFrame[]>(() => buildFrames());
+  const [frames, setFrames] = React.useState<TerminalFrame[]>(() => buildFrames(origin, stations));
   const builtAt = React.useRef(refreshedAt);
+  // Rebuilt on refresh, and again when the measurements land: the frames are
+  // keyed by station id and carry each node's reading, so a mesh that changed
+  // under them would leave the map drawing the hand-written values while the
+  // table beside it showed the measured ones.
   React.useEffect(() => {
-    if (builtAt.current === refreshedAt) return;
+    if (builtAt.current === refreshedAt && !mesh.live) return;
     builtAt.current = refreshedAt;
-    setFrames(buildFrames());
-  }, [refreshedAt]);
+    setFrames(buildFrames(origin, stations));
+  }, [refreshedAt, stations, mesh.live, origin]);
 
   const frameIndex = useTerminalStore((s) => s.frameIndex);
   const select = useTerminalStore((s) => s.select);
@@ -37,8 +56,8 @@ export function GeoMapView() {
   const [params] = useSearchParams();
   const requested = params.get('station');
   React.useEffect(() => {
-    if (requested && stationById(requested)) select(requested);
-  }, [requested, select]);
+    if (requested && findById(stations, requested)) select(requested);
+  }, [requested, select, stations]);
 
   return (
     <>
@@ -49,7 +68,8 @@ export function GeoMapView() {
               Geospatial Plume Map
             </h1>
             <span className="rounded border border-orange-500/40 bg-orange-500/15 px-2.5 py-0.5 font-mono text-xs font-bold text-orange-400">
-              DELHI NCR MESH • {STATIONS.length} NODES ONLINE
+              DELHI NCR MESH • {stations.length} NODES{' '}
+              {mesh.live ? 'REPORTING' : 'ONLINE'}
             </span>
           </div>
           <p className="mt-1 font-body text-sm text-slate-400">

@@ -81,6 +81,47 @@ export function stationById(id: string | null): Station | undefined {
 /** Worst-to-best, the order the mesh ranking and ledger both use. */
 export const STATIONS_BY_SEVERITY: Station[] = [...STATIONS].sort((a, b) => b.aqi - a.aqi);
 
+/**
+ * The same orderings and rollups, over whichever mesh is actually on screen.
+ *
+ * The constants above are computed once from the curated list, which was
+ * correct while that list was the only one. The live mesh replaces the readings
+ * and drops the nodes the archive has no counterpart for, so every derived
+ * figure has to be recomputed from it or the zone means would describe a
+ * different set of stations than the table below them.
+ */
+export function bySeverity<T extends Station>(list: T[]): T[] {
+  return [...list].sort((a, b) => b.aqi - a.aqi);
+}
+
+export function findById<T extends Station>(list: T[], id: string | null): T | undefined {
+  if (!id) return undefined;
+  return list.find((s) => s.id === id);
+}
+
+export const ZONE_ORDER: TerminalZone[] = [
+  'North', 'West', 'Central', 'East', 'South', 'NCR Outer',
+];
+
+export function zoneSummary(list: Station[]): ZoneSummary[] {
+  return ZONE_ORDER.map((zone) => {
+    const members = list.filter((s) => s.zone === zone);
+    // A zone can empty out once unmatched nodes are dropped; dividing by zero
+    // here would put NaN in the rail.
+    if (members.length === 0) {
+      return { zone, mean: 0, dominant: 'PM2.5' as Station['dominant'], delta: 0, count: 0 };
+    }
+    const mean = members.reduce((sum, s) => sum + s.aqi, 0) / members.length;
+    const delta = members.reduce((sum, s) => sum + s.delta, 0) / members.length;
+    const tally = members.reduce<Record<string, number>>((acc, s) => {
+      acc[s.dominant] = (acc[s.dominant] ?? 0) + 1;
+      return acc;
+    }, {});
+    const dominant = Object.entries(tally).sort((a, b) => b[1] - a[1])[0][0] as Station['dominant'];
+    return { zone, mean: Math.round(mean), dominant, delta: Number(delta.toFixed(1)), count: members.length };
+  }).filter((z) => z.count > 0);
+}
+
 export type ZoneSummary = {
   zone: TerminalZone;
   mean: number;

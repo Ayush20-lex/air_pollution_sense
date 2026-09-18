@@ -4,7 +4,8 @@ import { MeshOdometer, useRollDuration } from '@/components/terminal/MeshOdomete
 import { Label, Meter, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { DISPERSION, type TerminalFrame } from '@/lib/terminal/field';
-import { PLUME_SOURCES, stationById } from '@/lib/terminal/stations';
+import { PLUME_SOURCES, findById } from '@/lib/terminal/stations';
+import { useMesh } from '@/lib/terminal/useMesh';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { TERM } from '@/lib/terminal/palette';
 
@@ -57,7 +58,7 @@ function SourceAttribution() {
 function SelectedNode({ frame }: { frame: TerminalFrame }) {
   const selectedId = useTerminalStore((s) => s.selectedId);
   const rollMs = useRollDuration();
-  const station = stationById(selectedId);
+  const station = findById(useMesh().stations, selectedId);
   if (!station) return null;
 
   const sample = frame.nodes[station.id];

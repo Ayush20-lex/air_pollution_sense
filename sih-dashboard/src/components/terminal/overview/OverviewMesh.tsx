@@ -4,7 +4,8 @@ import { AlertTriangle, CheckCircle2, CircleAlert, Info } from 'lucide-react';
 import { Delta, Label, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { INCIDENTS, POLLUTANTS } from '@/lib/terminal/content';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
-import { STATIONS_BY_SEVERITY } from '@/lib/terminal/stations';
+import { bySeverity } from '@/lib/terminal/stations';
+import { useMesh } from '@/lib/terminal/useMesh';
 import { cn } from '@/lib/utils';
 import { TERM, TERM_SEVERITY } from '@/lib/terminal/palette';
 
@@ -21,7 +22,7 @@ export function OverviewMesh() {
 
 /** The six worst nodes, as telemetry cards. */
 function StationMesh() {
-  const top = STATIONS_BY_SEVERITY.slice(0, 6);
+  const top = bySeverity(useMesh().stations).slice(0, 6);
 
   return (
     <div id="grid" className="space-y-3">

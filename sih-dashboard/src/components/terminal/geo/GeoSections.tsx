@@ -5,7 +5,8 @@ import { AnimatedNumber, useRollDuration } from '@/components/terminal/MeshOdome
 import { COVERAGE_KPIS, INCIDENTS } from '@/lib/terminal/content';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { DISPERSION, nodeSeries, type TerminalFrame } from '@/lib/terminal/field';
-import { STATIONS, STATIONS_BY_SEVERITY, ZONE_SUMMARY } from '@/lib/terminal/stations';
+import { bySeverity, zoneSummary } from '@/lib/terminal/stations';
+import { useMesh } from '@/lib/terminal/useMesh';
 import { cn } from '@/lib/utils';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { TERM, TERM_SEVERITY } from '@/lib/terminal/palette';
@@ -27,6 +28,9 @@ export function GeoSections({ frame }: { frame: TerminalFrame }) {
 }
 
 function ZoneStrip() {
+  const { stations } = useMesh();
+  const zones = zoneSummary(stations);
+
   return (
     <div className="space-y-3">
       <SectionHead
@@ -34,12 +38,12 @@ function ZoneStrip() {
         right={
           <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-slate-400">
             <span className="size-2 rounded-full bg-term-primary" />
-            {STATIONS.length} nodes aggregated
+            {stations.length} nodes aggregated
           </span>
         }
       />
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        {ZONE_SUMMARY.map((z) => {
+        {zones.map((z) => {
           const color = aqiColor(z.mean);
           const band = bandForAqi(z.mean);
           return (
@@ -73,6 +77,8 @@ function ZoneStrip() {
 
 /** Worst-to-best node list. Clicking a row selects it on the map. */
 function MeshRanking({ frame }: { frame: TerminalFrame }) {
+  const ranked = bySeverity(useMesh().stations);
+
   const selectedId = useTerminalStore((s) => s.selectedId);
   const select = useTerminalStore((s) => s.select);
   const query = useTerminalStore((s) => s.query);
@@ -81,10 +87,10 @@ function MeshRanking({ frame }: { frame: TerminalFrame }) {
 
   const needle = query.trim().toLowerCase();
   const rows = needle
-    ? STATIONS_BY_SEVERITY.filter(
+    ? ranked.filter(
         (s) => s.name.toLowerCase().includes(needle) || s.zone.toLowerCase().includes(needle),
       )
-    : STATIONS_BY_SEVERITY;
+    : ranked;
 
   return (
     <TelemetryCard className="p-5 lg:col-span-7">
@@ -247,25 +253,56 @@ const STATUS_PILL: Record<string, string> = {
   CALIBRATING: 'border-term-secondary/40 bg-term-secondary/20 text-term-secondary',
 };
 
+/** "2025-12-28T23:00:00+00:00" -> "28 Dec 04:30 IST". */
+function hourLabel(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+    timeZone: 'Asia/Kolkata', hour12: false,
+  })} IST`;
+}
+
 function NodeLedger({ frame }: { frame: TerminalFrame }) {
+  const mesh = useMesh();
+  const ranked = bySeverity(mesh.stations);
+
   const select = useTerminalStore((s) => s.select);
   const selectedId = useTerminalStore((s) => s.selectedId);
   const rollMs = useRollDuration();
 
+  // Every column but one is measured once the mesh is live. "Inflow source" is
+  // not - it is an editorial attribution of the upwind sector, and the archive
+  // has nothing to derive it from. Marking it is the whole point: an invented
+  // column sitting unlabelled beside measured ones is what this page was
+  // fixing, and reintroducing it one column over would be no better.
   const columns = [
     'Node', 'Zone', 'Agency', 'Latitude', 'Longitude', 'AQI',
-    'Dominant', 'Inflow source', 'Δ24h', 'Sensors', 'Uptime', 'Status',
+    'Dominant', mesh.live ? 'Inflow source †' : 'Inflow source',
+    'Δ24h', 'Sensors', 'Uptime', 'Status',
   ];
 
   return (
     <div id="ledger" className="space-y-3">
       <SectionHead
         title="Regional Node Ledger"
-        sub={`${STATIONS.length} active CPCB / DPCC / HSPCB / UPPCB monitoring stations across the National Capital Region`}
+        sub={
+          mesh.live
+            ? `${mesh.stations.length} of ${mesh.curatedCount} nodes carrying their own measurements — PM2.5, PM10, NO₂, O₃ and SO₂ from each station's sensors, indexed under the CPCB National AQI`
+            : `${mesh.stations.length} CPCB / DPCC / HSPCB / UPPCB monitoring stations across the National Capital Region`
+        }
         right={
-          <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-slate-400">
-            <span className="size-2 rounded-full bg-amber-400" />
-            CPCB National AQI · demo values
+          /* This read "demo values" for as long as it was true. The readings
+             now come from the archive, so the label follows them rather than
+             being pinned either way — understating measured data invites a
+             reader to discount it. */
+          <span
+            className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-slate-400"
+            title={mesh.note ?? undefined}
+          >
+            <span className={`size-2 rounded-full ${mesh.live ? 'bg-term-primary' : 'bg-amber-400'}`} />
+            {mesh.live ? `${mesh.index} · measured ${hourLabel(mesh.asOf)}` : 'CPCB National AQI · demo values'}
           </span>
         }
       />
@@ -282,7 +319,7 @@ function NodeLedger({ frame }: { frame: TerminalFrame }) {
               </tr>
             </thead>
             <tbody>
-              {STATIONS_BY_SEVERITY.map((s) => {
+              {ranked.map((s) => {
                 const sample = frame.nodes[s.id];
                 const color = aqiColor(sample.aqi);
                 const active = selectedId === s.id;
@@ -325,6 +362,25 @@ function NodeLedger({ frame }: { frame: TerminalFrame }) {
             </tbody>
           </table>
         </div>
+        {mesh.live && (
+          <p className="px-4 pb-3 pt-1 font-body text-[11px] leading-relaxed text-slate-500">
+            <span className="font-mono">†</span> Inflow source is an editorial
+            attribution of the upwind sector, not a measurement — the archive has
+            nothing to derive it from. Every other column on this row comes from
+            the station's own sensors.
+            {Object.keys(mesh.excluded).length > 0 && (
+              <>
+                {' '}
+                {Object.keys(mesh.excluded).join(', ').toUpperCase()} is excluded
+                from the index:{' '}
+                <span title={Object.values(mesh.excluded)[0]}>
+                  its catalogued unit is contradicted by its own values
+                </span>
+                .
+              </>
+            )}
+          </p>
+        )}
       </TelemetryCard>
     </div>
   );

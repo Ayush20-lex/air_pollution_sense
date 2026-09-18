@@ -24,9 +24,9 @@ import {
   NCR_BOUNDS,
   NCR_CENTER,
   PLUME_SOURCES,
-  STATIONS,
   type Station,
 } from '@/lib/terminal/stations';
+import { useMesh } from '@/lib/terminal/useMesh';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { TERM } from '@/lib/terminal/palette';
 
@@ -91,10 +91,11 @@ function StationPins({
   select: (id: string) => void;
 }) {
   const density = usePinDensity(selectedId);
+  const { stations } = useMesh();
 
   return (
     <>
-      {STATIONS.map((s) => {
+      {stations.map((s) => {
           const n = frame.nodes[s.id];
           const d = density[s.id] ?? 'full';
           return (
@@ -165,6 +166,7 @@ type PinDensity = 'full' | 'compact' | 'dot';
  * still carries its tooltip and click target.
  */
 function usePinDensity(selectedId: string | null): Record<string, PinDensity> {
+  const { stations } = useMesh();
   const map = useMap();
   // Zoom and pan both change which pins overlap, so both re-run the pass.
   const [, bump] = React.useReducer((n: number) => n + 1, 0);
@@ -186,7 +188,7 @@ function usePinDensity(selectedId: string | null): Record<string, PinDensity> {
 
     // Selected first so it always keeps the richest label it can — it is what
     // the rest of the page is pointing at. Then worst AQI first.
-    const order = [...STATIONS].sort((a, b) => {
+    const order = [...stations].sort((a, b) => {
       if (a.id === selectedId) return -1;
       if (b.id === selectedId) return 1;
       return b.aqi - a.aqi;
@@ -264,6 +266,7 @@ function buildRampLut(): Uint8ClampedArray {
 }
 
 function HeatOverlay({ frame, field }: { frame: TerminalFrame; field: TerminalField }) {
+  const { stations } = useMesh();
   const map = useMap();
   const overlay = React.useRef<L.ImageOverlay | null>(null);
   const lut = React.useMemo(() => buildRampLut(), []);
@@ -281,7 +284,7 @@ function HeatOverlay({ frame, field }: { frame: TerminalFrame; field: TerminalFi
     // --- accumulate intensity as greyscale ---
     ctx.clearRect(0, 0, HEAT_W, HEAT_H);
     ctx.globalCompositeOperation = 'lighter';
-    for (const st of STATIONS) {
+    for (const st of stations) {
       const sample = frame.nodes[st.id];
       const v = fieldIntensity(sample, field);
       if (v <= 0.01) continue;
@@ -336,7 +339,7 @@ function HeatOverlay({ frame, field }: { frame: TerminalFrame; field: TerminalFi
         className: 'term-heat',
       }).addTo(map);
     }
-  }, [frame, field, map, lut]);
+  }, [frame, field, map, lut, stations]);
 
   // Strip the overlay when the layer is switched off or the map unmounts.
   React.useEffect(
@@ -362,12 +365,13 @@ const CONTOUR_N = 52;
  * onto the map — so 90 µg/m³ is a curve that means 90 µg/m³.
  */
 function IsoContours({ frame }: { frame: TerminalFrame }) {
+  const { stations } = useMesh();
   // SVG rather than the map's canvas renderer: contours need dash patterns and
   // their labels are DOM, and canvas paths cannot carry either.
   const renderer = React.useMemo(() => L.svg({ padding: 0.4 }), []);
 
   const levels = React.useMemo(() => {
-    const grid = pm25Grid(frame, CONTOUR_N);
+    const grid = pm25Grid(frame, CONTOUR_N, stations);
     return CONTOUR_LEVELS.map((level) => ({
       ...level,
       paths: isoContours(grid, level.value)
@@ -375,7 +379,7 @@ function IsoContours({ frame }: { frame: TerminalFrame }) {
         .filter((path) => path.length >= 8)
         .map((path) => smoothPath(path, 2).map((pt) => gridToLatLng(CONTOUR_N, pt))),
     }));
-  }, [frame]);
+  }, [frame, stations]);
 
   return (
     <>
@@ -555,12 +559,13 @@ const STREAM_PHASES = ['a', 'b', 'c'] as const;
  * motion` drops it to solid lines.
  */
 function WindStreamlines({ frame }: { frame: TerminalFrame }) {
+  const { stations } = useMesh();
   const renderer = React.useMemo(() => L.svg({ padding: 0.4 }), []);
 
   const lines = React.useMemo(() => {
-    const ctx = buildWindContext(STATIONS.map((st) => frame.nodes[st.id]));
+    const ctx = buildWindContext(stations.map((st) => frame.nodes[st.id]));
     return streamlines(ctx);
-  }, [frame]);
+  }, [frame, stations]);
 
   return (
     <>
