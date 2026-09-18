@@ -50,6 +50,15 @@ type AppState = {
    * failure, which looks identical to a healthy demo.
    */
   liveStatus: 'idle' | 'loading' | 'live' | 'offline';
+  /**
+   * When the backend last answered, as epoch ms; null until it ever has.
+   *
+   * `liveStatus` says whether the most recent attempt succeeded, not how long
+   * ago that was. A console left open since the morning holds frames from the
+   * morning while the badge still reports them in the present tense. Age is
+   * the missing half of the claim.
+   */
+  lastFetchedAt: number | null;
   loadLiveForecast: () => Promise<void>;
 
   setIntervention: (key: keyof Interventions, value: number) => void;
@@ -93,14 +102,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   source: null,
   loadingLive: false,
   liveStatus: 'idle',
+  lastFetchedAt: null,
 
   loadLiveForecast: async () => {
     if (get().loadingLive) return;
     set({ loadingLive: true, liveStatus: 'loading' });
     const live = await fetchLiveForecast();
     if (!live) {
-      // Backend unreachable. Keep the synthetic frames already in place, but
-      // record the failure so the UI can say so instead of quietly pretending.
+      // Backend unreachable. Keep whatever frames are in place - synthetic on a
+      // first failure, real ones if an earlier fetch succeeded - and record the
+      // failure so the UI can say so instead of quietly pretending.
+      //
+      // `source` and `lastFetchedAt` are deliberately left alone. Clearing them
+      // would throw away the fact that the numbers on screen came from the
+      // backend, and the badge would call real measurements synthetic.
       set({ loadingLive: false, liveStatus: 'offline' });
       return;
     }
@@ -115,6 +130,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       frames: active,
       loadingLive: false,
       liveStatus: 'live',
+      lastFetchedAt: Date.now(),
     });
   },
 

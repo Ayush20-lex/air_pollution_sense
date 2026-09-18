@@ -47,6 +47,13 @@ export async function fetchLiveForecast(timeoutMs = 8000): Promise<LiveForecast 
     const res = await fetch(`${API_BASE}/api/v1/forecast/frames`, {
       signal: ctrl.signal,
       headers: { Accept: 'application/json' },
+      // A 200 has to mean the server answered, not that the browser still had
+      // a copy. The backend sets no Cache-Control, which leaves the response
+      // open to heuristic caching here and to any proxy in between; a hit then
+      // resolves instantly and indistinguishably from a healthy fetch, and the
+      // provenance badge goes green over a body of unknown age. Bypassing the
+      // cache costs one request and makes success mean what it claims.
+      cache: 'no-store',
     });
     if (!res.ok) return null;
     const data = (await res.json()) as LiveForecast;
