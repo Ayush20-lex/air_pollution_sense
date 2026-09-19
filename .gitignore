@@ -146,3 +146,6 @@ backend/weights_*/
 ml_pipeline/data/raw/gfs/*
 !ml_pipeline/data/raw/gfs/gfs_ncr.parquet
 !ml_pipeline/data/raw/gfs/gfs_ncr_forecast.parquet
+
+# Third-party subagents fetched with the caveman pack — per-machine, not project code
+.claude/agents/cavecrew-*.md
