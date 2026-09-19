@@ -167,16 +167,34 @@ function UnindexedPins() {
       {unindexed.map((s) => (
         <Marker key={s.id} position={[s.lat, s.lng]} icon={buildUnindexedPin()}>
           <LTooltip direction="top" offset={[0, -10]} opacity={1} className="as-tip">
-            <div style={{ minWidth: 170 }}>
+            <div style={{ minWidth: 180 }}>
               <div style={{ fontWeight: 700, marginBottom: 4, color: '#fff' }}>{s.name}</div>
               <div style={{ color: '#f0b429' }}>No CPCB index this hour</div>
               <div style={{ opacity: 0.85, marginTop: 2 }}>{s.reason}</div>
-              <div style={{ opacity: 0.7, marginTop: 4 }}>
-                {s.pollutants.length
-                  ? `Reporting ${s.pollutants.map((x) => x.toUpperCase()).join(', ')}`
-                  : 'Reporting nothing this hour'}
-              </div>
-              <div style={{ opacity: 0.7 }}>{s.agency}</div>
+
+              {/* What it is measuring. "No index" and "no data" are different
+                  states and most of these are in the first one - Knowledge Park
+                  III is publishing ozone and carbon monoxide, its particulate
+                  sensors are simply down. Labelled as sub-indices, never as an
+                  AQI: each is on the same 0-500 scale, which is exactly why an
+                  unlabelled number here would be read as the station's index. */}
+              {Object.keys(s.subIndices).length > 0 ? (
+                <div style={{ marginTop: 5 }}>
+                  <div style={{ opacity: 0.6, fontSize: 10, letterSpacing: '0.08em' }}>
+                    SUB-INDICES · NOT COMBINED
+                  </div>
+                  {Object.entries(s.subIndices).map(([pol, sub]) => (
+                    <div key={pol} style={{ opacity: 0.9 }}>
+                      {pol} {sub.sub_index}
+                      <span style={{ opacity: 0.6 }}> · {sub.window_hours}h</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ opacity: 0.7, marginTop: 4 }}>Reporting nothing this hour</div>
+              )}
+
+              <div style={{ opacity: 0.7, marginTop: 4 }}>{s.agency}</div>
             </div>
           </LTooltip>
         </Marker>

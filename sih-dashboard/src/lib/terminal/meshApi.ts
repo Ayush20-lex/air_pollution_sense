@@ -258,6 +258,14 @@ export type UnindexedStation = {
   pollutants: string[];
   /** CPCB's own words for why there is no index. */
   reason: string;
+  /**
+   * The sub-indices it *did* produce, which are real measurements on the AQI
+   * scale - Knowledge Park III was carrying O3 25 and CO 59. They are shown
+   * because "no index" and "no data" are different states and the station is
+   * in the first one; what it cannot do is combine them, since CPCB's rules
+   * need three pollutants with a particulate among them.
+   */
+  subIndices: Record<string, SubIndex>;
   freshness: 'live' | 'archive';
 };
 
@@ -376,6 +384,7 @@ export function mergeMesh(payload: MeshPayload): MergedMesh {
         lng: s.lon,
         pollutants: s.pollutants ?? [],
         reason: s.reasons?.[0] ?? 'no publishable index this hour',
+        subIndices: s.sub_indices ?? {},
         freshness: s.freshness ?? (payload.source === 'waqi_live' ? 'live' : 'archive'),
       }),
     );
