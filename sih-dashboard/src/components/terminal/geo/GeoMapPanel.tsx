@@ -45,10 +45,20 @@ export function GeoMapPanel({
     <TelemetryCard focus className="relative flex h-full flex-col overflow-hidden p-4 lg:col-span-8">
       <div className="pointer-events-none absolute -right-16 -top-16 size-96 rounded-full bg-orange-500/10 blur-3xl" />
 
-      {/* `flex-1` rather than a fixed aspect ratio: the map grows into whatever
-          height the rail sets, with a floor so it never collapses when the rail is
-          short. */}
-      <div className="term-map relative min-h-[320px] w-full flex-1 overflow-hidden rounded-xl border border-term-outline-variant/50">
+      {/* `flex-1` so a tall rail still stretches the map rather than leaving dead
+          space beside it - but the floor, not the rail, is what sets the size.
+
+          It used to be 320px, which made the map's height depend on whether a
+          station happened to be selected: the rail carries a Selected Node card,
+          nothing is selected on a fresh load, so the rail came up short and the
+          map collapsed onto the floor. Pick a station and it grew; refresh and it
+          shrank again. The map is the point of this page and it was being sized
+          by an incidental sibling.
+
+          `clamp` keeps it a stable fraction of the viewport instead - large
+          enough that the NCR mesh is readable, capped so it does not run off a
+          tall monitor, with a floor for short ones. */}
+      <div className="term-map relative min-h-[clamp(360px,74vh,880px)] w-full flex-1 overflow-hidden rounded-xl border border-term-outline-variant/50">
         <NcrPlumeMap frame={frame} />
 
         {/* layer switcher */}

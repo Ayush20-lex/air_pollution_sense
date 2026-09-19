@@ -19,7 +19,9 @@ import {
   type TerminalFrame,
 } from '@/lib/terminal/field';
 import { isoContours, smoothPath } from '@/lib/terminal/contours';
-import { buildWindContext, streamlines } from '@/lib/terminal/wind';
+import { buildWindContext, streamlines, type WindCell } from '@/lib/terminal/wind';
+import { DISTRICTS } from '@/lib/data';
+import { useAppStore } from '@/store/useAppStore';
 import {
   NCR_BOUNDS,
   NCR_CENTER,
@@ -138,15 +140,19 @@ function StationPins({
   );
 }
 
+/** The region the map opens on. Shared so the density pass can ask what zoom
+ *  this fits to without assuming a number. */
+const FIT_BOUNDS = L.latLngBounds(
+  [NCR_BOUNDS.south, NCR_BOUNDS.west],
+  [NCR_BOUNDS.north, NCR_BOUNDS.east],
+);
+const FIT_PADDING = L.point(18, 18);
+
 /** Keeps the NCR domain framed when the container resizes. */
 function Fitter() {
   const map = useMap();
   React.useEffect(() => {
-    const bounds = L.latLngBounds(
-      [NCR_BOUNDS.south, NCR_BOUNDS.west],
-      [NCR_BOUNDS.north, NCR_BOUNDS.east],
-    );
-    map.fitBounds(bounds, { padding: [18, 18] });
+    map.fitBounds(FIT_BOUNDS, { padding: [FIT_PADDING.x, FIT_PADDING.y] });
     const ro = new ResizeObserver(() => map.invalidateSize());
     ro.observe(map.getContainer());
     return () => ro.disconnect();
@@ -172,6 +178,16 @@ type PinDensity = 'full' | 'compact' | 'dot';
  * The walk is worst-AQI-first, so when pins fight for the same pixels the more
  * severe reading keeps its label. A demoted station is never hidden: a dot
  * still carries its tooltip and click target.
+ *
+ * Zoomed out past the opening view the collision pass is skipped entirely and
+ * everything is a dot.
+ * Collision alone never got there: zooming out shrinks the gaps until almost
+ * every pin is demoted, but the two or three with nothing near them keep their
+ * cards, so a wide view of the region carried a handful of AQI boards floating
+ * over an otherwise bare mesh. Those survivors are the least informative labels
+ * on screen - they are labelled because that corner is empty, not because they
+ * matter - and at region scale the mesh reads as a pattern of points, which the
+ * cards interrupt.
  */
 function usePinDensity(selectedId: string | null): Record<string, PinDensity> {
   const { stations } = useMesh();
@@ -193,6 +209,21 @@ function usePinDensity(selectedId: string | null): Record<string, PinDensity> {
   // tests per render is far cheaper than getting the cache key wrong.
   {
     const out: Record<string, PinDensity> = {};
+
+    // Zoomed out past the opening view: dots, with no exception for the
+    // selected station. A single card left floating over the region is exactly
+    // the stray label this is here to remove, and the selected pin is still
+    // marked - it keeps its own styling, tooltip and click target as a dot.
+    //
+    // The threshold is the zoom `Fitter` fits the region to, asked of the map
+    // rather than written down. A literal would have to guess: the fit depends
+    // on the container, and the same constant that reads as "one step out" on a
+    // wide screen is the opening view on a narrow one, which would greet that
+    // reader with a mesh of bare dots.
+    if (map.getZoom() < map.getBoundsZoom(FIT_BOUNDS, false, FIT_PADDING)) {
+      for (const st of stations) out[st.id] = 'dot';
+      return out;
+    }
 
     // Selected first so it always keeps the richest label it can — it is what
     // the rest of the page is pointing at. Then worst AQI first.
@@ -572,15 +603,44 @@ const STREAM_PHASES = ['a', 'b', 'c'] as const;
 function WindStreamlines({ frame }: { frame: TerminalFrame }) {
   const stations = useFreshStations();
   const renderer = React.useMemo(() => L.svg({ padding: 0.4 }), []);
+  // The measured direction. The map's own frames are built client-side from
+  // station readings, which carry a wind *speed* and never a bearing; the
+  // backend's frames carry one per district and always have. Without this the
+  // layer drew a fixed north-westerly whatever the air was doing.
+  const liveFrames = useAppStore((st) => st.liveFrames);
 
   const lines = React.useMemo(() => {
+    // Match the map's hour to the same hour of the backend forecast, so the
+    // streamlines turn as the timeline is scrubbed instead of holding the
+    // direction of hour zero across all 72.
+    const live = liveFrames?.[Math.min(frame.offset, (liveFrames?.length ?? 1) - 1)];
+
+    // One cell per district, at the district's own coordinates, so the field
+    // varies across the domain instead of taking a single mean. The five cells
+    // do disagree: 153 degrees over Delhi against 192 over Faridabad on the
+    // afternoon this was wired, which is a real 39-degree turn across the
+    // basin and exactly the thing a map should show.
+    const cells: WindCell[] = live
+      ? DISTRICTS.flatMap((d) => {
+          const cell = live.districts[d.id];
+          if (!cell || typeof cell.windDir !== 'number') return [];
+          return [{
+            lat: d.lat,
+            lng: d.lng,
+            fromDeg: cell.windDir,
+            speed: typeof cell.windSpeed === 'number' ? cell.windSpeed : 0,
+          }];
+        })
+      : [];
+
     // Only the nodes this frame carries. buildWindContext averages over the
     // samples and a missing one would take the mean with it.
     const ctx = buildWindContext(
       stations.map((st) => frame.nodes[st.id]).filter(Boolean),
+      cells,
     );
     return streamlines(ctx);
-  }, [frame, stations]);
+  }, [frame, stations, liveFrames]);
 
   return (
     <>

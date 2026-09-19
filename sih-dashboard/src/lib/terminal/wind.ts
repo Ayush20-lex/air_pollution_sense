@@ -29,6 +29,45 @@ export type WindContext = {
   stagnation: number;
   /** Domain-mean wind speed, m/s. */
   meanSpeed: number;
+  /**
+   * Measured wind, one entry per reporting cell, as the bearing the air comes
+   * *from* - the convention every weather source uses and the opposite of the
+   * way the streamlines travel.
+   *
+   * A list rather than one number because the domain does not have one wind.
+   * On 19 September the five cells ran from 153 degrees over Delhi to 192 over
+   * Faridabad, a 39-degree spread, with speeds from 5.3 to 10.4 m/s. Averaging
+   * that to a single bearing throws away the part a map is for.
+   */
+  cells: WindCell[];
+  /**
+   * Domain bearing, for callers that genuinely need one number - the compass
+   * needle and the inflow caption. Null offline.
+   *
+   * Legacy note kept because it explains the default below:
+   *
+   * The synoptic term was a fixed north-westerly, written when nothing on this
+   * page knew the real direction. The backend has carried it per district all
+   * along: on 19 September it read 153 degrees, air arriving from the
+   * south-south-east, while the map drew the same north-westerly it always
+   * drew. A wind layer pointing the wrong way is worse than none - it is a
+   * claim about the air, made confidently, from a constant.
+   *
+   * Null keeps the old north-westerly, which is the right offline default for
+   * an NCR winter and is now a stated fallback rather than the only behaviour.
+   */
+  fromDeg: number | null;
+};
+
+/** One cell's measured wind. */
+export type WindCell = {
+  lat: number;
+  lng: number;
+  /** Bearing the air arrives from, degrees. */
+  fromDeg: number;
+  /** Speed, m/s. Weights the interpolation: a strong cell should carry
+   *  further than a calm one. */
+  speed: number;
 };
 
 /** Longitude degrees are shorter than latitude degrees at this latitude. */
@@ -75,19 +114,84 @@ function ridgeGeometry(lat: number, lng: number, a: [number, number], b: [number
 }
 
 /** Context for one frame: how stagnant the column is, and how fast it moves. */
-export function buildWindContext(samples: { pbl: number; windSpeed: number }[]): WindContext {
-  if (!samples.length) return { stagnation: 0.5, meanSpeed: 2 };
+export function buildWindContext(
+  samples: { pbl: number; windSpeed: number }[],
+  cells: WindCell[] = [],
+): WindContext {
+  const fromDeg = meanBearing(cells.map((c) => c.fromDeg));
+  if (!samples.length) return { stagnation: 0.5, meanSpeed: 2, cells, fromDeg };
   const meanPbl = samples.reduce((s, x) => s + x.pbl, 0) / samples.length;
   const meanSpeed = samples.reduce((s, x) => s + x.windSpeed, 0) / samples.length;
   // A 900 m layer ventilates freely; 250 m is the nocturnal trap.
-  return { stagnation: clamp01(1 - meanPbl / 900), meanSpeed };
+  return { stagnation: clamp01(1 - meanPbl / 900), meanSpeed, cells, fromDeg };
+}
+
+/**
+ * Mean of a set of bearings.
+ *
+ * Averaged as numbers, 350 and 10 give 180 - due south for two winds that are
+ * both very nearly northerly. Summing unit vectors and taking the angle of the
+ * result is the only way this comes out right, and NCR sits where the wind
+ * crosses north often enough for it to matter.
+ *
+ * Returns null when the vectors cancel, which is a domain with no agreed
+ * direction rather than one blowing due north.
+ */
+export function meanBearing(degrees: number[]): number | null {
+  if (!degrees.length) return null;
+  let x = 0;
+  let y = 0;
+  for (const d of degrees) {
+    const r = (d * Math.PI) / 180;
+    x += Math.cos(r);
+    y += Math.sin(r);
+  }
+  if (Math.hypot(x, y) < 1e-6) return null;
+  return (((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360;
 }
 
 /** The wind vector at a point. */
 export function windAt(lat: number, lng: number, ctx: WindContext): WindVec {
-  // --- prevailing synoptic flow: from the NW, so blowing toward the SE ---
-  let u = 0.7071;
+  // --- measured flow, interpolated from the reporting cells ---
+  //
+  // Inverse-distance weighted over the cells' *vectors*, never their bearings.
+  // Interpolating angles has the same fault as averaging them: halfway between
+  // 350 and 10 degrees comes out due south. Turning each into a unit vector
+  // first makes the arithmetic mean the right answer.
+  //
+  // `fromDeg` is where the air arrives from, so the flow travels the reverse
+  // bearing. Bearings run clockwise from north, which puts the northward
+  // component on cos and the eastward on sin - the opposite of the usual maths
+  // convention, and the easiest thing here to get backwards.
+  let u = 0.7071;   // from the NW: toward the SE
   let v = -0.7071;
+
+  if (ctx.cells.length) {
+    let su = 0;
+    let sv = 0;
+    let sw = 0;
+    for (const c of ctx.cells) {
+      const toward = ((c.fromDeg + 180) % 360) * (Math.PI / 180);
+      const dLat = lat - c.lat;
+      const dLng = (lng - c.lng) * LNG_SCALE;
+      const d2 = dLat * dLat + dLng * dLng;
+      // A floor on the distance, so standing on a cell does not divide by zero
+      // and does not let that one cell win outright either.
+      const w = 1 / Math.max(d2, 1e-4);
+      su += Math.sin(toward) * w;
+      sv += Math.cos(toward) * w;
+      sw += w;
+    }
+    if (sw > 0) {
+      const mag = Math.hypot(su, sv) || 1;
+      u = su / mag;
+      v = sv / mag;
+    }
+  } else if (ctx.fromDeg != null) {
+    const toward = ((ctx.fromDeg + 180) % 360) * (Math.PI / 180);
+    u = Math.sin(toward);
+    v = Math.cos(toward);
+  }
 
   // --- barrier channelling: flow turns to run along a ridge it approaches ---
   let blocked = 0;
@@ -120,9 +224,19 @@ export function windAt(lat: number, lng: number, ctx: WindContext): WindVec {
   return { u: (u / mag) * speed, v: (v / mag) * speed, speed };
 }
 
-/** Meteorological direction the wind blows *from*, degrees. */
+/**
+ * Meteorological direction the wind blows *from*, degrees, as the inverse of
+ * `windAt`.
+ *
+ * `(u, v)` is the direction the air travels, so `(-u, -v)` already points back
+ * at the source and `atan2(east, north)` reads the bearing straight off it. An
+ * earlier version added a further 180, inverting a vector that was inverted
+ * already and reporting every wind as its own opposite. Nothing consumed it, so
+ * nothing on the page was wrong; a probe of the interpolated field was, which
+ * is how it surfaced.
+ */
 export function windFromDegrees({ u, v }: WindVec): number {
-  return (Math.atan2(-u, -v) * 180) / Math.PI + 180;
+  return (((Math.atan2(-u, -v) * 180) / Math.PI) + 360) % 360;
 }
 
 export type StreamOptions = {
@@ -235,4 +349,13 @@ export function streamlines(ctx: WindContext, opts: StreamOptions = {}): [number
   }
 
   return paths;
+}
+
+/** Sixteen-point compass name for a bearing, e.g. 153 -> "SSE". */
+export function compassName(deg: number): string {
+  const names = [
+    'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+    'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW',
+  ];
+  return names[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
 }

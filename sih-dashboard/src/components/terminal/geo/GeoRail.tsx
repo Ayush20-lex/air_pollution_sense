@@ -7,20 +7,23 @@ import { DISPERSION, type TerminalFrame } from '@/lib/terminal/field';
 import { PLUME_SOURCES, findById } from '@/lib/terminal/stations';
 import { useMesh } from '@/lib/terminal/useMesh';
 import { useTerminalStore } from '@/store/useTerminalStore';
+import { compassName, meanBearing } from '@/lib/terminal/wind';
+import { useAppStore } from '@/store/useAppStore';
 import { TERM } from '@/lib/terminal/palette';
 
 /** The three-card rail beside the map. */
 export function GeoRail({ frame }: { frame: TerminalFrame }) {
   return (
     <div className="space-y-5 lg:col-span-4">
-      <SourceAttribution />
+      <SourceAttribution frame={frame} />
       <SelectedNode frame={frame} />
-      <TrappingDispersion />
+      <TrappingDispersion frame={frame} />
     </div>
   );
 }
 
-function SourceAttribution() {
+function SourceAttribution({ frame }: { frame: TerminalFrame }) {
+  const measured = useMeasuredWind(frame.offset);
   return (
     <TelemetryCard className="space-y-3 p-5">
       <div className="flex items-center justify-between">
@@ -48,7 +51,11 @@ function SourceAttribution() {
 
       <div className="flex items-center gap-2 border-t border-term-outline-variant/40 pt-2 font-mono text-[11px] font-bold text-term-primary">
         <Navigation className="size-3.5" />
-        DOMINANT INFLOW VECTOR: NORTH-WEST
+        {/* Was the word NORTH-WEST, printed whatever the air was doing. The
+            attribution below it is editorial and stays; the direction is a
+            measurement and now reads like one. */}
+        DOMINANT INFLOW VECTOR:{' '}
+        {measured ? `${compassName(measured.fromDeg)} · ${Math.round(measured.fromDeg)}°` : 'NORTH-WEST'}
       </div>
     </TelemetryCard>
   );
@@ -154,9 +161,45 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
   );
 }
 
-function TrappingDispersion() {
+/**
+ * The measured bearing for this hour, or null offline.
+ *
+ * The card read a constant "NW" beside a compass needle drawn at a fixed
+ * angle. The backend has carried a real direction per district all along, and
+ * on 19 September it was 153 degrees - south-south-easterly - while the card
+ * said north-west and the needle pointed there.
+ */
+function useMeasuredWind(offset: number): { fromDeg: number; speedKmh: number } | null {
+  const liveFrames = useAppStore((st) => st.liveFrames);
+  return React.useMemo(() => {
+    const live = liveFrames?.[Math.min(offset, (liveFrames?.length ?? 1) - 1)];
+    if (!live) return null;
+    const cells = Object.values(live.districts);
+    const deg = meanBearing(
+      cells.map((d) => d.windDir).filter((d): d is number => typeof d === 'number'),
+    );
+    if (deg == null) return null;
+    const speeds = cells
+      .map((d) => d.windSpeed)
+      .filter((v): v is number => typeof v === 'number');
+    // The payload is m/s and the card has always been labelled km/h.
+    const speedKmh = speeds.length
+      ? (speeds.reduce((a, b) => a + b, 0) / speeds.length) * 3.6
+      : DISPERSION.windSpeed;
+    return { fromDeg: deg, speedKmh };
+  }, [liveFrames, offset]);
+}
+
+function TrappingDispersion({ frame }: { frame: TerminalFrame }) {
+  const measured = useMeasuredWind(frame.offset);
   const rows = [
-    { label: 'Wind', value: `${DISPERSION.windSpeed} km/h ${DISPERSION.windDir}`, cls: 'text-term-ink' },
+    {
+      label: 'Wind',
+      value: measured
+        ? `${measured.speedKmh.toFixed(1)} km/h ${compassName(measured.fromDeg)}`
+        : `${DISPERSION.windSpeed} km/h ${DISPERSION.windDir}`,
+      cls: 'text-term-ink',
+    },
     { label: 'Boundary layer', value: `${DISPERSION.boundaryLayer} m`, cls: 'text-term-ink' },
     { label: 'Dispersion idx', value: `${DISPERSION.dispersionIndex} ${DISPERSION.dispersionLabel}`, cls: 'text-orange-400' },
     { label: 'Inversion risk', value: DISPERSION.inversionRisk, cls: 'text-amber-400' },
@@ -177,7 +220,25 @@ function TrappingDispersion() {
             <text x="90" y="54">E</text>
             <text x="10" y="54">W</text>
           </g>
-          <line x1="50" y1="50" x2="27" y2="27" stroke={TERM.primary} strokeWidth="3" strokeLinecap="round" />
+          {/* Points at where the air is coming from, which is what a wind
+              rose shows. Drawn from the bearing rather than at a fixed 45
+              degrees: bearings run clockwise from north, so north is -y and
+              east is +x, and the needle length is 23 units. */}
+          {(() => {
+            const deg = measured?.fromDeg ?? 315;
+            const r = (deg * Math.PI) / 180;
+            return (
+              <line
+                x1="50"
+                y1="50"
+                x2={50 + 23 * Math.sin(r)}
+                y2={50 - 23 * Math.cos(r)}
+                stroke={TERM.primary}
+                strokeWidth="3"
+                strokeLinecap="round"
+              />
+            );
+          })()}
           <circle cx="50" cy="50" r="3.5" fill={TERM.primary} />
         </svg>
 
@@ -193,7 +254,9 @@ function TrappingDispersion() {
 
       <div className="flex items-center gap-1.5 border-t border-term-outline-variant/40 pt-2 font-mono text-[10px] uppercase tracking-wider text-term-ink-variant">
         <Wind className="size-3.5 text-term-secondary" />
-        Plume drift → {DISPERSION.driftDir} at {DISPERSION.driftSpeed} km/h
+        {/* Where it goes, which is the reverse of where it came from. */}
+        Plume drift → {measured ? compassName((measured.fromDeg + 180) % 360) : DISPERSION.driftDir} at{' '}
+        {measured ? (measured.speedKmh * 0.28).toFixed(1) : DISPERSION.driftSpeed} km/h
         <Compass className="ml-auto size-3.5 text-term-outline" />
       </div>
     </TelemetryCard>
