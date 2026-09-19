@@ -24,7 +24,7 @@ import { clamp, seeded } from './utils';
  * These coefficients were tuned to a moderate Delhi day and produce about
  * 110 ug/m3 unscaled. What the backend replays is a real window, and its level
  * depends entirely on which window: the December 2025 archive averages 330 at
- * hour 0, the September 2026 one averages 23. Left unscaled the offline console
+ * hour 0, the mid-September 2026 one averages 40. Left unscaled the offline console
  * would claim a different city from the live one - and in December it claimed a
  * far cleaner one, which is the more dangerous direction.
  *
@@ -34,13 +34,13 @@ import { clamp, seeded } from './utils';
  * mismatch between them and the backend is silent, which is why they are
  * regenerated together and the season is named here rather than left implicit.
  *
- * Season 2026, origin 2026-09-04T23:00Z: target ~23 ug/m3 at hour 0.
+ * Season 2026, origin 2026-09-16T23:00Z: target ~40 ug/m3 at hour 0.
  *
  * Only the loading is scaled. The physics is untouched - ventilation, the
  * aerosol-radiation feedback, the diurnal shape and the intervention sliders
  * all still do the work.
  */
-export const REGIME = 0.21;
+export const REGIME = 0.36;
 
 export const FORECAST_HOURS = 72;
 export const STEP_HOURS = 1;

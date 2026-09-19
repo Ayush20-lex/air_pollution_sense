@@ -15,16 +15,16 @@ same tensor contract, so no endpoint or frontend code has to change.
 
 The method
 ----------
-Scored by ml_pipeline/scripts/14_baselines.py over 3,734,362 comparisons from
-1,112 origins across 68 CPCB stations, fitted on everything to 30 November 2025
+Scored by ml_pipeline/scripts/14_baselines.py over 3,891,185 comparisons from
+1,157 origins across 68 CPCB stations, fitted on everything to 30 November 2025
 and tested on December 2025 through September 2026 - a full annual cycle rather
 than one winter month:
 
-    mean(diurnal_persistence, bias-corrected CAMS)   RMSE  63.35 ug/m3   <- this
-    diurnal persistence alone                        RMSE  68.33
-    persistence                                      RMSE  84.14
-    bias-corrected CAMS alone                        RMSE  82.27
-    raw CAMS                                         RMSE  87.09
+    mean(diurnal_persistence, bias-corrected CAMS)   RMSE  62.23 ug/m3   <- this
+    diurnal persistence alone                        RMSE  67.15
+    persistence                                      RMSE  82.65
+    bias-corrected CAMS alone                        RMSE  83.41
+    raw CAMS                                         RMSE  85.61
 
 CAMS reproduces Delhi's diurnal shape but is biased, so it is rescaled by a
 single factor fitted on the training window alone. The direction of that bias is
@@ -34,9 +34,9 @@ fits 0.937 - CAMS runs slightly high - where the winter-only 2025 window fits
 errors are largely uncorrelated with persistence, so the mean of the two beats
 both and beats raw CAMS by 25%.
 
-The error barely moves with lead time, which is the part worth knowing: 64.4 at
-+1-6h, 62.6 at +7-24h, 63.9 at +25-48h, 63.1 at +49-72h. Plain persistence
-degrades from 66.7 to 88.4 over the same span. A 72-hour forecast that is no
+The error barely moves with lead time, which is the part worth knowing: 63.3 at
++1-6h, 61.5 at +7-24h, 62.8 at +25-48h, 62.0 at +49-72h. Plain persistence
+degrades from 65.5 to 86.8 over the same span. A 72-hour forecast that is no
 worse than a 6-hour one is what makes it usable for a decision taken three days
 out.
 
@@ -109,18 +109,19 @@ VALIDATED: dict[int, dict[str, object]] = {
         "scored_comparisons": 462_323,
     },
     2026: {
-        "validated_rmse_ugm3": 63.35,
+        "validated_rmse_ugm3": 62.23,
         "beats_raw_cams_by": "27%",
         # A full annual cycle rather than one winter month, which is the
         # stronger claim even though the number is lower: part of the drop is
         # simply that monsoon months are cleaner, not that the method improved.
         #
-        # 66.35 before observation QC. Dropping 394 network-contradicted sensor
-        # readings out of 925,344 moved it three points - a reminder that a
-        # handful of faults can carry an error metric, and that the score has to
-        # be recomputed on the data the service actually serves.
+        # 66.35 before observation QC, 63.35 after, 62.23 once the archive was
+        # topped up to 17 September. The QC step is the interesting one: dropping
+        # 394 network-contradicted readings out of 925,344 moved it three points,
+        # a reminder that a handful of faults can carry an error metric and that
+        # the score has to be recomputed on the data actually served.
         "scored_window": "December 2025 - September 2026",
-        "scored_comparisons": 3_734_362,
+        "scored_comparisons": 3_891_185,
     },
 }
 

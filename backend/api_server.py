@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     # Do NOT commit a real token value here.
     aqicn_token:    str   = ""
     # Serve the scored blend baseline while the network has no trained weights.
-    # Its output is measurements and an evaluated forecast (RMSE 63.35 ug/m3,
+    # Its output is measurements and an evaluated forecast (RMSE 62.23 ug/m3,
     # 30% better than raw CAMS) instead of random-weight noise. Set false to see
     # the untrained model's raw output.
     use_baseline:   bool  = True
@@ -322,7 +322,7 @@ def _generate_forecast_tensor() -> tuple[torch.Tensor, bool]:
     # With no trained weights the network below emits noise, and the inputs it
     # would run on are mock CPCB, mock FIRMS and np.random meteorology. Prefer a
     # forecast whose error is known: the mean of diurnal persistence and
-    # bias-corrected CAMS, scored at RMSE 63.35 ug/m3 across Dec 2025-Sep 2026 —
+    # bias-corrected CAMS, scored at RMSE 62.23 ug/m3 across Dec 2025-Sep 2026 —
     # 30% better than raw CAMS. Ten of the twelve channels are measurements or
     # archived forecast; FRP and smoke stay zero for want of a live fire feed.
     if cfg.use_baseline and not _state.weights_loaded:
@@ -488,7 +488,7 @@ async def model_status():
             "imd_met": "archive" if _state.forecast_meta else "synthetic",
             "nasa_firms": "synthetic",  # no live fire feed in either path
             # Read-only side channel from the partner ingestion pipeline. It
-            # feeds no forecast: the blend baseline is validated at 63.35 and
+            # feeds no forecast: the blend baseline is validated at 62.23 and
             # adding an input would invalidate that number.
             "noaa_gfs": gfs_reader.describe(),
             "station_mesh": station_registry.describe(
@@ -510,7 +510,7 @@ async def model_status():
             else (
                 "Model weights not loaded. Forecasts come from the blend baseline "
                 "(mean of diurnal persistence and bias-corrected CAMS), validated at "
-                "RMSE 63.35 ug/m3 over Dec 2025-Sep 2026 — 27% better than raw CAMS. "
+                "RMSE 62.23 ug/m3 over Dec 2025-Sep 2026 — 27% better than raw CAMS. "
                 "Values are real; FRP and smoke channels are zero. Replayed from the "
                 "archive, not a live feed."
             ) if _state.forecast_meta

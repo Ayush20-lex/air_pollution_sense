@@ -18,7 +18,7 @@ window is carried in the column name rather than assumed by the reader.
 
 So this is a read-only side channel, not a forecast input. It deliberately does
 not touch baseline_forecaster or channel_spec: the blend baseline is validated
-at 63.35 ug/m3 over 3,734,362 scored comparisons, and feeding a new field into it
+at 62.23 ug/m3 over 3,891,185 scored comparisons, and feeding a new field into it
 would invalidate that number with no time left to re-run the scoring.
 
 Absence is a normal state
