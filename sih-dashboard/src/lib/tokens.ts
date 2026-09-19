@@ -47,9 +47,9 @@ export const PARTICLE = {
     // Deep and desaturated on purpose. The globe blends additively in dark
     // mode, so ocean covers 70% of the sphere and any chroma here sums into
     // a solid disc that swallows the land.
-    ocean: '#0E2A44',
+    ocean: '#1C4A72',
     /** Base colour of clean land — most of the globe, so it must stay quiet. */
-    calm: '#5EC8E8',
+    calm: '#8BDEFF',
     /** The globe's edge. Brighter than the surface — it is the outline. */
     rim: '#BFEFFF',
   },
@@ -60,9 +60,9 @@ export const PARTICLE = {
     cool: '#0369A1',
     hot: '#0F172A',
     /** Light mode draws normally, so ocean needs value rather than restraint. */
-    ocean: '#94A3B8',
+    ocean: '#7C8CA0',
     /** Base colour of clean land in light mode. */
-    calm: '#0E7490',
+    calm: '#0891B2',
     /** The globe's edge in light mode, where it must darken rather than glow. */
     rim: '#164E63',
   },

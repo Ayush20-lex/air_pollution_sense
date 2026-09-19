@@ -97,7 +97,7 @@ function loadAt(x: number, y: number, z: number) {
 function makeGlobeMaterial(sprite: THREE.Texture, dark: boolean) {
   const material = new THREE.PointsMaterial({
     map: sprite,
-    size: dark ? 0.0145 : 0.016,
+    size: dark ? 0.0205 : 0.022,
     transparent: true,
     opacity: dark ? 0.95 : 0.9,
     depthWrite: false,
@@ -345,7 +345,7 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
     u.uDisperse.value = d;
 
     mat.opacity = (dark ? 0.95 : 0.9) * (1 - d * 0.95);
-    mat.size = (dark ? 0.0145 : 0.016) + d * 0.055;
+    mat.size = (dark ? 0.0205 : 0.022) + d * 0.055;
 
     // Gentle autorotation; accelerates as the field breaks apart.
     pts.rotation.y += delta * (0.045 + d * 0.9);
