@@ -363,3 +363,28 @@
 .tele-range:focus-visible {
   box-shadow: 0 0 0 2px rgb(78 222 163 / 0.5);
 }
+
+/* ---- Forecast track ----
+   Only the value labels fade; the line, the numbers and the runner are drawn
+   unconditionally.
+
+   A mask that swept the line into view was tried first and is the wrong shape
+   of idea. A running animation overrides the resting style, so wherever the
+   compositor does not advance it - a minimised window, a throttled background
+   tab - the mask stays shut and the chart is blank. What fails should cost the
+   motion, never the data. The resting state here is therefore the finished
+   state, and the keyframes describe only the way in. */
+.forecast-value {
+  opacity: 1;
+  animation: forecast-value-in 0.35s ease-out forwards;
+}
+@keyframes forecast-value-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .forecast-value {
+    animation: none;
+  }
+}

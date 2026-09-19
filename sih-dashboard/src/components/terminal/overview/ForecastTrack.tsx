@@ -24,6 +24,7 @@ import { Label, SectionHead, TelemetryCard } from '@/components/terminal/Termina
 import { AQI_RAMP } from '@/lib/terminal/bands';
 import type { ForecastSource } from '@/lib/forecastApi';
 import { TERM } from '@/lib/terminal/palette';
+import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 
 /** Hours between x-axis marks. Every hour is unreadable; every 24 hides the
  *  shape of a day, which for NCR is the whole story - the morning build-up and
@@ -59,6 +60,7 @@ export function ForecastTrack({
   points: ForecastPoint[];
   source: ForecastSource | null;
 }) {
+  const reduced = usePrefersReducedMotion();
   const w = 760;
   const h = 260;
   const padL = 34;
@@ -223,33 +225,92 @@ export function ForecastTrack({
             );
           })}
 
-          {/* the forecast itself, one stroke per method */}
-          {runs.map((run, i) => (
-            <path
-              key={i}
-              d={path(run.pts)}
-              fill="none"
-              stroke={run.method === 'cams_only' ? TERM.secondary : TERM.primary}
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeDasharray={run.method === 'cams_only' ? '5 4' : undefined}
-              opacity={run.method === 'cams_only' ? 0.85 : 1}
-            />
-          ))}
+          <g>
+            {/* the forecast itself, one stroke per method */}
+            {runs.map((run, i) => (
+              <path
+                key={i}
+                d={path(run.pts)}
+                fill="none"
+                stroke={run.method === 'cams_only' ? TERM.secondary : TERM.primary}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray={run.method === 'cams_only' ? '5 4' : undefined}
+                opacity={run.method === 'cams_only' ? 0.85 : 1}
+              />
+            ))}
+          </g>
 
-          {/* the hour the forecast was issued for */}
-          <circle cx={x(0)} cy={y(points[0].aqi)} r="4" fill={TERM.primary} />
-          <text
-            x={x(0) + 8}
-            y={y(points[0].aqi) - 8}
-            fontSize="10"
-            fill={TERM.ink}
-            fontFamily="var(--font-mono), monospace"
-            fontWeight="700"
-          >
-            {points[0].aqi}
-          </text>
+          {/* The animation is a highlight that travels the line once, not a
+              reveal of the line itself.
+
+              A mask was tried first and is the wrong shape of idea: a running
+              animation overrides the resting style, so wherever the compositor
+              does not advance it - a minimised window, a throttled background
+              tab - the mask stays shut and the chart is simply blank. Whatever
+              fails here should cost the motion and never the data, so the line
+              and its numbers are drawn unconditionally and this rides over
+              them. If it never moves, it is a dot at hour zero. */}
+          {reduced ? null : (
+            <circle
+              className="forecast-runner"
+              r="4"
+              fill={TERM.primary}
+              opacity="0.9"
+              cy={y(points[0].aqi)}
+              cx={x(0)}
+            >
+              <animateMotion
+                dur="2.4s"
+                repeatCount="indefinite"
+                path={path(points)}
+                rotate="auto"
+              />
+            </circle>
+          )}
+
+          {/* The value at each 12-hour mark. Every one of the 72 would be
+              unreadable and most carry no information the shape does not
+              already give; the marks are where the eye stops anyway.
+
+              Each is delayed to land as the sweep passes it, so the numbers
+              arrive with the line rather than all at once at the end. */}
+          {ticks.map((t, i) => {
+            const above = t.aqi < maxAqi * 0.75;
+            const method = methods[Math.max(0, t.hour - 1)] ?? 'cams_only';
+            const colour = method === 'cams_only' ? TERM.secondary : TERM.primary;
+            // Pull the first and last inside the plot so neither is clipped.
+            const anchor = i === 0 ? 'start' : i === ticks.length - 1 ? 'end' : 'middle';
+            return (
+              <g
+                key={`v-${t.hour}`}
+                className={reduced ? undefined : 'forecast-value'}
+                style={
+                  reduced
+                    ? undefined
+                    : { animationDelay: `${0.15 + (t.hour / lastPoint.hour) * 0.95}s` }
+                }
+              >
+                <circle cx={x(t.hour)} cy={y(t.aqi)} r={t.hour === 0 ? 4 : 2.5} fill={colour} />
+                <text
+                  x={x(t.hour)}
+                  y={above ? y(t.aqi) - 9 : y(t.aqi) + 16}
+                  textAnchor={anchor}
+                  fontSize="11"
+                  fill={TERM.ink}
+                  fontFamily="var(--font-mono), monospace"
+                  fontWeight="700"
+                  paintOrder="stroke"
+                  stroke={TERM.bgDeep}
+                  strokeWidth="3"
+                  strokeLinejoin="round"
+                >
+                  {t.aqi}
+                </text>
+              </g>
+            );
+          })}
         </svg>
 
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-term-outline-variant/40 pt-2">
