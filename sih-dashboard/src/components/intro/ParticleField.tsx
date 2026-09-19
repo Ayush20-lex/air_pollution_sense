@@ -86,15 +86,18 @@ function makeGlobeMaterial(sprite: THREE.Texture, dark: boolean) {
     blending: dark ? THREE.AdditiveBlending : THREE.NormalBlending,
   });
 
+  const palette = dark ? PARTICLE.dark : PARTICLE.light;
   const uniforms = {
     uTime: { value: 0 },
     uDisperse: { value: 0 },
+    uRim: { value: new THREE.Color(palette.rim) },
   };
   material.userData.uniforms = uniforms;
 
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uniforms.uTime;
     shader.uniforms.uDisperse = uniforms.uDisperse;
+    shader.uniforms.uRim = uniforms.uRim;
 
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -104,6 +107,7 @@ function makeGlobeMaterial(sprite: THREE.Texture, dark: boolean) {
          attribute vec3 aColor;
          uniform float uTime;
          uniform float uDisperse;
+         uniform vec3 uRim;
          varying float vFade;
          varying vec3 vTint;`,
       )
@@ -129,8 +133,24 @@ function makeGlobeMaterial(sprite: THREE.Texture, dark: boolean) {
          // translating it. Its z in view space is how far the point faces
          // the camera: +1 dead on, -1 directly behind the globe.
          vec3 viewDir = normalize((modelViewMatrix * vec4(dir, 0.0)).xyz);
-         vFade = mix(smoothstep(-0.12, 0.12, viewDir.z), 1.0, uDisperse);
-         vTint = aColor;`,
+         float facing = smoothstep(-0.12, 0.12, viewDir.z);
+
+         // The silhouette. Points whose surface has turned edge-on sit on the
+         // circle where viewDir.z crosses zero, front and back hemispheres
+         // alike, and perspective packs their spacing to nearly nothing there
+         // — so the outline draws itself as soon as those points are allowed
+         // to be seen. The depth fade was dimming exactly them to half, which
+         // is why the globe had no edge and read as a drifting patch.
+         //
+         // Narrow on purpose: 0.09 is about five degrees of arc, a line
+         // rather than a glow. It carries its own colour because ocean at the
+         // limb is near black, and alpha cannot brighten a colour that is not
+         // there.
+         float rim = 1.0 - smoothstep(0.0, 0.09, abs(viewDir.z));
+         rim *= 1.0 - uDisperse;
+
+         vFade = mix(max(facing, rim * 0.92), 1.0, uDisperse);
+         vTint = mix(aColor, uRim, rim * 0.85);`,
       );
 
     shader.fragmentShader = shader.fragmentShader

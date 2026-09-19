@@ -50,6 +50,8 @@ export const PARTICLE = {
     ocean: '#0E2A44',
     /** Base colour of clean land — most of the globe, so it must stay quiet. */
     calm: '#5EC8E8',
+    /** The globe's edge. Brighter than the surface — it is the outline. */
+    rim: '#BFEFFF',
   },
   light: {
     good: '#15803D',
@@ -61,5 +63,7 @@ export const PARTICLE = {
     ocean: '#94A3B8',
     /** Base colour of clean land in light mode. */
     calm: '#0E7490',
+    /** The globe's edge in light mode, where it must darken rather than glow. */
+    rim: '#164E63',
   },
 } as const;
