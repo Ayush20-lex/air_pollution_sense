@@ -228,10 +228,13 @@ def _observations(
             # is what the National AQI is computed from. Only PM2.5 for now -
             # the thresholds are calibrated to it, and PM10 is legitimately
             # several times higher during a dust event.
-            wide = pd.DataFrame(
-                observation_qc.despike(wide.to_numpy(dtype=np.float32), pol),
-                index=wide.index, columns=wide.columns,
-            )
+            # Two different faults, so two passes. `despike` removes readings
+            # the rest of the network contradicts; `drop_stuck` removes runs
+            # where the instrument stopped moving, which no peer can contradict
+            # because the fault is silent and local.
+            values = observation_qc.despike(wide.to_numpy(dtype=np.float32), pol)
+            values = observation_qc.drop_stuck(values, pol)
+            wide = pd.DataFrame(values, index=wide.index, columns=wide.columns)
         frames[pol] = wide
     return frames
 
@@ -269,6 +272,10 @@ def build(season: int = 2025, as_of: str | None = None) -> dict[str, Any]:
 
         readings: list[tuple[str, float | None, str]] = []
         measured: list[str] = []
+        # The hourly window each sub-index was computed from, kept so a reader
+        # can see the 24 hours behind the number rather than only its mean.
+        # Already computed below for the index; it was simply discarded.
+        hourly: dict[str, list[float | None]] = {}
         for pol in AQI_POLLUTANTS:
             wide = obs.get(pol)
             if wide is None:
@@ -284,6 +291,9 @@ def build(season: int = 2025, as_of: str | None = None) -> dict[str, Any]:
                 continue
             measured.append(pol)
             readings.extend((pol, v, sensor.unit) for v in series)
+            # One decimal is the reporting precision of the instruments and
+            # keeps the payload to roughly the size of the rest of the record.
+            hourly[pol] = [None if v is None else round(v, 1) for v in series]
 
         result = aqi_cpcb.compute_aqi_from_readings(readings)
         payload = result.as_dict()
@@ -318,6 +328,7 @@ def build(season: int = 2025, as_of: str | None = None) -> dict[str, Any]:
                 "coverage_pct": round(hours / WINDOW_HOURS * 100.0, 1),
                 "sensors_reporting": len(measured),
                 "pollutants": measured,
+                "hourly": hourly,
                 **payload,
             }
         )

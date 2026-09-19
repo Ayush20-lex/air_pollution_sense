@@ -742,7 +742,7 @@ def _mesh_origin() -> str | None:
         from baseline_forecaster import get_forecaster
         return str(get_forecaster(get_settings().baseline_season).valid_origins()[-1])
     except Exception as exc:  # noqa: BLE001 - the mesh still stands alone
-        log.info("no forecast origin to pin the mesh to (%s)", exc)
+        _log.info("no forecast origin to pin the mesh to (%s)", exc)
         return None
 
 
@@ -881,7 +881,7 @@ async def policy_grap():
         # No station geometry available - the trained-model path, or a failed
         # archive load. Fall back to a high spatial percentile rather than the
         # maximum, so the answer is still not decided by one cell.
-        log.info("GRAP falling back to a grid percentile (%s)", exc)
+        _log.info("GRAP falling back to a grid percentile (%s)", exc)
         basis = "grid_p95"
         series = np.percentile(pm25.reshape(pm25.shape[0], -1), 95, axis=1)[:, None]
 

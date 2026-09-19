@@ -236,10 +236,12 @@ class BlendBaselineForecaster:
                                 aggfunc="mean")
                    .reindex(index=self.times, columns=ids))
             if qc:
-                w = pd.DataFrame(
-                    observation_qc.despike(w.to_numpy(dtype=np.float32), col),
-                    index=w.index, columns=w.columns,
-                )
+                # Two different faults, so two passes. `despike` removes readings
+                # the network contradicts; `drop_stuck` removes runs where the
+                # instrument stopped moving, which no peer can contradict.
+                values = observation_qc.despike(w.to_numpy(dtype=np.float32), col)
+                values = observation_qc.drop_stuck(values, col)
+                w = pd.DataFrame(values, index=w.index, columns=w.columns)
             return (w.ffill().bfill() if fill else w).to_numpy(dtype=np.float32)
 
         # Observations only. CAMS is a model field and has no faulty sensor.

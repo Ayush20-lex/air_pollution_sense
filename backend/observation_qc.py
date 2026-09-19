@@ -63,6 +63,28 @@ MIN_ABSOLUTE = 200.0
 #: shows up as several stations elevated together, not as one station alone.
 PEER_FACTOR = 3.0
 
+#: A reading this low is not a measurement of urban air. NCR's cleanest
+#: monsoon hours sit in the teens; single digits sustained over hours are the
+#: instrument, not the atmosphere. Used only as a gate on the stuck-value test
+#: below, never on its own - one genuinely clean hour is not a fault.
+IMPLAUSIBLE_LOW = 5.0
+
+#: Consecutive byte-identical hourly readings taken to mean the instrument has
+#: stopped reporting and started repeating. Real PM2.5 never holds exactly the
+#: same value for hours: even a flat night wanders by a few tenths. Six is
+#: chosen to be past any rounding coincidence while still catching a fault
+#: inside the 24-hour indexing window.
+#:
+#: This is the fault that motivated the test. Anand Vihar on 2026-09-04 ran
+#: 28.5, 55.5, 75.0, 51.0, 35.5, 34.7, 17.5, 1.7 and then sixteen consecutive
+#: hours of exactly 1.0. Read as measurements those hours pulled the 24-hour
+#: mean from about 42 to 13.14, took the PM2.5 sub-index from roughly 100 to
+#: 22, and published Delhi's worst-known station as "Satisfactory" with a 67%
+#: improvement over the previous day. Every step downstream was arithmetically
+#: correct; the input was not a measurement.
+STUCK_RUN = 6
+
+
 
 def despike(obs: np.ndarray, label: str = "pm25") -> np.ndarray:
     """Return `obs` with network-contradicted readings set to NaN.
@@ -95,5 +117,56 @@ def despike(obs: np.ndarray, label: str = "pm25") -> np.ndarray:
         logger.warning(
             "%s: dropped %d reading(s) contradicted by the network (max %.0f ug/m3)",
             label, n, worst,
+        )
+    return out
+
+
+def drop_stuck(obs: np.ndarray, label: str = "pm25") -> np.ndarray:
+    """Return `obs` with flatlined runs set to NaN.
+
+    A run is flagged when a station repeats one value for `STUCK_RUN`
+    consecutive hours and that value is below `IMPLAUSIBLE_LOW`. Both halves
+    matter: the repetition identifies the instrument as stuck, and the
+    magnitude gate keeps the test off a genuinely steady reading at a level the
+    atmosphere can actually produce.
+
+    Unlike `despike` this cannot consult the network, because a stuck sensor
+    fails alone and silently - there is no contradiction to find, only a value
+    that never moves.
+    """
+    if obs.size == 0:
+        return obs
+
+    out = np.asarray(obs, dtype=np.float32).copy()
+    n_times, n_stations = out.shape
+    dropped = 0
+
+    for col in range(n_stations):
+        series = out[:, col]
+        run_start = 0
+        for i in range(1, n_times + 1):
+            same = (
+                i < n_times
+                and np.isfinite(series[i])
+                and np.isfinite(series[i - 1])
+                and series[i] == series[i - 1]
+            )
+            if same:
+                continue
+            run_len = i - run_start
+            value = series[run_start]
+            if (
+                run_len >= STUCK_RUN
+                and np.isfinite(value)
+                and value < IMPLAUSIBLE_LOW
+            ):
+                series[run_start:i] = np.nan
+                dropped += run_len
+            run_start = i
+
+    if dropped:
+        logger.warning(
+            "%s: dropped %d reading(s) from stuck sensors (runs of >=%d identical values below %.0f ug/m3)",
+            label, dropped, STUCK_RUN, IMPLAUSIBLE_LOW,
         )
     return out
