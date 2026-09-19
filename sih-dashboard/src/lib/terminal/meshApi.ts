@@ -258,6 +258,30 @@ export type MergedMesh = {
  * `source` is the one field with no equivalent in either feed - it is an
  * editorial attribution of the upwind sector, and the table marks it as such.
  */
+/**
+ * The hour a station's reading belongs to, in IST.
+ *
+ * Shared rather than written where it is needed: the map tooltip and the
+ * overview both have to name the archive's hour, and two formatters would
+ * eventually disagree about the same timestamp on the same screen.
+ */
+export function stationHour(s: Station | LiveStation): string {
+  const iso = 'stationAsOf' in s ? s.stationAsOf : null;
+  if (!iso) return 'an earlier hour';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'an earlier hour';
+  return (
+    d.toLocaleString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Kolkata',
+    }) + ' IST'
+  );
+}
+
 export function mergeMesh(payload: MeshPayload): MergedMesh {
   const zones: Station['zone'][] = ['North', 'West', 'Central', 'East', 'South', 'NCR Outer'];
 

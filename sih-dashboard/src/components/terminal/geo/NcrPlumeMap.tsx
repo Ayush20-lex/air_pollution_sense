@@ -26,7 +26,7 @@ import {
   PLUME_SOURCES,
   type Station,
 } from '@/lib/terminal/stations';
-import type { LiveStation } from '@/lib/terminal/meshApi';
+import { stationHour } from '@/lib/terminal/meshApi';
 import { useMesh, useFreshStations, isStale } from '@/lib/terminal/useMesh';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { TERM } from '@/lib/terminal/palette';
@@ -615,22 +615,6 @@ const PIN_SIZE: Record<PinDensity, [number, number]> = {
   compact: [44, 34],
   dot: [16, 16],
 };
-
-/**
- * The hour a pin's reading belongs to, in IST, for the archived pins only.
- * A live pin does not carry this: everything else on the page is already that
- * hour, and repeating it on every tooltip would bury the one case that differs.
- */
-function stationHour(s: Station | LiveStation): string {
-  const iso = 'stationAsOf' in s ? s.stationAsOf : null;
-  if (!iso) return 'an earlier hour';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return 'an earlier hour';
-  return d.toLocaleString('en-IN', {
-    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-    hour12: false, timeZone: 'Asia/Kolkata',
-  }) + ' IST';
-}
 
 function buildPin(
   station: Station,

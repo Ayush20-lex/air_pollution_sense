@@ -4,7 +4,8 @@ import { Label, Meter, TelemetryCard } from '@/components/terminal/TerminalPrimi
 import { ADVISORY_TEXT, BIOMETRIC_IMPACTS, CPCB_SCALE, HUB } from '@/lib/terminal/content';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { useHubStation, useMeshRange } from '@/lib/terminal/useMesh';
-import { isLive } from '@/lib/terminal/useMesh';
+import { isLive, isStale } from '@/lib/terminal/useMesh';
+import { stationHour } from '@/lib/terminal/meshApi';
 import { cn } from '@/lib/utils';
 import { TERM } from '@/lib/terminal/palette';
 
@@ -23,6 +24,12 @@ export function OverviewHero() {
 
 function StatusBanner() {
   const { station, live } = useHubStation();
+  // The map draws archived stations hollow and dates them in the tooltip; this
+  // banner said "Measured / CPCB hourly" over the same reading with no hour at
+  // all. That is how a Greater Noida station came to show 17 September's PM10
+  // of 308 beside a live site reading 127 two days later, with nothing on
+  // screen to explain the gap - the numbers were right and the page was not.
+  const stale = live && isStale(station);
   return (
     <div className="flex flex-col justify-between gap-4 border-b border-term-outline-variant/40 pb-1 lg:flex-row lg:items-center">
       <div>
@@ -33,6 +40,11 @@ function StatusBanner() {
           <span className="rounded border border-orange-500/40 bg-orange-500/15 px-2.5 py-0.5 font-mono text-xs font-bold text-orange-400">
             {live ? `${station.name} • ${station.zone} zone • ${station.agency}` : HUB.station}
           </span>
+          {stale && (
+            <span className="rounded border border-amber-500/50 bg-amber-500/10 px-2.5 py-0.5 font-mono text-xs font-bold text-amber-400">
+              ARCHIVED · {stationHour(station)}
+            </span>
+          )}
         </div>
         <p className="mt-1 font-body text-sm text-term-ink-variant">
           High-frequency optical spectrometry stream &amp; distributed meteorological telemetry
@@ -41,14 +53,16 @@ function StatusBanner() {
       <div className="flex items-center gap-3">
         <StatPill
           icon={<Radio className="size-4 text-term-primary" />}
+          // "CPCB hourly" describes a stream. A replayed window is not one, and
+          // saying so was the strongest claim on the banner.
           label="Mesh Stream Sync"
-          value={live ? 'CPCB hourly' : HUB.sampleRate}
+          value={stale ? 'CPCB hourly · replayed' : live ? 'CPCB hourly' : HUB.sampleRate}
         />
         <StatPill
           icon={<Thermometer className="size-4 text-term-secondary" />}
           label="Readings"
           value={live ? 'Measured' : 'Demo values'}
-          valueClass="text-term-primary"
+          valueClass={stale ? 'text-amber-400' : 'text-term-primary'}
         />
       </div>
     </div>
@@ -87,6 +101,12 @@ function AqiGauge() {
   const aqi = station.aqi;
   const band = bandForAqi(aqi);
   const delta = station.delta;
+  // The live feed is one snapshot with no previous day behind it, so its
+  // delta is absent rather than zero. Printed anyway it read "0.0% Increased" -
+  // an absence rendered as a measurement of no change, which is the same
+  // mistake as a dead sensor publishing clean air.
+  const deltaKnown = isLive(station) ? station.deltaKnown : true;
+  const stale = live && isStale(station);
   const sub = isLive(station) ? station.subIndices : null;
   const dominantSub = sub?.[station.dominant === 'PM2.5' ? 'PM2.5' : station.dominant];
 
@@ -105,14 +125,23 @@ function AqiGauge() {
           <div className="mt-0.5 font-display text-xl font-bold text-term-ink">
             {live ? station.name : HUB.sector}
           </div>
+          {stale && (
+            <div className="mt-0.5 font-mono text-[11px] font-bold text-amber-400">
+              Replayed from the archive · {stationHour(station)}
+            </div>
+          )}
           <div className="mt-1 flex items-center gap-2 font-mono text-xs text-term-ink-variant">
             <span>{live ? `${station.zone} zone · ${station.agency}` : `Updated ${HUB.updatedSeconds}s ago`}</span>
             <span className="inline-block size-1.5 rounded-full bg-slate-600" />
             {/* Sign follows the measurement. The old copy said "Increased"
                 unconditionally, over a delta that can be and today is negative. */}
-            <span className={cn('font-bold', delta >= 0 ? 'text-orange-400' : 'text-term-primary')}>
-              {delta >= 0 ? '↑' : '↓'} {Math.abs(delta).toFixed(1)}% {delta >= 0 ? 'Increased' : 'Decreased'}
-            </span>
+            {deltaKnown ? (
+              <span className={cn('font-bold', delta >= 0 ? 'text-orange-400' : 'text-term-primary')}>
+                {delta >= 0 ? '↑' : '↓'} {Math.abs(delta).toFixed(1)}% {delta >= 0 ? 'Increased' : 'Decreased'}
+              </span>
+            ) : (
+              <span className="text-term-outline">24h change not measured</span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 rounded-full border border-orange-500/50 bg-orange-500/20 px-3.5 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-orange-300 shadow-[0_0_15px_rgba(249,115,22,0.3)]">
