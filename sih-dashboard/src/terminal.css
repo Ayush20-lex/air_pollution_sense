@@ -277,6 +277,33 @@
   opacity: 1;
   background: var(--t-glass-bg);
 }
+/* Unindexed pins.
+   A station that is reporting but has too few pollutants for CPCB to publish
+   an index - most often its PM sensors are down, and the National AQI needs a
+   particulate. There is no reading, so there is deliberately no severity
+   colour: a neutral ring says "station here, no number" without implying the
+   air is clean. Smaller and quieter than a dot pin so the indexed mesh still
+   reads first. Excluded from the heat field, the contours and every aggregate,
+   which is guaranteed upstream by keeping them in their own list. */
+.term-map .as-pin-unindexed {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+}
+.term-map .as-pin-hollow {
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  border: 1.5px dashed var(--t-outline);
+  opacity: 0.7;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.term-map .as-pin-unindexed:hover .as-pin-hollow {
+  opacity: 1;
+  transform: scale(1.25);
+  border-style: solid;
+}
 .term-map .as-pin-selected {
   border-width: 2px !important;
   background: var(--t-glass-bg);

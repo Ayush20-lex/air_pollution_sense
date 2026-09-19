@@ -79,6 +79,19 @@ export function GeoMapView() {
                 + {mesh.supplemented} ARCHIVED
               </span>
             )}
+            {mesh.unindexed.length > 0 && (
+              // Counted apart again, and for a stronger reason than the archived
+              // nodes: these have no number at all. They are on the map because a
+              // station that is measuring should not vanish from it, but folding
+              // them into "reporting" would claim readings that CPCB's own rules
+              // refuse to publish.
+              <span
+                className="rounded border border-term-outline-variant/60 px-2.5 py-0.5 font-mono text-xs font-bold text-term-ink-variant"
+                title="Reporting too few pollutants for a CPCB index — drawn as hollow rings, counted in no aggregate"
+              >
+                + {mesh.unindexed.length} NO INDEX
+              </span>
+            )}
           </div>
           <p className="mt-1 font-body text-sm text-term-ink-variant">
             Regional plume tracking, topographic trapping analysis &amp; pollution source attribution

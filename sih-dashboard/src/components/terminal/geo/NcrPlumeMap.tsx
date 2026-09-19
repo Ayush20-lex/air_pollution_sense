@@ -76,6 +76,7 @@ export function NcrPlumeMap({ frame }: { frame: TerminalFrame }) {
       {layers.tracks && <SourceRibbons />}
       {layers.wind && <WindStreamlines frame={frame} />}
       {layers.pins && <StationPins frame={frame} selectedId={selectedId} select={select} />}
+      {layers.pins && <UnindexedPins />}
     </MapContainer>
   );
 }
@@ -138,6 +139,61 @@ function StationPins({
         })}
     </>
   );
+}
+
+/**
+ * Stations that are reporting but have no publishable index.
+ *
+ * CPCB's National AQI needs three pollutants including a particulate, so a
+ * site whose PM sensors are down this hour produces no number - Knowledge Park
+ * III was publishing CO and O3 and nothing else. The merge dropped those
+ * silently, so the map showed nothing at a coordinate where a station was
+ * demonstrably measuring, and a reader looking for it concluded the mesh did
+ * not cover Greater Noida.
+ *
+ * They are drawn as hollow rings: present, locatable, clickable for the
+ * reason, and visibly not carrying a reading. Inventing an index from CO and
+ * O3 would be the one failure worse than omitting them, so the marker says
+ * what is missing instead.
+ *
+ * No AQI means no colour, no severity and no place in any aggregate - these
+ * come from their own list for exactly that reason.
+ */
+function UnindexedPins() {
+  const { unindexed } = useMesh();
+
+  return (
+    <>
+      {unindexed.map((s) => (
+        <Marker key={s.id} position={[s.lat, s.lng]} icon={buildUnindexedPin()}>
+          <LTooltip direction="top" offset={[0, -10]} opacity={1} className="as-tip">
+            <div style={{ minWidth: 170 }}>
+              <div style={{ fontWeight: 700, marginBottom: 4, color: '#fff' }}>{s.name}</div>
+              <div style={{ color: '#f0b429' }}>No CPCB index this hour</div>
+              <div style={{ opacity: 0.85, marginTop: 2 }}>{s.reason}</div>
+              <div style={{ opacity: 0.7, marginTop: 4 }}>
+                {s.pollutants.length
+                  ? `Reporting ${s.pollutants.map((x) => x.toUpperCase()).join(', ')}`
+                  : 'Reporting nothing this hour'}
+              </div>
+              <div style={{ opacity: 0.7 }}>{s.agency}</div>
+            </div>
+          </LTooltip>
+        </Marker>
+      ))}
+    </>
+  );
+}
+
+/** A hollow ring: a station with a position and no reading. */
+function buildUnindexedPin() {
+  const size: [number, number] = [14, 14];
+  return L.divIcon({
+    className: 'as-pin-wrap',
+    iconSize: size,
+    iconAnchor: [size[0] / 2, size[1] / 2],
+    html: '<div class="as-pin as-pin-unindexed"><span class="as-pin-hollow"></span></div>',
+  });
 }
 
 /** The region the map opens on. Shared so the density pass can ask what zoom

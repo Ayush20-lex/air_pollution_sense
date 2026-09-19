@@ -13,7 +13,13 @@
  */
 import * as React from 'react';
 import { STATIONS, type Station } from './stations';
-import { fetchMesh, mergeMesh, type LiveStation, type MergedMesh } from './meshApi';
+import {
+  fetchMesh,
+  mergeMesh,
+  type LiveStation,
+  type MergedMesh,
+  type UnindexedStation,
+} from './meshApi';
 import { useTerminalStore } from '@/store/useTerminalStore';
 
 /** Kept in step with the console's refresh so the two pages age together. */
@@ -42,6 +48,12 @@ export type MeshState = {
   note: string | null;
   /** Curated nodes with no counterpart in the archive. */
   dropped: string[];
+  /**
+   * Stations the feed carries at a real location but CPCB's rules forbid
+   * indexing this hour. Drawn on the map, counted in nothing - see
+   * `UnindexedStation`.
+   */
+  unindexed: UnindexedStation[];
   /** Pollutants withheld from the index, and why. */
   excluded: Record<string, string>;
   /** Nodes in the curated mesh, for "22 of 26" style reporting. */
@@ -74,6 +86,9 @@ const OFFLINE: MeshState = {
   curatedCount: STATIONS.length,
   feed: null,
   supplemented: 0,
+  // The offline fallback is a frozen snapshot of stations that *did* index;
+  // it carries no record of the ones that did not.
+  unindexed: [],
 };
 
 /**
@@ -114,6 +129,7 @@ async function refresh(force = false) {
   }
   publish({
     stations: merged.stations,
+    unindexed: merged.unindexed,
     live: true,
     status: 'live',
     asOf: merged.as_of,

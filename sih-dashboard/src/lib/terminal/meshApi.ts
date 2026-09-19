@@ -231,8 +231,43 @@ export type LiveStation = Station & {
   historyKind: 'hourly_readings' | 'rolling_24h_mean';
 };
 
+/**
+ * A station the feed carries at a real location but cannot put a number on.
+ *
+ * CPCB's National AQI needs three pollutants with at least one particulate.
+ * A site whose PM sensors are down this hour still reports - Knowledge Park
+ * III was publishing CO and O3 and nothing else - and it is still a real
+ * monitoring station at a real coordinate. It simply has no index, and the
+ * map was dropping it silently, which reads as "nothing here" rather than
+ * "measuring, not indexable".
+ *
+ * Deliberately not a `LiveStation` and deliberately in its own list. Every
+ * aggregate on the page - zone rollups, the ranking, the interpolated
+ * surface - walks `stations`, so keeping these out of that array is what
+ * guarantees none of them can average in a station that has no number.
+ */
+export type UnindexedStation = {
+  id: string;
+  meshId: number;
+  name: string;
+  fullName: string;
+  agency: string;
+  lat: number;
+  lng: number;
+  /** What it did report this hour, e.g. ["co", "o3"]. */
+  pollutants: string[];
+  /** CPCB's own words for why there is no index. */
+  reason: string;
+  freshness: 'live' | 'archive';
+};
+
 export type MergedMesh = {
   stations: LiveStation[];
+  /**
+   * Stations the feed carried at a location but could not index. Drawn as
+   * bare markers, counted in no aggregate.
+   */
+  unindexed: UnindexedStation[];
   /** Stations the feed carried but could not index, by name. */
   dropped: string[];
   /** "waqi_live" or "archive". */
@@ -319,8 +354,35 @@ export function mergeMesh(payload: MeshPayload): MergedMesh {
       historyKind: s.history_kind ?? 'hourly_readings',
     }));
 
+  // Same stations `dropped` names, but kept with their coordinates so the map
+  // can draw them. Anything without a usable position is left out: a marker
+  // at 0,0 is worse than an absent one.
+  const unindexed = payload.stations
+    .filter(
+      (s) =>
+        (!s.valid || s.aqi == null) &&
+        Number.isFinite(s.lat) &&
+        Number.isFinite(s.lon) &&
+        (s.lat !== 0 || s.lon !== 0),
+    )
+    .map(
+      (s): UnindexedStation => ({
+        id: `u${s.id}`,
+        meshId: s.id,
+        name: s.name,
+        fullName: s.full_name,
+        agency: s.agency ?? 'CPCB',
+        lat: s.lat,
+        lng: s.lon,
+        pollutants: s.pollutants ?? [],
+        reason: s.reasons?.[0] ?? 'no publishable index this hour',
+        freshness: s.freshness ?? (payload.source === 'waqi_live' ? 'live' : 'archive'),
+      }),
+    );
+
   return {
     stations,
+    unindexed,
     dropped: payload.stations.filter((s) => !s.valid).map((s) => s.name),
     as_of: payload.as_of,
     index: payload.index,
