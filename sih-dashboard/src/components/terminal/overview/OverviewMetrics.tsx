@@ -21,6 +21,7 @@ export function OverviewMetrics() {
         measured: false,
         series: [] as (number | null)[],
         caption: null,
+        windowNote: '',
       }));
   const measuredCount = readings.filter((r) => r.measured).length;
 
@@ -184,9 +185,7 @@ function PollutantCard({
         <div className="flex items-center justify-between border-t border-term-outline-variant/40 pt-1 font-mono text-[10px] text-term-ink-variant">
           {p.measured ? (
             <>
-              <span>
-                {p.validHours} of {p.windowHours}h reported
-              </span>
+              <span>{p.windowNote}</span>
               <span className="font-bold" style={{ color: p.color }}>
                 Click for CPCB detail
               </span>

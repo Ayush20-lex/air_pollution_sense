@@ -42,6 +42,17 @@ export type LivePollutant = PollutantReading & {
   emptyNote?: string;
   /** Printed under the line when it is not a series of hourly readings. */
   caption: string | null;
+  /**
+   * What the card says about the window under the chart.
+   *
+   * For the archive these are the same window - the chart IS the 24 hours the
+   * sub-index was computed from, so "22 of 24h reported" describes both. For a
+   * live station they are two different things: the sub-index comes from WAQI's
+   * own 24-hour mean, while the chart is however much we have recorded. Printed
+   * side by side without this, "1h recorded" and "24 of 24h reported" read as a
+   * contradiction rather than as two facts about two windows.
+   */
+  windowNote: string;
 };
 
 /**
@@ -74,7 +85,8 @@ export function livePollutants(station: LiveStation): LivePollutant[] {
     // Zeroed, not carried over: this card is about to say "Not reported",
     // and a hand-written 24h change printed beside that reads as a
     // measurement of something the archive has no reading for.
-    if (!sub) return { ...p, measured: false, delta: 0, series: [], caption: null };
+    if (!sub)
+      return { ...p, measured: false, delta: 0, series: [], caption: null, windowNote: '' };
 
     const { status, note } = statusFor(sub.sub_index);
     const series = station.hourly[p.id] ?? [];
@@ -105,6 +117,9 @@ export function livePollutants(station: LiveStation): LivePollutant[] {
         rolling && recorded > 0
           ? `${recorded}h recorded · 24h rolling mean`
           : null,
+      windowNote: rolling
+        ? `Index from ${sub.window_hours}h mean`
+        : `${sub.valid_hours} of ${sub.window_hours}h reported`,
       // Per-pollutant 24h change is not in the payload — only the station's.
       // Leaving the hand-written delta here would read as measured.
       delta: 0,
