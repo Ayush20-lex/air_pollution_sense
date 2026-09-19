@@ -27,7 +27,10 @@ const SUB_INDEX_KEY: Record<string, string> = {
   so2: 'SO2',
 };
 
-export type LivePollutant = PollutantReading & {
+export type LivePollutant = Omit<PollutantReading, 'value'> & {
+  /** Null when the feed publishes a sub-index but not the concentration
+   *  behind it, which is the case for CPCB's own bulletin. */
+  value: number | null;
   /** False when the archive has no reading for this pollutant. */
   measured: boolean;
   /** 0-500 CPCB sub-index. 100 is the standard. */
@@ -95,6 +98,10 @@ export function livePollutants(station: LiveStation): LivePollutant[] {
     return {
       ...p,
       measured: true,
+      // CPCB's bulletin publishes the sub-index and not the concentration it
+      // was computed from. Null travels through to the card, which shows the
+      // sub-index instead; inverting the index back to a concentration is the
+      // reconstruction this feed exists to avoid.
       value: sub.concentration,
       pct: meterPct(sub.sub_index),
       color: aqiColor(sub.sub_index),

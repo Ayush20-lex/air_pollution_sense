@@ -60,7 +60,12 @@ export function PollutantDetail({
     };
   }, [open, onClose]);
 
-  const stamp = asOf
+  // Guarded: a feed that stamps its hour in some other layout used to reach
+  // `new Date()` here and throw RangeError from inside render, taking the whole
+  // route down over a caption. An unparseable stamp is worth omitting, not
+  // worth a blank page.
+  const asOfDate = asOf ? new Date(asOf) : null;
+  const stamp = asOfDate && !Number.isNaN(asOfDate.getTime())
     ? new Intl.DateTimeFormat('en-GB', {
         timeZone: 'Asia/Kolkata',
         day: '2-digit',
@@ -68,7 +73,7 @@ export function PollutantDetail({
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
-      }).format(new Date(asOf))
+      }).format(asOfDate)
     : null;
 
   const valid = p.validHours ?? 0;
@@ -142,10 +147,11 @@ export function PollutantDetail({
               <div className="space-y-4 p-4">
                 <div className="flex items-baseline justify-between">
                   <span className="font-display text-4xl font-extrabold text-term-ink">
-                    {p.value.toFixed(1)}
+                    {p.value != null ? p.value.toFixed(1) : p.subIndex}
                   </span>
                   <span className="font-mono text-xs text-term-ink-variant">
-                    {p.unit} · {windowHours}h mean to {stamp ?? 'last reported hour'}
+                    {p.value != null ? `${p.unit} · ` : 'CPCB sub-index · '}
+                    {windowHours}h mean to {stamp ?? 'last reported hour'}
                   </span>
                 </div>
 

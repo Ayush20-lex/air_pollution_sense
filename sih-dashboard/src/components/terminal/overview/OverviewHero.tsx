@@ -240,7 +240,9 @@ function AqiGauge() {
           label="Dominant Stressor"
           value={
             dominantSub
-              ? `${station.dominant} (${dominantSub.concentration.toFixed(0)} µg/m³)`
+              ? dominantSub.concentration != null
+                ? `${station.dominant} (${dominantSub.concentration.toFixed(0)} µg/m³)`
+                : `${station.dominant} (sub-index ${dominantSub.sub_index})`
               : live
                 ? station.dominant
                 : HUB.dominant

@@ -44,6 +44,10 @@ ENV/
 env.bak/
 venv.bak/
 *.db
+# SQLite's write-ahead log and shared-memory files. `*.db` alone leaves these
+# two behind as untracked noise every time live_history is written to.
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 .pytest_cache/

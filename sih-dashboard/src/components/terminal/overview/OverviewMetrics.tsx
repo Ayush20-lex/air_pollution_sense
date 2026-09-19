@@ -126,10 +126,16 @@ function PollutantCard({
 
         <div className="flex items-baseline justify-between">
           <span className="font-display text-3xl font-extrabold text-term-ink">
-            {p.measured ? p.value.toFixed(p.value < 10 ? 1 : 0) : '—'}
+            {/* CPCB's bulletin publishes the sub-index without the
+                concentration behind it, so the card leads with whichever it
+                actually has rather than inverting one out of the other. */}
+            {!p.measured ? '—' : p.value != null ? p.value.toFixed(p.value < 10 ? 1 : 0) : p.subIndex}
           </span>
           <span className="font-mono text-xs text-term-ink-variant">
-            {p.unit} <span className="font-normal text-term-outline">(Ref: {p.reference})</span>
+            {p.value != null ? p.unit : 'CPCB sub-index'}{' '}
+            <span className="font-normal text-term-outline">
+              {p.value != null ? `(Ref: ${p.reference})` : '(100 = the standard)'}
+            </span>
           </span>
         </div>
 
@@ -171,7 +177,11 @@ function PollutantCard({
             className="font-mono text-xs font-bold"
             style={{ color: p.measured ? p.color : TERM.inkVariant }}
           >
-            {p.measured ? `${p.value.toFixed(1)} ${p.unit}` : `${p.trend[p.trend.length - 1]} ${p.unit}`}
+            {!p.measured
+              ? `${p.trend[p.trend.length - 1]} ${p.unit}`
+              : p.value != null
+                ? `${p.value.toFixed(1)} ${p.unit}`
+                : `sub-index ${p.subIndex}`}
           </span>
         </div>
 

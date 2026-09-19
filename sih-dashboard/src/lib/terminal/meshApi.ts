@@ -30,7 +30,10 @@ const API_BASE =
  */
 export type SubIndex = {
   sub_index: number;
-  concentration: number;
+  /** Null when the feed publishes only the index. CPCB's own bulletin does:
+   *  it carries the sub-index per pollutant and not the concentration behind
+   *  it, so the grid shows the index rather than inventing a µg/m³ figure. */
+  concentration: number | null;
   window_hours: number;
   valid_hours: number;
 };

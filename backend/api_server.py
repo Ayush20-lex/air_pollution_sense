@@ -51,6 +51,7 @@ from grap_policy import calculate_indian_aqi_pm25, evaluate_grap_stage
 import gfs_reader
 import station_registry
 import waqi_live
+import cpcb_live
 import live_history
 
 
@@ -400,7 +401,16 @@ def _generate_forecast_tensor() -> tuple[torch.Tensor, bool]:
         try:
             from baseline_forecaster import get_forecaster
 
-            result = get_forecaster(cfg.baseline_season).forecast()
+            # Issued for today, not for the newest observed hour. The
+            # archive lags about two days behind CPCB by way of OpenAQ, and
+            # pinning the origin to it made a "72-hour forecast" that was
+            # mostly hindcast: on 19 September the origin sat at the 17th, so
+            # 53 of the 72 hours had already happened. CAMS runs days ahead,
+            # so the lead is there; what changes is that leads past the
+            # observations have no diurnal parent, which `forecast` records
+            # per lead rather than papering over.
+            fc = get_forecaster(cfg.baseline_season)
+            result = fc.forecast(fc.latest_origin(), _live_diurnal_source(fc))
             _state.forecast_meta = result.meta
             log.info(
                 "forecast from blend baseline (season %s, origin %s, RMSE %s ug/m3)",
@@ -565,6 +575,7 @@ async def model_status():
             "station_mesh": station_registry.describe(
                 get_settings().baseline_season, _mesh_origin()
             ),
+            "cpcb_live": cpcb_live.describe(),
             "waqi_live": waqi_live.describe(),
             "live_history": live_history.describe(),
         },
@@ -914,9 +925,25 @@ async def stations(response: Response):
     # live and the rest are two days old cannot be read: the map would show one
     # hour and the table beside it another, with nothing on screen to say which
     # node was which.
+    # CPCB's own bulletin first, WAQI second.
+    #
+    # Both are the same stations; the difference is how many hands the numbers
+    # pass through. WAQI republishes CPCB as US EPA sub-indices, so that path
+    # has to invert each index back to a concentration and drop NO2 and SO2
+    # over a window mismatch. Against CPCB's own figures for the same hour,
+    # Wazirpur came out 163 "Moderate" that way and 231 "Poor" from the
+    # bulletin - a whole band, on the pollutant that set the index.
+    #
+    # Without a data.gov.in key this returns None and nothing changes.
     live = None
     try:
-        live = waqi_live.mesh()
+        live = cpcb_live.mesh()
+    except Exception as exc:  # noqa: BLE001 - WAQI and the archive still stand
+        _log.warning("CPCB bulletin unavailable (%s); trying WAQI", exc)
+
+    try:
+        if live is None or live["indexable"] < MIN_LIVE_STATIONS:
+            live = waqi_live.mesh() or live
     except Exception as exc:  # noqa: BLE001 - the archive still stands
         # `_log`, not `log`: this handler runs precisely when the live feed has
         # failed, and a bare `log` is unbound at module scope, so the fallback
@@ -1104,6 +1131,69 @@ def _alert_level(pm25: float, inversion: float) -> str:
         return "ADVISORY"
     return "NOMINAL"
 
+
+
+def _live_diurnal_source(fc):
+    """"Same hour yesterday" from the live feed, for hours the archive misses.
+
+    The archive's observations end about two days back, so a forecast issued
+    today has no diurnal parent for any lead and falls to CAMS alone at 83.41
+    against the blend's 62.23. The live feed does cover those hours, and
+    `live_history` has been recording them; this is what joins the two.
+
+    Live stations and archive stations are different networks with different
+    ids, so they are paired by position - nearest archive station within
+    `MATCH_KM`, each used once. Beyond that radius they are different sites and
+    pairing them would publish one station's air under another's name.
+
+    Returns None when nothing usable is recorded, which leaves the lead on CAMS
+    rather than on a thin or invented field.
+    """
+    import numpy as np
+
+    MATCH_KM = 2.0
+    mesh = None
+    for feed in (cpcb_live, waqi_live):
+        try:
+            mesh = feed.mesh()
+        except Exception:  # noqa: BLE001 - absence is a normal state here
+            mesh = None
+        if mesh:
+            break
+    if not mesh:
+        return None
+
+    # archive station -> nearest live station, within the radius
+    pairs: list[tuple[int, int]] = []
+    used_live: set[int] = set()
+    for a_i, (a_lat, a_lon) in enumerate(zip(fc.lats, fc.lons)):
+        best, best_d = None, MATCH_KM
+        for m in mesh["stations"]:
+            if m["id"] in used_live or m.get("lat") is None:
+                continue
+            d = float(np.hypot((a_lat - m["lat"]) * 111.0, (a_lon - m["lon"]) * 97.5))
+            if d < best_d:
+                best, best_d = m["id"], d
+        if best is not None:
+            used_live.add(best)
+            pairs.append((a_i, best))
+    if not pairs:
+        return None
+
+    live_ids = [lid for _, lid in pairs]
+
+    def source(hour):
+        recorded = live_history.history(live_ids, hour.isoformat(), hours=1)
+        if not recorded:
+            return None
+        out = np.full(len(fc.lats), np.nan, dtype=np.float32)
+        for a_i, lid in pairs:
+            series = (recorded.get(lid) or {}).get("pm25")
+            if series and series[0] is not None:
+                out[a_i] = series[0]
+        return out
+
+    return source
 
 @app.get("/api/v1/forecast/frames")
 async def forecast_frames():
