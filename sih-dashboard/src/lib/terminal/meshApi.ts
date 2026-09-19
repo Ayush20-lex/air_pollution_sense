@@ -15,7 +15,6 @@
  * says DEMO. That fallback is why this merges rather than replaces.
  */
 import type { Station } from './stations';
-import { STATIONS } from './stations';
 
 /** Same contract as forecastApi's API_BASE - see the note there. */
 const API_BASE =
@@ -61,10 +60,14 @@ export type MeshStation = {
    *  have no entry — the archive has no reading, not a reading of zero. */
   sub_indices: Record<string, SubIndex>;
   reasons: string[];
+  /** WAQI's own US-scale figure, present only on the live feed. */
+  aqi_us?: number | null;
 };
 
 export type MeshPayload = {
-  season: number;
+  /** "waqi_live" when the feed is live, "archive" when it is the replay. */
+  source?: string;
+  season: number | null;
   as_of: string;
   count: number;
   indexable: number;
@@ -180,8 +183,14 @@ export type LiveStation = Station & {
   fullName: string;
   pm25: number | null;
   category: string | null;
-  /** How far the curated coordinate sits from the archive's. */
-  matchKm: number;
+  /**
+   * Whether `delta` is a measurement. The live feed is a single snapshot with
+   * no previous day behind it, and a 0 would render as "no change" -
+   * indistinguishable from a measured flat 24 hours.
+   */
+  deltaKnown: boolean;
+  /** WAQI's US-scale figure, for reconciling against a US-scale site. */
+  aqiUs: number | null;
   /** Per-pollutant measurements behind this station's index. */
   subIndices: Record<string, SubIndex>;
   /** Share of the indexing window this station actually reported. */
@@ -190,8 +199,10 @@ export type LiveStation = Station & {
 
 export type MergedMesh = {
   stations: LiveStation[];
-  /** Curated nodes with no counterpart in the archive, by name. */
+  /** Stations the feed carried but could not index, by name. */
   dropped: string[];
+  /** "waqi_live" or "archive". */
+  source: string;
   as_of: string;
   index: string;
   note: string;
@@ -199,52 +210,58 @@ export type MergedMesh = {
 };
 
 /**
- * Curated nodes carrying their real readings.
+ * The feed's own stations, as the page will draw them.
  *
- * Nodes with no counterpart are dropped rather than kept at their hand-written
- * value. Four of the 26 have none: two sit where the archive has no station,
- * and two (Uttam Nagar, Faridabad Sector-16A) lose their nearest match to a
- * closer node. Showing 22 measured nodes is worth more than 26 of which four
- * are invented, and a mesh that mixes the two cannot be read at all.
+ * This used to intersect the payload with the curated list in ./stations,
+ * which was right while both described the same 68 CPCB sites. The live feed
+ * does not: WAQI carries 24 NCR stations and only six of them coincide with a
+ * curated node, so intersecting would have thrown away three quarters of a
+ * live mesh to preserve a hand-drawn one.
+ *
+ * So the backend decides which stations exist and this renders them. The
+ * curated list is now purely the offline fallback, which is all it was ever
+ * really doing.
+ *
+ * `source` is the one field with no equivalent in either feed - it is an
+ * editorial attribution of the upwind sector, and the table marks it as such.
  */
-export function mergeMesh(payload: MeshPayload, curated: Station[] = STATIONS): MergedMesh {
-  const indexable = payload.stations.filter((s) => s.valid && s.aqi != null);
-  const matches = matchStations(curated, indexable);
+export function mergeMesh(payload: MeshPayload): MergedMesh {
+  const zones: Station['zone'][] = ['North', 'West', 'Central', 'East', 'South', 'NCR Outer'];
 
-  const stations = matches.map(({ station, mesh, km: d }): LiveStation => {
-    const dominant = mesh.prominent_pollutant
-      ? (POLLUTANT_LABEL[mesh.prominent_pollutant] ?? station.dominant)
-      : station.dominant;
-    return {
-      ...station,
-      // Measured, all of it.
-      aqi: mesh.aqi as number,
-      delta: mesh.delta_24h_pct ?? 0,
-      dominant,
-      agency: (mesh.agency as Station['agency']) ?? station.agency,
-      sensors: mesh.sensors_reporting,
-      // Real coverage over the indexing window, not an invented availability
-      // figure. It reads lower than the old hand-written "99.94%" because it
-      // is counting actual reporting hours.
-      uptime: `${mesh.coverage_pct.toFixed(1)}%`,
-      status: mesh.coverage_pct >= 90 ? 'ONLINE' : mesh.coverage_pct >= 60 ? 'DEGRADED' : 'CALIBRATING',
-      meshId: mesh.id,
-      fullName: mesh.full_name,
-      pm25: mesh.pm25,
-      category: mesh.category,
-      matchKm: Math.round(d * 100) / 100,
-      subIndices: mesh.sub_indices ?? {},
-      coveragePct: mesh.coverage_pct,
-    };
-  });
+  const stations = payload.stations
+    .filter((s) => s.valid && s.aqi != null)
+    .map((s): LiveStation => ({
+      id: `m${s.id}`,
+      name: s.name,
+      zone: (zones.includes(s.zone as Station['zone']) ? s.zone : 'Central') as Station['zone'],
+      agency: (s.agency as Station['agency']) ?? 'CPCB',
+      lat: s.lat,
+      lng: s.lon,
+      aqi: s.aqi as number,
+      dominant: (POLLUTANT_LABEL[s.prominent_pollutant ?? ''] ?? 'PM2.5'),
+      source: '—',
+      delta: s.delta_24h_pct ?? 0,
+      deltaKnown: s.delta_24h_pct != null,
+      sensors: s.sensors_reporting,
+      uptime: `${s.coverage_pct.toFixed(1)}%`,
+      status:
+        s.coverage_pct >= 90 ? 'ONLINE' : s.coverage_pct >= 60 ? 'DEGRADED' : 'CALIBRATING',
+      meshId: s.id,
+      fullName: s.full_name,
+      pm25: s.pm25,
+      category: s.category,
+      aqiUs: s.aqi_us ?? null,
+      subIndices: s.sub_indices ?? {},
+      coveragePct: s.coverage_pct,
+    }));
 
-  const kept = new Set(matches.map((m) => m.station.id));
   return {
     stations,
-    dropped: curated.filter((s) => !kept.has(s.id)).map((s) => s.name),
+    dropped: payload.stations.filter((s) => !s.valid).map((s) => s.name),
     as_of: payload.as_of,
     index: payload.index,
     note: payload.note,
     excluded: payload.pollutants_excluded ?? {},
+    source: payload.source ?? 'archive',
   };
 }

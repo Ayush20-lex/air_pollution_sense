@@ -96,7 +96,9 @@ function StationPins({
   return (
     <>
       {stations.map((s) => {
+          // The frame can lag the mesh by one render; see field.ts's `sampled`.
           const n = frame.nodes[s.id];
+          if (!n) return null;
           const d = density[s.id] ?? 'full';
           return (
             <Marker
@@ -285,7 +287,10 @@ function HeatOverlay({ frame, field }: { frame: TerminalFrame; field: TerminalFi
     ctx.clearRect(0, 0, HEAT_W, HEAT_H);
     ctx.globalCompositeOperation = 'lighter';
     for (const st of stations) {
+      // The frame can lag the mesh by one render; a node with no sample has
+      // nothing to contribute to the heat field.
       const sample = frame.nodes[st.id];
+      if (!sample) continue;
       const v = fieldIntensity(sample, field);
       if (v <= 0.01) continue;
 
@@ -563,7 +568,11 @@ function WindStreamlines({ frame }: { frame: TerminalFrame }) {
   const renderer = React.useMemo(() => L.svg({ padding: 0.4 }), []);
 
   const lines = React.useMemo(() => {
-    const ctx = buildWindContext(stations.map((st) => frame.nodes[st.id]));
+    // Only the nodes this frame carries. buildWindContext averages over the
+    // samples and a missing one would take the mean with it.
+    const ctx = buildWindContext(
+      stations.map((st) => frame.nodes[st.id]).filter(Boolean),
+    );
     return streamlines(ctx);
   }, [frame, stations]);
 

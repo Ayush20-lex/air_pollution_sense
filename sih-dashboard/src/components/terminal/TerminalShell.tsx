@@ -317,7 +317,7 @@ function TerminalHeader() {
         <div
           title={
             mesh.live
-              ? `Node ledger and plume map are measured from CPCB stations (${mesh.index}). Other panels on this route are demo content.`
+              ? `Node ledger and plume map are measured from CPCB stations (${mesh.index}), ${mesh.feed === 'waqi_live' ? 'reporting live' : 'replayed from the archive'}. Other panels on this route are demo content.`
               : 'Backend unreachable. The mesh is a frozen snapshot of the archive and other panels are demo content.'
           }
           className="flex shrink-0 items-center gap-2 rounded-full border border-term-primary/40 bg-term-primary/10 px-3 py-1.5 shadow-[0_0_15px_rgba(78,222,163,0.15)]"

@@ -116,7 +116,9 @@ function MeshRanking({ frame }: { frame: TerminalFrame }) {
 
       <div className="max-h-[430px] space-y-0.5 overflow-y-auto pr-1">
         {rows.map((s, i) => {
+          // See GeoRail: the frame can lag the mesh by one render.
           const sample = frame.nodes[s.id];
+          if (!sample) return null;
           const color = aqiColor(sample.aqi);
           const active = selectedId === s.id;
           return (
@@ -289,7 +291,9 @@ function NodeLedger({ frame }: { frame: TerminalFrame }) {
         title="Regional Node Ledger"
         sub={
           mesh.live
-            ? `${mesh.stations.length} of ${mesh.curatedCount} nodes carrying their own measurements — PM2.5, PM10, NO₂, O₃ and SO₂ from each station's sensors, indexed under the CPCB National AQI`
+            ? mesh.feed === 'waqi_live'
+              ? `${mesh.stations.length} CPCB stations reporting live — PM2.5, PM10 and O₃ from each station's sensors, indexed under the National AQI`
+              : `${mesh.stations.length} stations from the replayed archive — PM2.5, PM10, NO₂, O₃ and SO₂, indexed under the National AQI`
             : `${mesh.stations.length} CPCB / DPCC / HSPCB / UPPCB monitoring stations across the National Capital Region`
         }
         right={
@@ -302,7 +306,15 @@ function NodeLedger({ frame }: { frame: TerminalFrame }) {
             title={mesh.note ?? undefined}
           >
             <span className={`size-2 rounded-full ${mesh.live ? 'bg-term-primary' : 'bg-amber-400'}`} />
-            {mesh.live ? `${mesh.index} · measured ${hourLabel(mesh.asOf)}` : 'CPCB National AQI · demo values'}
+            {/* Live and archive are both measured; what differs is how long
+                ago. Saying only "measured" for a reading 42 hours old, beside
+                one from this hour, would flatten the distinction that matters
+                most on this page. */}
+            {mesh.live
+              ? mesh.feed === 'waqi_live'
+                ? `${mesh.index} · live ${hourLabel(mesh.asOf)}`
+                : `${mesh.index} · archive ${hourLabel(mesh.asOf)}`
+              : 'CPCB National AQI · demo values'}
           </span>
         }
       />
@@ -321,6 +333,7 @@ function NodeLedger({ frame }: { frame: TerminalFrame }) {
             <tbody>
               {ranked.map((s) => {
                 const sample = frame.nodes[s.id];
+                if (!sample) return null;
                 const color = aqiColor(sample.aqi);
                 const active = selectedId === s.id;
                 return (

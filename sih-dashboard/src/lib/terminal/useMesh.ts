@@ -45,6 +45,13 @@ export type MeshState = {
   excluded: Record<string, string>;
   /** Nodes in the curated mesh, for "22 of 26" style reporting. */
   curatedCount: number;
+  /**
+   * Which feed answered: "waqi_live" for the real-time CPCB stations,
+   * "archive" for the replayed window. The distinction is the whole point of
+   * carrying it - the archive publishes about 42 hours behind, and a page that
+   * cannot say which one it is showing is making the stronger claim by default.
+   */
+  feed: 'waqi_live' | 'archive' | null;
 };
 
 const OFFLINE: MeshState = {
@@ -57,6 +64,7 @@ const OFFLINE: MeshState = {
   dropped: [],
   excluded: {},
   curatedCount: STATIONS.length,
+  feed: null,
 };
 
 /**
@@ -105,6 +113,7 @@ async function refresh(force = false) {
     dropped: merged.dropped,
     excluded: merged.excluded,
     curatedCount: STATIONS.length,
+    feed: merged.source === 'waqi_live' ? 'waqi_live' : 'archive',
   });
 }
 

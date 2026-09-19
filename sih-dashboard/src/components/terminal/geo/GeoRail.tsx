@@ -61,7 +61,13 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
   const station = findById(useMesh().stations, selectedId);
   if (!station) return null;
 
+  // The mesh and the frames are separate state and land one render apart, so
+  // a station can exist in the list before it exists in the frame. That window
+  // widened when the mesh started coming from a live feed - the whole station
+  // set changes at once, not just its values - and reading straight through
+  // threw on `.pbl`.
   const sample = frame.nodes[station.id];
+  if (!sample) return null;
   const color = aqiColor(sample.aqi);
   const band = bandForAqi(sample.aqi);
 

@@ -50,6 +50,7 @@ from physics_loss import compute_isi
 from grap_policy import calculate_indian_aqi_pm25, evaluate_grap_stage
 import gfs_reader
 import station_registry
+import waqi_live
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────
@@ -175,6 +176,19 @@ async def lifespan(app: FastAPI):
         in_channels=N_CHANNELS, hidden_dim=64, n_steps=N_STEPS
     ).to(cfg.device)
     _state.model.eval()
+
+    # Warm the live mesh off the request path. Building it costs 25 round trips
+    # to WAQI - about six seconds - and the dashboard gives up after eight, so
+    # the first visitor after a restart would have raced it and lost, seeing the
+    # archive and a DEMO badge with a live feed working perfectly behind it.
+    if waqi_live.available():
+        try:
+            warm = await asyncio.to_thread(waqi_live.mesh)
+            if warm:
+                log.info("live mesh warm: %d stations, %d indexable, as of %s",
+                         warm["count"], warm["indexable"], warm["as_of"])
+        except Exception as exc:  # noqa: BLE001 - never block startup on a feed
+            log.warning("could not warm the live mesh (%s)", exc)
 
     if not cfg.mock_mode:
         try:
@@ -494,6 +508,7 @@ async def model_status():
             "station_mesh": station_registry.describe(
                 get_settings().baseline_season, _mesh_origin()
             ),
+            "waqi_live": waqi_live.describe(),
         },
         # Which engine produced the numbers being served.
         "forecast_engine": (
@@ -706,6 +721,12 @@ async def alerts_inversion(
     return alerts
 
 
+#: Below this many indexable live stations the archive is the better answer -
+#: a handful of points cannot carry an interpolated field across the NCR, and a
+#: sparse live mesh would look like coverage it does not have.
+MIN_LIVE_STATIONS = 8
+
+
 def _mesh_origin() -> str | None:
     """The hour the station mesh should describe.
 
@@ -743,7 +764,25 @@ async def stations(response: Response):
     rather than a number. Read that field before reading `aqi`.
     """
     cfg = get_settings()
+
+    # Live first. The archive publishes about 42 hours behind - that is the
+    # source's lag, not the fetcher's - so when a live feed is configured it is
+    # simply the better answer to "what is the air doing".
+    #
+    # All of one or all of the other, never a blend. A mesh where some nodes are
+    # live and the rest are two days old cannot be read: the map would show one
+    # hour and the table beside it another, with nothing on screen to say which
+    # node was which.
+    live = None
+    try:
+        live = waqi_live.mesh()
+    except Exception as exc:  # noqa: BLE001 - the archive still stands
+        log.warning("live mesh unavailable (%s); serving the archive", exc)
+    if live is not None and live["indexable"] >= MIN_LIVE_STATIONS:
+        return live
+
     data = station_registry.build(cfg.baseline_season, _mesh_origin())
+    data = {**data, "source": "archive"}
     if not data["stations"]:
         response.status_code = 204
         return None

@@ -48,6 +48,8 @@ from __future__ import annotations
 
 import logging
 import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import requests
@@ -56,6 +58,23 @@ logger = logging.getLogger("waqi_live")
 
 API = "https://api.waqi.info"
 TIMEOUT = 20
+
+#: How long a built mesh is reused. WAQI republishes hourly, so anything under
+#: that is free freshness; five minutes keeps a demo responsive without hammering
+#: a free endpoint.
+#:
+#: Not optional. Building the mesh costs one listing call plus one per station -
+#: 25 round trips - and without a cache every request paid it, taking about
+#: fifteen seconds while the dashboard gives up after eight. The page fell back
+#: to the archive and reported itself as demo data, with a live feed configured
+#: and working.
+CACHE_TTL_S = 300
+
+#: Stations are independent reads, so they go out together. Eight at a time is
+#: polite to a free endpoint and turns fifteen seconds into about two.
+FETCH_WORKERS = 8
+
+_cache: tuple[float, dict | None] | None = None
 
 #: NCR, matching the forecast grid so the two describe the same region.
 BOUNDS = (28.20, 76.80, 28.90, 77.60)   # lat1, lon1, lat2, lon2
@@ -209,3 +228,181 @@ def describe() -> dict[str, Any]:
         }
     return {"available": True, "source": "waqi", "pollutants": sorted(EPA),
             "excluded": EXCLUDED}
+
+
+# ── mesh ─────────────────────────────────────────────────────────────────────
+
+def _cpcb_index(conc: dict[str, float]) -> tuple[int | None, str | None, dict]:
+    """CPCB sub-indices from already-averaged concentrations.
+
+    Deliberately not `aqi_cpcb.compute_aqi`, which averages an hourly series and
+    refuses fewer than 16 valid hours in 24. There is no series here and there
+    does not need to be: EPA indexes PM2.5 and PM10 over 24 hours and ozone over
+    a rolling 8, so a value inverted from an EPA sub-index is *already* the mean
+    that CPCB's own breakpoints expect. Feeding it through the windowing would
+    treat one 24-hour mean as one hour of data and reject every station.
+    """
+    import aqi_cpcb
+
+    subs: dict[str, dict] = {}
+    for pol, value in conc.items():
+        unit = EPA[pol][0]
+        c = value if unit == "ugm3" else aqi_cpcb.to_cpcb_units(pol, value, "ppb")
+        idx = aqi_cpcb.sub_index(pol, c)
+        if idx is None:
+            continue
+        subs[aqi_cpcb.DISPLAY_NAME[pol]] = {
+            "sub_index": idx,
+            "concentration": round(c, 2),
+            "window_hours": aqi_cpcb.AVERAGING_HOURS[pol],
+            "valid_hours": aqi_cpcb.AVERAGING_HOURS[pol],
+        }
+    if len(subs) < 3:
+        return None, None, subs
+    worst = max(subs.items(), key=lambda kv: kv[1]["sub_index"])
+    return worst[1]["sub_index"], worst[0], subs
+
+
+def mesh(bounds: tuple[float, float, float, float] | None = None) -> dict | None:
+    """Every live NCR station, shaped like the archive registry's payload.
+
+    Returns None when there is no token or nothing usable came back, which the
+    caller treats as an ordinary state and falls back to the archive.
+    """
+    import aqi_cpcb  # noqa: F401 - imported for its side-effect-free tables
+
+    global _cache
+    if _cache is not None and time.monotonic() - _cache[0] < CACHE_TTL_S:
+        return _cache[1]
+
+    tok = token()
+    if tok is None:
+        return None
+
+    global BOUNDS
+    if bounds:
+        BOUNDS = bounds
+    try:
+        listed = list_stations(tok)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("WAQI station list unavailable (%s); staying on the archive", exc)
+        return None
+
+    with ThreadPoolExecutor(max_workers=FETCH_WORKERS) as pool:
+        fetched = list(pool.map(lambda s: (s, read_station(s["uid"], tok)), listed))
+    readings = [(s, r) for s, r in fetched if r is not None]
+
+    # The same peer test the archive runs, for the same reason. A live feed has
+    # faulty sensors too: on the first run one station reported PM2.5 of
+    # 282 ug/m3 in monsoon air while the next highest read 70. The archive would
+    # have dropped that reading; letting it through here because it arrived by a
+    # different route would be inconsistent, and it is the value that would have
+    # led the mesh.
+    _despike_live(readings)
+
+    stations: list[dict] = []
+    newest: str | None = None
+    for s, r in readings:
+        aqi, prominent, subs = _cpcb_index(r["concentrations"])
+        reasons = [] if aqi is not None else [
+            f"{len(subs)} usable pollutant(s); CPCB requires 3"
+        ]
+        obs = r["observed_at"]
+        if obs and (newest is None or obs > newest):
+            newest = obs
+        stations.append({
+            "id": r["uid"],
+            "name": _short_name(r["name"]),
+            "full_name": r["name"],
+            "agency": "CPCB",
+            "zone": _zone(r["lat"] or s["lat"], r["lon"] or s["lon"]),
+            "lat": round(float(r["lat"] or s["lat"]), 6),
+            "lon": round(float(r["lon"] or s["lon"]), 6),
+            "pm25": r["concentrations"].get("pm25"),
+            # A single live reading has no previous day to compare with. The
+            # archive path computes this; here it is absent rather than zero,
+            # because zero would render as "no change" and be read as measured.
+            "delta_24h_pct": None,
+            "hours_observed": 24,
+            "hours_expected": 24,
+            "coverage_pct": 100.0,
+            "sensors_reporting": len(r["concentrations"]),
+            "pollutants": sorted(r["concentrations"]),
+            "valid": aqi is not None,
+            "aqi": aqi,
+            "category": aqi_cpcb.category_for(aqi) if aqi is not None else None,
+            "prominent_pollutant": prominent,
+            "sub_indices": subs,
+            "dropped": {},
+            "reasons": reasons,
+            "aqi_us": r["aqi_us"],
+            "observed_at": obs,
+        })
+
+    if not stations:
+        return None
+
+    valid = sum(1 for s in stations if s["valid"])
+    payload = {
+        "source": "waqi_live",
+        "season": None,
+        "as_of": newest,
+        "count": len(stations),
+        "indexable": valid,
+        "window_hours": 24,
+        "index": "CPCB National AQI (2014)",
+        "note": (
+            "Live CPCB stations via WAQI, indexed under the National AQI. WAQI "
+            "publishes US EPA sub-indices rather than concentrations, so each "
+            "value is inverted through the EPA breakpoints and re-indexed; only "
+            "PM2.5, PM10 and O3 are used, being the three whose averaging window "
+            "is the same under both standards. `aqi_us` carries WAQI's own "
+            "figure unchanged, which is what a US-scale site displays."
+        ),
+        "pollutants_indexed": sorted(EPA),
+        "pollutants_excluded": EXCLUDED,
+        "stations": stations,
+    }
+    _cache = (time.monotonic(), payload)
+    return payload
+
+
+def _despike_live(readings: list) -> None:
+    """Drop PM2.5 readings no other station supports, in place.
+
+    Thresholds come from observation_qc so the live path and the archive cannot
+    drift apart: high enough to matter, and more than a few times the
+    second-highest station in the same snapshot. Only PM2.5 - the thresholds are
+    calibrated to it, and PM10 is legitimately several times higher in dust.
+    """
+    import observation_qc
+
+    values = sorted((r["concentrations"]["pm25"] for _, r in readings
+                     if "pm25" in r["concentrations"]), reverse=True)
+    if len(values) < 2:
+        return
+    second = values[1]
+    for _, r in readings:
+        v = r["concentrations"].get("pm25")
+        if v is None:
+            continue
+        if v > observation_qc.MIN_ABSOLUTE and v > observation_qc.PEER_FACTOR * second:
+            logger.warning(
+                "live PM2.5 of %.0f ug/m3 at %s dropped; nearest peer read %.0f",
+                v, r["name"][:40], second,
+            )
+            del r["concentrations"]["pm25"]
+
+
+def _short_name(name: str) -> str:
+    """"Anand Vihar, Delhi, Delhi, India" -> "Anand Vihar"."""
+    parts = [p.strip() for p in (name or "").split(",") if p.strip()]
+    drop = {"delhi", "new delhi", "india", "uttar pradesh", "up", "haryana"}
+    keep = [p for p in parts if p.lower() not in drop]
+    return (keep[0] if keep else (parts[0] if parts else "Unknown"))
+
+
+def _zone(lat: float, lon: float) -> str:
+    """Same grouping the archive registry derives, so the two agree."""
+    import station_registry
+    return station_registry._zone(lat, lon)
