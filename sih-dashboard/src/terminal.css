@@ -6,8 +6,15 @@
  * light/dark swap via CSS custom properties.
  */
 
-/* ---- Terminal design token layer ---- */
-.terminal-root {
+/* ---- Terminal design token layer ----
+
+   `.term-scope` carries the same tokens without the surface treatment, for
+   content portalled to <body>. A portal moves the node out of .terminal-root,
+   so every var(--t-*) inside it stops resolving and the element paints
+   transparent — which is exactly what happened to the pollutant detail dialog.
+   Put .term-scope on the portal root and the ramp follows it out. */
+.terminal-root,
+.term-scope {
   /* Light palette (default) */
   --t-bg: #f8fafc;
   --t-surface-lowest: #f1f5f9;
@@ -36,7 +43,8 @@
   color-scheme: light;
 }
 
-.dark .terminal-root {
+.dark .terminal-root,
+.dark .term-scope {
   --t-bg: #040e1a;
   --t-surface-lowest: #010f1f;
   --t-surface-low: #0d1c2d;

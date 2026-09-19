@@ -36,6 +36,8 @@ export type LivePollutant = PollutantReading & {
   windowHours?: number;
   /** Hours inside that window the station actually reported. */
   validHours?: number;
+  /** The measured 24-hour window, gaps as null. Empty when not measured. */
+  series: (number | null)[];
 };
 
 /**
@@ -68,7 +70,7 @@ export function livePollutants(station: LiveStation): LivePollutant[] {
     // Zeroed, not carried over: this card is about to say "Not reported",
     // and a hand-written 24h change printed beside that reads as a
     // measurement of something the archive has no reading for.
-    if (!sub) return { ...p, measured: false, delta: 0 };
+    if (!sub) return { ...p, measured: false, delta: 0, series: [] };
 
     const { status, note } = statusFor(sub.sub_index);
     return {
@@ -82,6 +84,7 @@ export function livePollutants(station: LiveStation): LivePollutant[] {
       subIndex: sub.sub_index,
       windowHours: sub.window_hours,
       validHours: sub.valid_hours,
+      series: station.hourly[p.id] ?? [],
       // Per-pollutant 24h change is not in the payload — only the station's.
       // Leaving the hand-written delta here would read as measured.
       delta: 0,

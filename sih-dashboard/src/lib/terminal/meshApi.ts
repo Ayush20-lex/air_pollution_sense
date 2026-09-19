@@ -59,6 +59,11 @@ export type MeshStation = {
   /** Keyed "PM2.5" | "PM10" | "NO2" | "O3" | "SO2". Absent pollutants simply
    *  have no entry — the archive has no reading, not a reading of zero. */
   sub_indices: Record<string, SubIndex>;
+  /** The 24 hourly readings each sub-index was computed from, keyed by the
+   *  lowercase pollutant ("pm25" | "pm10" | "no2" | "o3" | "so2"). Gaps and
+   *  readings the QC rejected come through as null rather than being closed
+   *  over, so a chart shows the hole instead of drawing across it. */
+  hourly: Record<string, (number | null)[]>;
   reasons: string[];
   /** WAQI's own US-scale figure, present only on the live feed. */
   aqi_us?: number | null;
@@ -193,6 +198,8 @@ export type LiveStation = Station & {
   aqiUs: number | null;
   /** Per-pollutant measurements behind this station's index. */
   subIndices: Record<string, SubIndex>;
+  /** The hourly window behind those measurements. */
+  hourly: Record<string, (number | null)[]>;
   /** Share of the indexing window this station actually reported. */
   coveragePct: number;
 };
@@ -252,6 +259,7 @@ export function mergeMesh(payload: MeshPayload): MergedMesh {
       category: s.category,
       aqiUs: s.aqi_us ?? null,
       subIndices: s.sub_indices ?? {},
+      hourly: s.hourly ?? {},
       coveragePct: s.coverage_pct,
     }));
 
