@@ -56,6 +56,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -101,6 +102,28 @@ CHANNEL_SOURCE: dict[int, str] = {
 #: bare 84.89 literal, measured on December 2025, sitting in a payload whose
 #: season is configurable - point the service at another year and the figure
 #: would have followed it unchanged and described nothing.
+#: What each lead is worth, by which parents actually contributed to it.
+#:
+#: Both were scored on the same window by the same script, so they are
+#: comparable and neither is an estimate. The blend figure is the headline one;
+#: the CAMS-only figure applies to any lead whose diurnal parent is missing,
+#: which is every lead once a forecast runs past the newest observation.
+#:
+#: Reporting one number for both would be the easy lie. A forecast anchored on
+#: today is mostly CAMS, and calling that 62.23 claims an accuracy measured
+#: with real observations behind every hour.
+LEAD_RMSE = {
+    "blend": 62.23,        # mean(diurnal_persistence, bias-corrected CAMS)
+    # Same method and so the same figure; what differs is where the diurnal
+    # parent came from. The archive's own observations end about two days back,
+    # so a forecast issued today can only get "same hour yesterday" from the
+    # live feed. It is a measurement either way - recorded hour by hour rather
+    # than replayed - and the blend was scored on the method, not on the
+    # provenance of one parent.
+    "blend_live": 62.23,
+    "cams_only": 83.41,    # bias-corrected CAMS alone
+}
+
 VALIDATED: dict[int, dict[str, object]] = {
     2025: {
         "validated_rmse_ugm3": 62.23,
@@ -348,6 +371,39 @@ class BlendBaselineForecaster:
         end = min(len(self.times) - HORIZON, self._last_observed_index() + 1)
         return self.times[24:max(end, 25)]
 
+    def _hour_observed(self, t: int) -> bool:
+        """True when hour `t` was measured, rather than forward-filled into.
+
+        `obs_pm25` is filled so the IDW weights stay constant, which makes it
+        unusable for this question - every hour looks covered. `_obs_raw` is
+        the same series before the fill, and the same quorum that bounds an
+        origin decides here too: one station reporting is not an observed hour.
+        """
+        if t < 0 or t >= len(self.times):
+            return False
+        return bool(np.isfinite(self._obs_raw[t]).mean() >= ORIGIN_QUORUM)
+
+    def latest_origin(self, now: pd.Timestamp | None = None) -> pd.Timestamp:
+        """The most recent hour a 72-hour forecast can still be issued for.
+
+        Not `valid_origins()[-1]`, which stops at the newest *observed* hour
+        and so pins the forecast two days behind - the archive's own lag, not
+        a property of the forecast. CAMS runs days ahead, so an origin can sit
+        on this hour as long as there is lead left in the forecast fields.
+
+        What changes past the observations is which parents a lead has, and
+        that is recorded per lead rather than hidden: leads with a measured
+        day behind them are the validated blend, the rest are CAMS alone.
+        """
+        now = (pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now)).floor("h")
+        last_with_lead = len(self.times) - HORIZON - 1
+        if last_with_lead < 24:
+            return self.times[24]
+        cap = self.times[last_with_lead]
+        # Never ahead of the wall clock: a forecast issued for a future hour
+        # would be claiming to have started later than it did.
+        return min(cap, now) if now >= self.times[24] else self.times[24]
+
     def _last_observed_index(self) -> int:
         """Newest hour the network as a whole reported, not just one station.
 
@@ -366,7 +422,18 @@ class BlendBaselineForecaster:
         idx = np.flatnonzero(covered)
         return int(idx[-1]) if idx.size else len(self.times) - 1
 
-    def forecast(self, origin: pd.Timestamp | None = None) -> ForecastResult:
+    def forecast(
+        self,
+        origin: pd.Timestamp | None = None,
+        diurnal_source: Callable[[pd.Timestamp], np.ndarray | None] | None = None,
+    ) -> ForecastResult:
+        """`diurnal_source` supplies "same hour yesterday" for hours the archive
+        does not reach, aligned to `self.station_ids` with NaN where unknown.
+
+        A hook rather than a live client: this module reads one archive and
+        should not know what a feed is. The caller owns that, and passing None
+        leaves the behaviour exactly as it was.
+        """
         origins = self.valid_origins()
         if origin is None:
             origin = origins[-1]
@@ -379,15 +446,38 @@ class BlendBaselineForecaster:
 
         out = np.zeros((HORIZON, N_CHANNELS, GRID_H, GRID_W), dtype=np.float32)
 
+        lead_methods: list[str] = []
         for lead in range(1, HORIZON + 1):
             t = t0 + lead
-            # PM2.5: mean of "same hour yesterday" and rescaled CAMS.
-            diurnal = self.obs_pm25[t - 24]
             cams = self.cams_pm25[t] * self.scale
-            blend = np.where(np.isfinite(diurnal) & np.isfinite(cams),
-                             (diurnal + cams) / 2.0,
-                             np.where(np.isfinite(diurnal), diurnal, cams))
-            out[lead - 1, CH_PM25] = self._to_grid(np.nan_to_num(blend))
+
+            # PM2.5: mean of "same hour yesterday" and rescaled CAMS - but only
+            # where "yesterday" was actually measured. Past the newest
+            # observation `obs_pm25` is forward-filled, so the diurnal parent
+            # there is the last real hour repeated, not a measurement. Blending
+            # against it dresses a stale number as a second opinion and, worse,
+            # earns the lead the blend's validated error when nothing about it
+            # was validated. Those leads run on CAMS alone and say so.
+            diurnal = None
+            method = "cams_only"
+            if self._hour_observed(t - 24):
+                diurnal, method = self.obs_pm25[t - 24], "blend"
+            elif diurnal_source is not None:
+                supplied = diurnal_source(self.times[t - 24])
+                # A handful of stations is not a diurnal field; the same quorum
+                # that bounds an origin decides whether this one is usable.
+                if supplied is not None and np.isfinite(supplied).mean() >= ORIGIN_QUORUM:
+                    diurnal, method = supplied, "blend_live"
+
+            if diurnal is None:
+                pm25 = cams
+            else:
+                pm25 = np.where(np.isfinite(diurnal) & np.isfinite(cams),
+                                (diurnal + cams) / 2.0,
+                                np.where(np.isfinite(diurnal), diurnal, cams))
+            lead_methods.append(method)
+
+            out[lead - 1, CH_PM25] = self._to_grid(np.nan_to_num(pm25))
 
             for ch, series in self.fields.items():
                 out[lead - 1, ch] = self._to_grid(np.nan_to_num(series[t]))
@@ -400,9 +490,13 @@ class BlendBaselineForecaster:
 
         out /= CHANNEL_NORMS[None, :, None, None]
 
+        n_blend = lead_methods.count("blend") + lead_methods.count("blend_live")
         meta = {
             "method": "blend(diurnal_persistence, cams_bias)",
-            "mode": "archive_replay",
+            # Replay while every lead still has a measured day behind it;
+            # once any lead runs past the observations this is a forecast
+            # issued from today, and the two are not the same claim.
+            "mode": "archive_replay" if n_blend == HORIZON else "forward",
             "season": self.season,
             "origin": origin.isoformat(),
             "cams_scale": round(self.scale, 4),
@@ -410,6 +504,13 @@ class BlendBaselineForecaster:
             **VALIDATED.get(self.season, {}),
             "real_channels": REAL_CHANNELS,
             "synthetic_channels": SYNTHETIC_CHANNELS,
+            # Per lead, so the UI can mark where the validated figure stops
+            # applying rather than printing one number over all 72 hours.
+            "lead_methods": lead_methods,
+            "lead_rmse_ugm3": [LEAD_RMSE[m] for m in lead_methods],
+            "blend_leads": n_blend,
+            "cams_only_leads": HORIZON - n_blend,
+            "rmse_by_method": LEAD_RMSE,
         }
         return ForecastResult(tensor=out, origin=origin, meta=meta)
 
