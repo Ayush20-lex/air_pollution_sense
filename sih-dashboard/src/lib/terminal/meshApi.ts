@@ -290,6 +290,11 @@ export function mergeMesh(payload: MeshPayload): MergedMesh {
     note: payload.note,
     excluded: payload.pollutants_excluded ?? {},
     source: payload.source ?? 'archive',
-    supplemented: payload.supplemented ?? 0,
+    // Counted from the list that is actually drawn, not from the payload's
+    // own `supplemented`. The two differ: the backend carries every archived
+    // station, including the ones CPCB's rules forbid publishing a number for,
+    // and this drops those a few lines above. Subtracting the backend's count
+    // from the filtered list read 12 nodes reporting where 24 were.
+    supplemented: stations.filter((s) => s.freshness === 'archive').length,
   };
 }
