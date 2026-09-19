@@ -44,6 +44,12 @@ export const PARTICLE = {
     bad: SEVERITY.bad,
     cool: SERIES.wind,
     hot: '#FFFFFF',
+    // Deep and desaturated on purpose. The globe blends additively in dark
+    // mode, so ocean covers 70% of the sphere and any chroma here sums into
+    // a solid disc that swallows the land.
+    ocean: '#0E2A44',
+    /** Base colour of clean land — most of the globe, so it must stay quiet. */
+    calm: '#5EC8E8',
   },
   light: {
     good: '#15803D',
@@ -51,5 +57,9 @@ export const PARTICLE = {
     bad: '#DC2626',
     cool: '#0369A1',
     hot: '#0F172A',
+    /** Light mode draws normally, so ocean needs value rather than restraint. */
+    ocean: '#94A3B8',
+    /** Base colour of clean land in light mode. */
+    calm: '#0E7490',
   },
 } as const;

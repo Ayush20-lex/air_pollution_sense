@@ -5,9 +5,44 @@ import { AdaptiveDpr, Preload } from '@react-three/drei';
 import { useTheme } from 'next-themes';
 import { PARTICLE } from '@/lib/tokens';
 import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
+import { LAND_FRACTION, isLandAtDirection } from '@/lib/earth-mask';
 import { seeded } from '@/lib/utils';
 
-const COUNT = 9200;
+const COUNT = 34000;
+
+/**
+ * Share of points that should land on land.
+ *
+ * Land is 29% of Earth, so even coverage spends 71% of the budget on ocean —
+ * which is the part with nothing to say. Oversampling the lattice and
+ * discarding most ocean candidates buys continent definition at the same
+ * point count and the same per-frame cost, since the frame loop walks COUNT
+ * either way.
+ *
+ * Ocean is thinned, never emptied: without it the globe stops being a globe
+ * and becomes a handful of floating continents.
+ */
+const LAND_SHARE = 0.94;
+/**
+ * Candidate lattice size, sized so the two quotas meet exactly.
+ *
+ * It cannot simply be "generous". The lattice runs pole to pole in order, so
+ * a lattice that offers more points than COUNT stops early and the points it
+ * never reaches are the last ones — the south polar cap. Oversampling by a
+ * round 2.2x shaved Antarctica off the globe. Solving for the exact size
+ * means the loop runs to the end.
+ */
+const CANDIDATES = Math.ceil((COUNT * LAND_SHARE) / LAND_FRACTION);
+/**
+ * Probability an ocean candidate survives.
+ *
+ * Solved rather than tuned: the lattice offers CANDIDATES * (1 - LAND_FRACTION)
+ * ocean points and the quota needs COUNT * (1 - LAND_SHARE) of them. Written
+ * this way, changing LAND_SHARE changes the globe and nothing else has to be
+ * re-guessed.
+ */
+const OCEAN_KEEP =
+  (COUNT * (1 - LAND_SHARE)) / (CANDIDATES * (1 - LAND_FRACTION));
 /** Radius of the aerosol globe, in world units. */
 const RADIUS = 2.45;
 /** Golden angle — the spacing that keeps a Fibonacci sphere free of seams. */
@@ -24,6 +59,98 @@ function loadAt(x: number, y: number, z: number) {
     Math.sin(y * 3.3 - x * 1.7) * 0.33 +
     Math.sin(z * 2.7 + y * 2.1) * 0.22;
   return Math.min(1, Math.max(0, 0.5 + v * 0.5));
+}
+
+/**
+ * The globe's material.
+ *
+ * A PointsMaterial with its vertex stage rewritten, rather than a
+ * ShaderMaterial from scratch: three's own chunks still handle point sizing,
+ * tone mapping and colour space, and only the two things they cannot do are
+ * injected.
+ *
+ * 1. Displacement. Drift, wobble and the radial blast used to run in a JS
+ *    loop over every point every frame. That loop, not the renderer, was the
+ *    ceiling on point count — and this look needs roughly four times the
+ *    points. On the GPU the cost is the same whether there are 9000 or 34000.
+ *
+ * 2. Depth fade, which is the reason the globe did not read as Earth. Points
+ *    are transparent and write no depth, so the far hemisphere drew straight
+ *    through the near one: measured at 3035 far-side points over 4078
+ *    near-side, with Africa laid over the Pacific. Fading by view-space
+ *    facing is what turns a cloud of dots into a sphere with a front.
+ *
+ * The fade relaxes to nothing as the field disperses. Once the points have
+ * left the sphere there is no near or far side to respect, and holding the
+ * fade would make half the blast vanish.
+ */
+function makeGlobeMaterial(sprite: THREE.Texture, dark: boolean) {
+  const material = new THREE.PointsMaterial({
+    map: sprite,
+    size: dark ? 0.019 : 0.021,
+    transparent: true,
+    opacity: dark ? 0.95 : 0.9,
+    depthWrite: false,
+    sizeAttenuation: true,
+    blending: dark ? THREE.AdditiveBlending : THREE.NormalBlending,
+  });
+
+  const uniforms = {
+    uTime: { value: 0 },
+    uDisperse: { value: 0 },
+  };
+  material.userData.uniforms = uniforms;
+
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = uniforms.uTime;
+    shader.uniforms.uDisperse = uniforms.uDisperse;
+
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+         attribute vec3 aSeed;
+         attribute vec3 aColor;
+         uniform float uTime;
+         uniform float uDisperse;
+         varying float vFade;
+         varying vec3 vTint;`,
+      )
+      .replace(
+        '#include <begin_vertex>',
+        `vec3 transformed = position;
+         float drift  = sin(uTime * 0.22 + aSeed.x * 6.28) * 0.09;
+         float wobble = sin(uTime * 0.60 + aSeed.y * 6.28) * 0.045;
+         float rise   = sin(uTime * 0.35 + aSeed.z * 6.28) * 0.06;
+         float len = max(length(position), 1e-4);
+         vec3 dir = position / len;
+         float blast = uDisperse * (2.6 + aSeed.x * 5.5);
+         transformed += vec3(drift, rise, wobble) + dir * blast;
+
+         // w = 0 so the model-view matrix rotates the direction without
+         // translating it. Its z in view space is how far the point faces
+         // the camera: +1 dead on, -1 directly behind the globe.
+         vec3 viewDir = normalize((modelViewMatrix * vec4(dir, 0.0)).xyz);
+         vFade = mix(smoothstep(-0.25, 0.30, viewDir.z), 1.0, uDisperse);
+         vTint = aColor;`,
+      );
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+         varying float vFade;
+         varying vec3 vTint;`,
+      )
+      .replace(
+        '#include <color_fragment>',
+        `diffuseColor.rgb *= vTint;
+         diffuseColor.a *= vFade;
+         if (diffuseColor.a < 0.004) discard;`,
+      );
+  };
+
+  return material;
 }
 
 /** Round, soft-edged sprite so points read as aerosol, not squares. */
@@ -68,119 +195,135 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
     const good = new THREE.Color(p.good);
     const warn = new THREE.Color(p.warn);
     const bad = new THREE.Color(p.bad);
-    const cool = new THREE.Color(p.cool);
+    const ocean = new THREE.Color(p.ocean);
+    const calm = new THREE.Color(p.calm);
     const tmp = new THREE.Color();
 
-    for (let i = 0; i < COUNT; i++) {
-      // Fibonacci lattice: even coverage of the sphere, with none of the
-      // polar clustering naive lat/long sampling produces.
-      const t = i / (COUNT - 1);
-      const dy = 1 - t * 2;
-      const ring = Math.sqrt(Math.max(0, 1 - dy * dy));
-      const theta = GOLDEN_ANGLE * i;
-      const dx = Math.cos(theta) * ring;
-      const dz = Math.sin(theta) * ring;
+    // Two passes over an oversampled lattice. The first takes every land
+    // candidate and a slice of the ocean; the second tops the quota back up
+    // from the ocean it passed over, so the buffer is always exactly full
+    // whatever the mask says. Both are seeded, so the globe is identical on
+    // every load — the same reason the lattice is Fibonacci and not random.
+    let n = 0;
+    for (let pass = 0; pass < 2 && n < COUNT; pass++) {
+      for (let i = 0; i < CANDIDATES && n < COUNT; i++) {
+        // Fibonacci lattice: even coverage of the sphere, with none of the
+        // polar clustering naive lat/long sampling produces.
+        const t = i / (CANDIDATES - 1);
+        const dy = 1 - t * 2;
+        const ring = Math.sqrt(Math.max(0, 1 - dy * dy));
+        const theta = GOLDEN_ANGLE * i;
+        const dx = Math.cos(theta) * ring;
+        const dz = Math.sin(theta) * ring;
 
-      // Most mass sits in a thin shell; the rest drifts inside as depth haze.
-      const u = seeded(i * 2.71);
-      const shell =
-        u < 0.78 ? 0.94 + seeded(i * 5.19) * 0.06 : Math.pow(seeded(i * 7.13), 0.4) * 0.9;
-      const rad = RADIUS * shell;
+        const land = isLandAtDirection(dx, dy, dz);
+        const keptFirstPass = land || seeded(i * 3.31) < OCEAN_KEEP;
+        if (pass === 0 ? !keptFirstPass : keptFirstPass) continue;
 
-      positions[i * 3] = dx * rad;
-      positions[i * 3 + 1] = dy * rad;
-      positions[i * 3 + 2] = dz * rad;
+        // Most mass sits in a thin shell; the rest drifts inside as depth haze.
+        const u = seeded(i * 2.71);
+        const shell =
+          u < 0.94 ? 0.985 + seeded(i * 5.19) * 0.015 : Math.pow(seeded(i * 7.13), 0.4) * 0.9;
+        const rad = RADIUS * shell;
 
-      seeds[i * 3] = seeded(i * 7.77);
-      seeds[i * 3 + 1] = seeded(i * 9.11);
-      seeds[i * 3 + 2] = seeded(i * 11.31);
+        positions[n * 3] = dx * rad;
+        positions[n * 3 + 1] = dy * rad;
+        positions[n * 3 + 2] = dz * rad;
 
-      // Pollution patches over the globe -> colour ramps good -> emergency
-      const load = loadAt(dx * 2, dy * 2, dz * 2);
-      if (load > 0.82) tmp.copy(bad);
-      else if (load > 0.6) tmp.lerpColors(warn, bad, (load - 0.6) / 0.22);
-      else if (load > 0.35) tmp.lerpColors(cool, warn, (load - 0.35) / 0.25);
-      else tmp.lerpColors(good, cool, load / 0.35);
+        seeds[n * 3] = seeded(i * 7.77);
+        seeds[n * 3 + 1] = seeded(i * 9.11);
+        seeds[n * 3 + 2] = seeded(i * 11.31);
 
-      // Interior haze sits behind the shell, so cool and dim it for depth.
-      if (u >= 0.78) tmp.lerp(cool, 0.32).multiplyScalar(0.7);
+        // Ocean carries no reading, so it carries no chroma: it is the thing
+        // the continents are legible against. Land keeps the pollution ramp,
+        // which is the only reason the globe is here.
+        let hot = false;
+        if (land) {
+          // Most land sits at one calm colour; only loaded regions leave it.
+          //
+          // The ramp used to spread green-amber-red across every dot, which
+          // made the continents a field of noise — the shapes were there and
+          // unreadable. A map is legible when most of it agrees and the
+          // exceptions stand out, so clean air is the base and pollution is
+          // the highlight. It also states the data more honestly: a
+          // continuous ramp implies a precision this synthetic field does
+          // not have, while "calm, with hotspots" is what it actually says.
+          const load = loadAt(dx * 2, dy * 2, dz * 2);
+          if (load > 0.86) tmp.copy(bad);
+          else if (load > 0.74) tmp.lerpColors(warn, bad, (load - 0.74) / 0.12);
+          else if (load > 0.62) tmp.lerpColors(calm, warn, (load - 0.62) / 0.12);
+          else tmp.lerpColors(calm, good, (0.62 - load) / 0.62 * 0.35);
 
-      // A small fraction burn bright as "hot" monitored parcels
-      const hot = seeded(i * 13.7) > 0.965;
-      if (hot) tmp.lerp(new THREE.Color(p.hot), 0.5);
+          // A small fraction burn bright as "hot" monitored parcels. Land only —
+          // a bright reading in the middle of the Pacific is a claim, not a mood.
+          hot = seeded(i * 13.7) > 0.965;
+          if (hot) tmp.lerp(new THREE.Color(p.hot), 0.5);
+        } else {
+          tmp.copy(ocean);
+        }
 
-      colors[i * 3] = tmp.r;
-      colors[i * 3 + 1] = tmp.g;
-      colors[i * 3 + 2] = tmp.b;
-      sizes[i] = hot ? 0.09 : 0.02 + seeded(i * 17.3) * 0.04;
+        // Interior haze sits behind the shell, so sink it toward the sea
+        // colour and dim it for depth. It tinted toward `cool` before, which
+        // is now a land hue and would have put blue back inside the planet.
+        if (u >= 0.94) tmp.lerp(ocean, 0.42).multiplyScalar(land ? 0.62 : 0.4);
+
+        colors[n * 3] = tmp.r;
+        colors[n * 3 + 1] = tmp.g;
+        colors[n * 3 + 2] = tmp.b;
+        sizes[n] = hot ? 0.09 : 0.02 + seeded(i * 17.3) * 0.04;
+        n++;
+      }
     }
     return { positions, colors, seeds, sizes };
   }, [dark]);
 
-  const base = React.useMemo(() => positions.slice(), [positions]);
+  // The material is built once and mutated through uniforms. Its vertex
+  // shader does the drift, the blast and the depth fade; see FADE_CHUNK.
+  const material = React.useMemo(() => makeGlobeMaterial(sprite, dark), [sprite, dark]);
+  React.useEffect(() => () => material.dispose(), [material]);
 
   useFrame((state, delta) => {
-    const p = points.current;
-    if (!p) return;
+    const pts = points.current;
+    if (!pts) return;
     const t = state.clock.elapsedTime;
-    const arr = p.geometry.attributes.position.array as Float32Array;
 
     // Scroll drives a slow, continuous spread; the scan click overrides it
     // with a fast full blast. Whichever is further along wins.
+    //
+    // This stays on the CPU deliberately. It is one float, it is where the
+    // scroll ref and the dispersing prop meet, and keeping it here means the
+    // hand-off logic reads the same as it did when the loop was here too.
     const scrolled = (progress?.current ?? 0) * 0.82;
     const target = Math.max(dispersing ? 1 : 0, scrolled);
     eased.current += (target - eased.current) * Math.min(1, delta * (dispersing ? 1.9 : 6));
     const d = eased.current;
 
-    for (let i = 0; i < COUNT; i++) {
-      const ix = i * 3;
-      const sx = seeds[ix];
-      const sy = seeds[ix + 1];
-      const sz = seeds[ix + 2];
+    // Two uniform writes replace a 34000-iteration loop with three sines in
+    // it. The loop is why the count could not rise: at 9200 points it already
+    // ran 27600 sines a frame, and the reference look needs four times that.
+    // Read off the object rather than the memo: same material, but mutating
+    // the captured value is a render-time value being written after render.
+    const mat = pts.material as THREE.PointsMaterial;
+    const u = mat.userData.uniforms as { uTime: { value: number }; uDisperse: { value: number } };
+    u.uTime.value = t;
+    u.uDisperse.value = d;
 
-      // Slow advective drift + turbulent wobble.
-      const drift = Math.sin(t * 0.22 + sx * 6.28) * 0.09;
-      const wobble = Math.sin(t * 0.6 + sy * 6.28) * 0.045;
-      const rise = Math.sin(t * 0.35 + sz * 6.28) * 0.06;
-
-      const bx = base[ix];
-      const by = base[ix + 1];
-      const bz = base[ix + 2];
-
-      // Radial blast-out during the scan transition.
-      const blast = d * (2.6 + sx * 5.5);
-      const len = Math.hypot(bx, by, bz) || 1;
-
-      arr[ix] = bx + drift + (bx / len) * blast;
-      arr[ix + 1] = by + rise + (by / len) * blast;
-      arr[ix + 2] = bz + wobble + (bz / len) * blast;
-    }
-    p.geometry.attributes.position.needsUpdate = true;
+    mat.opacity = (dark ? 0.95 : 0.9) * (1 - d * 0.95);
+    mat.size = (dark ? 0.019 : 0.021) + d * 0.05;
 
     // Gentle autorotation; accelerates as the field breaks apart.
-    p.rotation.y += delta * (0.045 + d * 0.9);
-
-    const mat = p.material as THREE.PointsMaterial;
-    mat.opacity = (dark ? 0.95 : 0.9) * (1 - d * 0.95);
-    mat.size = 0.055 + d * 0.05;
+    pts.rotation.y += delta * (0.045 + d * 0.9);
   });
 
   return (
-    <points ref={points} frustumCulled={false} rotation={[0, 0, 0.22]}>
+    // 0.409 rad is Earth's 23.44 degree obliquity. It was 0.22 when the
+    // sphere was an abstract cloud and any lean would do.
+    <points ref={points} frustumCulled={false} rotation={[0, 0, 0.409]} material={material}>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
+        <bufferAttribute attach="attributes-aColor" args={[colors, 3]} />
+        <bufferAttribute attach="attributes-aSeed" args={[seeds, 3]} />
       </bufferGeometry>
-      <pointsMaterial
-        map={sprite}
-        size={0.055}
-        vertexColors
-        transparent
-        opacity={0.9}
-        depthWrite={false}
-        sizeAttenuation
-        blending={dark ? THREE.AdditiveBlending : THREE.NormalBlending}
-      />
     </points>
   );
 }
