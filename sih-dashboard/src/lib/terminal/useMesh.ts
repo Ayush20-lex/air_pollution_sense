@@ -14,6 +14,7 @@
 import * as React from 'react';
 import { STATIONS, type Station } from './stations';
 import { fetchMesh, mergeMesh, type LiveStation, type MergedMesh } from './meshApi';
+import { useTerminalStore } from '@/store/useTerminalStore';
 
 /** Kept in step with the console's refresh so the two pages age together. */
 const REFRESH_MS = 120_000;
@@ -206,10 +207,35 @@ export function useHubStation(): { station: Station | LiveStation; live: boolean
   // The hero reports one station's number as the city's, so it has to be one
   // of the current ones - an archived master would headline a two-day-old AQI.
   const stations = useFreshStations();
+  const selectedId = useTerminalStore((s) => s.selectedId);
+
+  // The header's picker and the map's selection are the same choice, so they
+  // share one id. Falling through rather than pinning to it: the curated
+  // master is the default and does not exist in every feed, and a selection
+  // made against one feed can be gone after a refresh against another.
+  const chosen = stations.find((s) => s.id === selectedId);
   const master = stations.find((s) => s.master);
   const station =
-    master ?? [...stations].sort((a, b) => b.aqi - a.aqi)[0] ?? STATIONS[0];
+    chosen ?? master ?? [...stations].sort((a, b) => b.aqi - a.aqi)[0] ?? STATIONS[0];
   return { station, live: live && isLive(station) };
+}
+
+/**
+ * Every current station, worst first, for the header's picker.
+ *
+ * Worst first because that is the order someone scanning for a problem wants,
+ * and because the list is long enough - 79 on the CPCB feed - that alphabetical
+ * would bury the one station anybody is looking for.
+ */
+export function useStationOptions(): { id: string; label: string; aqi: number }[] {
+  const stations = useFreshStations();
+  return React.useMemo(
+    () =>
+      [...stations]
+        .sort((a, b) => b.aqi - a.aqi)
+        .map((s) => ({ id: s.id, label: `${s.name} — ${s.zone}`, aqi: s.aqi })),
+    [stations],
+  );
 }
 
 /** Lowest and highest index across the mesh this hour. Measured when live. */

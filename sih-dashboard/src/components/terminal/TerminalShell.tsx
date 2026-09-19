@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { CERTIFICATIONS, HUB, LOCATIONS } from '@/lib/terminal/content';
 import { STATIONS } from '@/lib/terminal/stations';
-import { useMesh } from '@/lib/terminal/useMesh';
+import { useHubStation, useMesh, useStationOptions } from '@/lib/terminal/useMesh';
 import { TerminalEnter } from './TerminalEnter';
 import { cn } from '@/lib/utils';
 import { useTerminalStore } from '@/store/useTerminalStore';
@@ -177,6 +177,13 @@ function TerminalSidebar() {
 }
 
 function TerminalHeader() {
+  const options = useStationOptions();
+  const select = useTerminalStore((st) => st.select);
+  // The hub, not the stored id. They differ whenever the stored selection is
+  // not in the current feed - the curated master is the default and the CPCB
+  // bulletin does not carry it - and the picker has to name the station the
+  // page is actually describing, or the two disagree in plain sight.
+  const { station: hub } = useHubStation();
   const mesh = useMesh();
   // A printable key pressed on the focused search control opens the palette
   // carrying that character, so type-ahead doesn't lose its first keystroke.
@@ -231,14 +238,30 @@ function TerminalHeader() {
             provenance pill. Below lg it shrinks and truncates instead. */}
         <div className="relative min-w-0 lg:min-w-[310px]">
           <MapPin className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-term-primary" />
+          {/* The real mesh, not a list of four names. This was a decorative
+              select: four hard-coded strings and no onChange, so picking one
+              did nothing. It now drives the same selection the map uses, so
+              choosing here moves the hero, the pollutant grid and the map
+              together instead of each holding its own idea of "the station". */}
           <select
             aria-label="Monitoring location"
-            defaultValue={LOCATIONS[0]}
+            value={options.some((o) => o.id === hub.id) ? hub.id : ''}
+            onChange={(e) => select(e.target.value)}
             className="w-full cursor-pointer appearance-none rounded-lg border border-term-outline bg-term-surface-high py-2 pl-9 pr-9 text-sm font-semibold text-term-ink shadow-inner focus:border-term-primary focus:outline-none"
           >
-            {LOCATIONS.map((l) => (
-              <option key={l} value={l}>
-                {l}
+            {options.length === 0 ? (
+              <option value="">{LOCATIONS[0]}</option>
+            ) : null}
+            {/* Shown when the stored selection is not in the current feed -
+                a refresh can retire a station, and a select with no matching
+                option silently displays its first entry instead, which would
+                name one station while the page described another. */}
+            {options.length > 0 && !options.some((o) => o.id === hub.id) ? (
+              <option value="">Select a station…</option>
+            ) : null}
+            {options.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label} · AQI {o.aqi}
               </option>
             ))}
           </select>
