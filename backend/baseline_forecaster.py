@@ -103,10 +103,10 @@ CHANNEL_SOURCE: dict[int, str] = {
 #: would have followed it unchanged and described nothing.
 VALIDATED: dict[int, dict[str, object]] = {
     2025: {
-        "validated_rmse_ugm3": 84.89,
-        "beats_raw_cams_by": "30%",
+        "validated_rmse_ugm3": 62.23,
+        "beats_raw_cams_by": "27%",
         "scored_window": "December 2025",
-        "scored_comparisons": 462_323,
+        "scored_comparisons": 3_891_185,
     },
     2026: {
         "validated_rmse_ugm3": 62.23,
@@ -127,6 +127,12 @@ VALIDATED: dict[int, dict[str, object]] = {
 
 #: Lowest boundary-layer height treated as physical, in metres.
 PBL_FLOOR_M = 50.0
+
+#: Fraction of stations that must have reported in an hour for it to be usable
+#: as a forecast origin. Half is enough to seed the IDW field everywhere while
+#: excluding the thin leading edge of the feed, where a few fast publishers run
+#: a day or more ahead of everyone else.
+ORIGIN_QUORUM = 0.5
 
 #: How much of a season the *service* loads, in days.
 #:
@@ -217,7 +223,8 @@ class BlendBaselineForecaster:
                                    freq="h", tz="UTC")
         self._t_index = {t: i for i, t in enumerate(self.times)}
 
-        def pivot(df: pd.DataFrame, col: str, qc: bool = False) -> np.ndarray:
+        def pivot(df: pd.DataFrame, col: str, qc: bool = False,
+                  fill: bool = True) -> np.ndarray:
             """(n_times, n_stations), gaps filled so IDW weights stay constant.
 
             `qc` runs the network-contradiction filter before the gaps are
@@ -233,10 +240,15 @@ class BlendBaselineForecaster:
                     observation_qc.despike(w.to_numpy(dtype=np.float32), col),
                     index=w.index, columns=w.columns,
                 )
-            return w.ffill().bfill().to_numpy(dtype=np.float32)
+            return (w.ffill().bfill() if fill else w).to_numpy(dtype=np.float32)
 
         # Observations only. CAMS is a model field and has no faulty sensor.
         self.obs_pm25 = pivot(obs.rename(columns={"value": "pm25"}), "pm25", qc=True)
+        # Before the gaps were closed. `obs_pm25` is forward-filled so the IDW
+        # weights stay constant, which makes it useless for asking how recently
+        # a station reported - every hour looks covered.
+        self._obs_raw = pivot(obs.rename(columns={"value": "pm25"}), "pm25",
+                              qc=True, fill=False)
         self.fields = {ch: pivot(fc, col) for ch, col in CHANNEL_SOURCE.items()
                        if col in fc.columns}
 
@@ -321,8 +333,36 @@ class BlendBaselineForecaster:
     # ── forecasting ───────────────────────────────────────────────────────────
 
     def valid_origins(self) -> pd.DatetimeIndex:
-        """Origins with 24 h of history behind and 72 h of forecast ahead."""
-        return self.times[24: len(self.times) - HORIZON]
+        """Origins with 24 h of observed history behind and 72 h of lead ahead.
+
+        The lead comes from the forecast archive, which by design runs days into
+        the future; the history has to come from measurements, which lag by a
+        day or so. Bounding only by the index let the origin sit ahead of the
+        newest observation - the gaps are forward-filled, so it still produced a
+        forecast, seeded by a "current" state that was in places nineteen hours
+        stale and silently repeated. An origin is only honest if the day behind
+        it was actually measured.
+        """
+        end = min(len(self.times) - HORIZON, self._last_observed_index() + 1)
+        return self.times[24:max(end, 25)]
+
+    def _last_observed_index(self) -> int:
+        """Newest hour the network as a whole reported, not just one station.
+
+        "Any station" is too weak a test. Stations publish at different rates:
+        PM2.5 from a handful of sites reaches 19 September while PM10, NO2 and
+        O3 across the network stop 36 hours earlier, and 119 readings spread
+        over 68 stations is not an hour anyone can forecast from. Taking the
+        newest such hour produced an origin where no station could meet CPCB's
+        three-pollutant rule - a forecast with an empty mesh beside it.
+
+        A quorum is the honest bound: the most recent hour where enough of the
+        network reported to seed a forecast from measurements rather than from
+        forward-fill.
+        """
+        covered = np.isfinite(self._obs_raw).mean(axis=1) >= ORIGIN_QUORUM
+        idx = np.flatnonzero(covered)
+        return int(idx[-1]) if idx.size else len(self.times) - 1
 
     def forecast(self, origin: pd.Timestamp | None = None) -> ForecastResult:
         origins = self.valid_origins()

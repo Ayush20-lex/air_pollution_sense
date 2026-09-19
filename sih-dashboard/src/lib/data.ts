@@ -34,13 +34,13 @@ import { clamp, seeded } from './utils';
  * mismatch between them and the backend is silent, which is why they are
  * regenerated together and the season is named here rather than left implicit.
  *
- * Season 2026, origin 2026-09-16T23:00Z: target ~40 ug/m3 at hour 0.
+ * Season 2026, origin 2026-09-17T13:00:00Z: target ~50 ug/m3 at hour 0.
  *
  * Only the loading is scaled. The physics is untouched - ventilation, the
  * aerosol-radiation feedback, the diurnal shape and the intervention sliders
  * all still do the work.
  */
-export const REGIME = 0.36;
+export const REGIME = 0.451;
 
 export const FORECAST_HOURS = 72;
 export const STEP_HOURS = 1;
