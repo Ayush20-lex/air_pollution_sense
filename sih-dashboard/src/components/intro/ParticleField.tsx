@@ -17,27 +17,46 @@ import { seeded } from '@/lib/utils';
  * on the eye finding rows. The lattice was why the continents stayed mushy
  * at any density.
  */
-const ROWS = 340;
+const ROWS_DESKTOP = 340;
+/** Phones get a coarser grid: ~62k dots against ~147k. */
+const ROWS_COMPACT = 220;
 
 /**
- * Dots on the equator. Every other row gets this scaled by cos(latitude), so
- * the rows stay and the polar crowding that ruins a naive lat/long grid does
- * not — the reason Fibonacci was chosen in the first place, recovered without
- * giving up the alignment.
+ * Grid resolution for this device, read once at mount.
+ *
+ * A full-density sphere is 147190 dots. That holds 87fps on a desktop GPU
+ * and is not a safe thing to hand a phone, which has a fraction of the fill
+ * rate and a screen too small to resolve the difference anyway. Read once
+ * rather than on resize: rebuilding 147190 dots mid-drag to gain detail
+ * nobody asked for is the more expensive mistake.
  */
-const EQUATOR_DOTS = ROWS * 2;
+function rowsForViewport(): number {
+  if (typeof window === 'undefined') return ROWS_COMPACT;
+  return window.innerWidth < 768 ? ROWS_COMPACT : ROWS_DESKTOP;
+}
+
+/**
+ * Dots on the equator, twice the row count. Every other row gets this scaled
+ * by cos(latitude), so the rows stay and the polar crowding that ruins a
+ * naive lat/long grid does not — the reason Fibonacci was chosen in the first
+ * place, recovered without giving up the alignment.
+ */
+const EQUATOR_FACTOR = 2;
 
 /** Radius of the globe, in world units. */
 const RADIUS = 2.45;
 
 /**
- * Share of ocean dots kept.
+ * How large a sea dot is against a land dot.
  *
- * Not zero. With the sea empty the globe stops being a globe and becomes
- * continents hanging in space; this is enough to carry the limb and the
- * silhouette without competing with the land.
+ * The sea used to be thinned instead — one dot in fourteen — which left the
+ * body of the sphere mostly empty and only the continents holding together,
+ * so the globe came apart into floating landmasses. Every grid cell is drawn
+ * now, and separation is carried by size and value rather than by absence.
+ * A complete surface is what makes it a sphere; the continents still lead
+ * because their dots are nearly twice the size and far brighter.
  */
-const OCEAN_KEEP = 0.07;
+const OCEAN_SCALE = 0.55;
 
 /**
  * Low-frequency field over the sphere. Three rotated sine lobes stand in for
@@ -105,6 +124,7 @@ function makeGlobeMaterial(sprite: THREE.Texture, dark: boolean) {
         `#include <common>
          attribute vec3 aSeed;
          attribute vec3 aColor;
+         attribute float aScale;
          uniform float uTime;
          uniform float uDisperse;
          uniform vec3 uRim;
@@ -152,6 +172,14 @@ function makeGlobeMaterial(sprite: THREE.Texture, dark: boolean) {
          vFade = mix(max(facing, rim * 0.92), 1.0, uDisperse);
          vTint = mix(aColor, uRim, rim * 0.85);`,
       );
+
+    // three sets a single point size for the whole material; the sea needs
+    // its own. Patched rather than reimplemented so size attenuation, which
+    // the next lines of the stock chunk apply, still runs untouched.
+    shader.vertexShader = shader.vertexShader.replace(
+      'gl_PointSize = size;',
+      'gl_PointSize = size * aScale;',
+    );
 
     shader.fragmentShader = shader.fragmentShader
       .replace(
@@ -207,7 +235,10 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
   const sprite = React.useMemo(() => makeSprite(), []);
   const eased = React.useRef(0);
 
-  const { positions, colors, seeds } = React.useMemo(() => {
+  const [rows] = React.useState(rowsForViewport);
+
+  const { positions, colors, seeds, scales } = React.useMemo(() => {
+    const equatorDots = rows * EQUATOR_FACTOR;
     // Light mode needs deeper pigments: the neon set greys out against white.
     const p = dark ? PARTICLE.dark : PARTICLE.light;
     const good = new THREE.Color(p.good);
@@ -224,18 +255,19 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
     const pos: number[] = [];
     const col: number[] = [];
     const sed: number[] = [];
+    const scl: number[] = [];
 
     let k = 0;
-    for (let r = 0; r < ROWS; r++) {
+    for (let r = 0; r < rows; r++) {
       // Row centres, so no dot sits exactly on a pole.
-      const v = (r + 0.5) / ROWS;
+      const v = (r + 0.5) / rows;
       const lat = Math.PI * (0.5 - v);
       const dy = Math.sin(lat);
       const ring = Math.cos(lat);
 
       // Columns scale with cos(latitude): rows stay aligned, spacing stays
       // even. A fixed column count would pile the poles with dots.
-      const cols = Math.max(1, Math.round(EQUATOR_DOTS * ring));
+      const cols = Math.max(1, Math.round(equatorDots * ring));
       for (let c = 0; c < cols; c++) {
         // Half-row stagger, so the rows do not line up into vertical seams.
         const lon = ((c + (r % 2) * 0.5) / cols) * Math.PI * 2;
@@ -244,10 +276,10 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
 
         const land = isLandAtDirection(dx, dy, dz);
         k++;
-        if (!land && seeded(k * 3.31) >= OCEAN_KEEP) continue;
 
         pos.push(dx * RADIUS, dy * RADIUS, dz * RADIUS);
         sed.push(seeded(k * 7.77), seeded(k * 9.11), seeded(k * 11.31));
+        scl.push(land ? 1 : OCEAN_SCALE);
 
         // Ocean carries no reading, so it carries no chroma: it is the thing
         // the continents are legible against.
@@ -277,8 +309,9 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
       positions: new Float32Array(pos),
       colors: new Float32Array(col),
       seeds: new Float32Array(sed),
+      scales: new Float32Array(scl),
     };
-  }, [dark]);
+  }, [dark, rows]);
 
   // The material is built once and mutated through uniforms. Its vertex
   // shader does the drift, the blast and the depth fade; see FADE_CHUNK.
@@ -326,6 +359,7 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
         <bufferAttribute attach="attributes-aColor" args={[colors, 3]} />
         <bufferAttribute attach="attributes-aSeed" args={[seeds, 3]} />
+        <bufferAttribute attach="attributes-aScale" args={[scales, 1]} />
       </bufferGeometry>
     </points>
   );
