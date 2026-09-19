@@ -256,6 +256,27 @@
 .dark .term-map .as-pin-body {
   box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.8);
 }
+/* Archived pins.
+   A station that reports to CPCB but not to the live feed. It is drawn hollow
+   and half-weight so the eye reads the live network first and never mistakes a
+   two-day-old reading for this hour's; the tooltip gives its actual hour.
+   These pins are excluded from the heat field, the contours and every
+   aggregate - they mark where a station is, not what the air is doing now. */
+.term-map .as-pin-stale .as-pin-body {
+  background: transparent;
+  border-style: dashed;
+  opacity: 0.55;
+}
+.term-map .as-pin-stale .as-pin-stem {
+  opacity: 0.4;
+}
+.term-map .as-pin-stale .as-pin-aqi {
+  font-style: italic;
+}
+.term-map .as-pin-stale:hover .as-pin-body {
+  opacity: 1;
+  background: var(--t-glass-bg);
+}
 .term-map .as-pin-selected {
   border-width: 2px !important;
   background: var(--t-glass-bg);

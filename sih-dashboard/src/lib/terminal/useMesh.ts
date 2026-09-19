@@ -52,6 +52,13 @@ export type MeshState = {
    * cannot say which one it is showing is making the stronger claim by default.
    */
   feed: 'waqi_live' | 'archive' | null;
+  /**
+   * Stations carried from the archive to fill out the map, because only about
+   * 24 of the network's 56 indexable sites report to the live feed in a given
+   * hour. They are drawn differently and excluded from every aggregate; see
+   * `freshStations`.
+   */
+  supplemented: number;
 };
 
 const OFFLINE: MeshState = {
@@ -65,6 +72,7 @@ const OFFLINE: MeshState = {
   excluded: {},
   curatedCount: STATIONS.length,
   feed: null,
+  supplemented: 0,
 };
 
 /**
@@ -114,6 +122,7 @@ async function refresh(force = false) {
     excluded: merged.excluded,
     curatedCount: STATIONS.length,
     feed: merged.source === 'waqi_live' ? 'waqi_live' : 'archive',
+    supplemented: merged.supplemented,
   });
 }
 
@@ -148,6 +157,37 @@ function start() {
   });
 }
 
+/**
+ * The stations an aggregate may be computed from.
+ *
+ * A blended mesh carries two clocks: live stations at this hour and archived
+ * ones at the archive's, about 42 hours back. Showing both on a map is honest
+ * because each pin says which it is, but averaging across them is not - a
+ * range, a zone mean or an interpolated plume surface would silently be a
+ * mixture of two times, and nothing on screen could reveal it.
+ *
+ * So anything derived from more than one station uses this. When no station is
+ * marked live - the pure archive, or the offline curated list - every station
+ * shares one clock and they are all returned.
+ */
+export function freshStations(
+  stations: (Station | LiveStation)[],
+): (Station | LiveStation)[] {
+  const live = stations.filter((s) => 'freshness' in s && s.freshness === 'live');
+  return live.length ? live : stations;
+}
+
+/** Hook form of `freshStations`, for the map's field and contour layers. */
+export function useFreshStations(): (Station | LiveStation)[] {
+  const { stations } = useMesh();
+  return React.useMemo(() => freshStations(stations), [stations]);
+}
+
+/** True when this station is speaking for the archive's hour, not this one. */
+export function isStale(s: Station | LiveStation): boolean {
+  return 'freshness' in s && s.freshness === 'archive';
+}
+
 /** True when this station carries the archive's own measurements. */
 export function isLive(s: Station | LiveStation): s is LiveStation {
   return 'meshId' in s;
@@ -162,7 +202,10 @@ export function isLive(s: Station | LiveStation): s is LiveStation {
  * better a real station than an empty gauge.
  */
 export function useHubStation(): { station: Station | LiveStation; live: boolean } {
-  const { stations, live } = useMesh();
+  const { live } = useMesh();
+  // The hero reports one station's number as the city's, so it has to be one
+  // of the current ones - an archived master would headline a two-day-old AQI.
+  const stations = useFreshStations();
   const master = stations.find((s) => s.master);
   const station =
     master ?? [...stations].sort((a, b) => b.aqi - a.aqi)[0] ?? STATIONS[0];
@@ -171,7 +214,7 @@ export function useHubStation(): { station: Station | LiveStation; live: boolean
 
 /** Lowest and highest index across the mesh this hour. Measured when live. */
 export function useMeshRange(): { low: number; high: number; count: number } {
-  const { stations } = useMesh();
+  const stations = useFreshStations();
   const values = stations.map((s) => s.aqi);
   return {
     low: values.length ? Math.min(...values) : 0,

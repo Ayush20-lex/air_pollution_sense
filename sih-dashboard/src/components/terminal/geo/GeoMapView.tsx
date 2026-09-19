@@ -68,9 +68,17 @@ export function GeoMapView() {
               Geospatial Plume Map
             </h1>
             <span className="rounded border border-orange-500/40 bg-orange-500/15 px-2.5 py-0.5 font-mono text-xs font-bold text-orange-400">
-              DELHI NCR MESH • {stations.length} NODES{' '}
+              DELHI NCR MESH • {stations.length - mesh.supplemented} NODES{' '}
               {mesh.live ? 'REPORTING' : 'ONLINE'}
             </span>
+            {mesh.supplemented > 0 && (
+              // Counted apart from the reporting nodes, not added to them: these
+              // stations are on the map at the archive's hour, so folding them
+              // into one total would overstate what is live by more than half.
+              <span className="rounded border border-term-outline-variant/60 px-2.5 py-0.5 font-mono text-xs font-bold text-term-ink-variant">
+                + {mesh.supplemented} ARCHIVED
+              </span>
+            )}
           </div>
           <p className="mt-1 font-body text-sm text-term-ink-variant">
             Regional plume tracking, topographic trapping analysis &amp; pollution source attribution

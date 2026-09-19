@@ -746,6 +746,64 @@ def _mesh_origin() -> str | None:
         return None
 
 
+#: How close an archived station must sit to a live one before it is taken to
+#: be the same site. The two feeds name stations differently - WAQI carries
+#: "Anand Vihar, Delhi" against the archive's "Anand Vihar, Delhi - DPCC" - so
+#: position is the only reliable identity, and 500 m is comfortably inside the
+#: spacing of the CPCB network while being wider than the coordinate rounding
+#: the two sources disagree on.
+SAME_SITE_KM = 0.5
+
+
+def _km(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float:
+    """Planar distance. Good to better than a percent over a 60 km domain."""
+    return float(np.hypot((a_lat - b_lat) * 111.0, (a_lon - b_lon) * 97.5))
+
+
+def _blend(live: dict[str, Any], archive: dict[str, Any] | None) -> dict[str, Any]:
+    """Live stations, filled out with archived ones where nothing live exists.
+
+    Only about 24 NCR stations report to WAQI in any given hour, against 56 the
+    archive can index, so a live-only mesh draws a quarter of the network and
+    leaves most of the map empty. The rest of those stations have not closed -
+    they simply published last on the archive's clock.
+
+    They are carried here with `freshness: "archive"` and their own `as_of`,
+    never merged into the live figures. Two rules keep that from becoming the
+    blend this endpoint used to refuse:
+
+      * a reader can tell them apart, because every station says which hour it
+        is speaking for and the map draws the two differently;
+
+      * they are excluded from `count`, `indexable` and anything computed from
+        them, so no headline number, range or zone average is ever a mix of two
+        timestamps. A supplemented station is something you can look up, not
+        something that moves an aggregate.
+
+    Where both feeds have the same site the live reading wins outright.
+    """
+    out = [{**s, "freshness": "live", "as_of": live["as_of"]} for s in live["stations"]]
+    if not archive or not archive.get("stations"):
+        return {**live, "stations": out, "supplemented": 0, "supplement_as_of": None}
+
+    fixes = [(s["lat"], s["lon"]) for s in live["stations"]]
+    added = 0
+    for s in archive["stations"]:
+        if any(_km(s["lat"], s["lon"], f_lat, f_lon) <= SAME_SITE_KM
+               for f_lat, f_lon in fixes):
+            continue
+        out.append({**s, "freshness": "archive", "as_of": archive["as_of"]})
+        added += 1
+
+    return {
+        **live,
+        "stations": out,
+        # count and indexable stay live-only on purpose - see the docstring.
+        "supplemented": added,
+        "supplement_as_of": archive["as_of"],
+    }
+
+
 @app.get("/api/v1/stations")
 async def stations(response: Response):
     """
@@ -777,12 +835,28 @@ async def stations(response: Response):
     try:
         live = waqi_live.mesh()
     except Exception as exc:  # noqa: BLE001 - the archive still stands
-        log.warning("live mesh unavailable (%s); serving the archive", exc)
-    if live is not None and live["indexable"] >= MIN_LIVE_STATIONS:
-        return live
+        # `_log`, not `log`: this handler runs precisely when the live feed has
+        # failed, and a bare `log` is unbound at module scope, so the fallback
+        # would have raised NameError over the error it exists to report.
+        _log.warning("live mesh unavailable (%s); serving the archive", exc)
 
-    data = station_registry.build(cfg.baseline_season, _mesh_origin())
-    data = {**data, "source": "archive"}
+    archive = None
+    try:
+        archive = station_registry.build(cfg.baseline_season, _mesh_origin())
+    except Exception as exc:  # noqa: BLE001 - live alone is still a mesh
+        _log.warning("archive mesh unavailable (%s)", exc)
+
+    if live is not None and live["indexable"] >= MIN_LIVE_STATIONS:
+        return _blend(live, archive)
+
+    if archive is None:
+        response.status_code = 204
+        return None
+    data = {**archive, "source": "archive"}
+    data["stations"] = [
+        {**s, "freshness": "archive", "as_of": archive["as_of"]}
+        for s in data["stations"]
+    ]
     if not data["stations"]:
         response.status_code = 204
         return None

@@ -67,6 +67,14 @@ export type MeshStation = {
   reasons: string[];
   /** WAQI's own US-scale figure, present only on the live feed. */
   aqi_us?: number | null;
+  /**
+   * Which clock this station is speaking for. "live" is this hour; "archive"
+   * is a station that reports to CPCB but not to the live feed, carried so the
+   * map is not three quarters empty. Absent on the offline curated fallback.
+   */
+  freshness?: 'live' | 'archive';
+  /** This station's own hour. Differs between the two freshnesses. */
+  as_of?: string;
 };
 
 export type MeshPayload = {
@@ -81,6 +89,9 @@ export type MeshPayload = {
   note: string;
   pollutants_indexed: string[];
   pollutants_excluded: Record<string, string>;
+  /** Archive-only stations added to fill the map. Never counted in `count`. */
+  supplemented?: number;
+  supplement_as_of?: string | null;
   stations: MeshStation[];
 };
 
@@ -202,6 +213,10 @@ export type LiveStation = Station & {
   hourly: Record<string, (number | null)[]>;
   /** Share of the indexing window this station actually reported. */
   coveragePct: number;
+  /** See MeshStation.freshness. Defaults to the payload's own feed. */
+  freshness: 'live' | 'archive';
+  /** This station's own hour, which on a blended mesh is not the page's. */
+  stationAsOf: string | null;
 };
 
 export type MergedMesh = {
@@ -214,6 +229,8 @@ export type MergedMesh = {
   index: string;
   note: string;
   excluded: Record<string, string>;
+  /** How many stations came from the archive to fill out the map. */
+  supplemented: number;
 };
 
 /**
@@ -261,6 +278,8 @@ export function mergeMesh(payload: MeshPayload): MergedMesh {
       subIndices: s.sub_indices ?? {},
       hourly: s.hourly ?? {},
       coveragePct: s.coverage_pct,
+      freshness: s.freshness ?? (payload.source === 'waqi_live' ? 'live' : 'archive'),
+      stationAsOf: s.as_of ?? payload.as_of ?? null,
     }));
 
   return {
@@ -271,5 +290,6 @@ export function mergeMesh(payload: MeshPayload): MergedMesh {
     note: payload.note,
     excluded: payload.pollutants_excluded ?? {},
     source: payload.source ?? 'archive',
+    supplemented: payload.supplemented ?? 0,
   };
 }

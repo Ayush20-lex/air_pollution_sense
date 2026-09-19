@@ -26,7 +26,8 @@ import {
   PLUME_SOURCES,
   type Station,
 } from '@/lib/terminal/stations';
-import { useMesh } from '@/lib/terminal/useMesh';
+import type { LiveStation } from '@/lib/terminal/meshApi';
+import { useMesh, useFreshStations, isStale } from '@/lib/terminal/useMesh';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { TERM } from '@/lib/terminal/palette';
 
@@ -104,7 +105,7 @@ function StationPins({
             <Marker
               key={s.id}
               position={[s.lat, s.lng]}
-              icon={buildPin(s, n.pm25, n.aqi, n.alert, selectedId === s.id, d)}
+              icon={buildPin(s, n.pm25, n.aqi, n.alert, selectedId === s.id, d, isStale(s))}
               eventHandlers={{ click: () => select(s.id) }}
             >
               <LTooltip direction="top" offset={[0, d === 'dot' ? -10 : d === 'compact' ? -36 : -50]} opacity={1} className="as-tip">
@@ -123,6 +124,11 @@ function StationPins({
                   <div style={{ opacity: 0.7 }}>
                     {s.zone} zone · {s.agency}
                   </div>
+                  {isStale(s) && (
+                    <div style={{ opacity: 0.75, marginTop: 4, color: '#f0b429' }}>
+                      ARCHIVED · last reported {stationHour(s)}
+                    </div>
+                  )}
                 </div>
               </LTooltip>
             </Marker>
@@ -268,7 +274,7 @@ function buildRampLut(): Uint8ClampedArray {
 }
 
 function HeatOverlay({ frame, field }: { frame: TerminalFrame; field: TerminalField }) {
-  const { stations } = useMesh();
+  const stations = useFreshStations();
   const map = useMap();
   const overlay = React.useRef<L.ImageOverlay | null>(null);
   const lut = React.useMemo(() => buildRampLut(), []);
@@ -370,7 +376,7 @@ const CONTOUR_N = 52;
  * onto the map — so 90 µg/m³ is a curve that means 90 µg/m³.
  */
 function IsoContours({ frame }: { frame: TerminalFrame }) {
-  const { stations } = useMesh();
+  const stations = useFreshStations();
   // SVG rather than the map's canvas renderer: contours need dash patterns and
   // their labels are DOM, and canvas paths cannot carry either.
   const renderer = React.useMemo(() => L.svg({ padding: 0.4 }), []);
@@ -564,7 +570,7 @@ const STREAM_PHASES = ['a', 'b', 'c'] as const;
  * motion` drops it to solid lines.
  */
 function WindStreamlines({ frame }: { frame: TerminalFrame }) {
-  const { stations } = useMesh();
+  const stations = useFreshStations();
   const renderer = React.useMemo(() => L.svg({ padding: 0.4 }), []);
 
   const lines = React.useMemo(() => {
@@ -610,6 +616,22 @@ const PIN_SIZE: Record<PinDensity, [number, number]> = {
   dot: [16, 16],
 };
 
+/**
+ * The hour a pin's reading belongs to, in IST, for the archived pins only.
+ * A live pin does not carry this: everything else on the page is already that
+ * hour, and repeating it on every tooltip would bury the one case that differs.
+ */
+function stationHour(s: Station | LiveStation): string {
+  const iso = 'stationAsOf' in s ? s.stationAsOf : null;
+  if (!iso) return 'an earlier hour';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'an earlier hour';
+  return d.toLocaleString('en-IN', {
+    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    hour12: false, timeZone: 'Asia/Kolkata',
+  }) + ' IST';
+}
+
 function buildPin(
   station: Station,
   pm: number,
@@ -617,6 +639,7 @@ function buildPin(
   alert: string,
   selected: boolean,
   density: PinDensity,
+  stale = false,
 ) {
   // The pin body is coloured by composite AQI so it agrees with every list on
   // the page; the tooltip carries the PM2.5 band separately.
@@ -625,7 +648,7 @@ function buildPin(
   const critical = alert === 'EMERGENCY';
 
   const html = `
-    <div class="as-pin as-pin-${density}" style="--pin:${color};--alert:${alertColor};--pm:${pm25Color(pm)}">
+    <div class="as-pin as-pin-${density}${stale ? ' as-pin-stale' : ''}" style="--pin:${color};--alert:${alertColor};--pm:${pm25Color(pm)}">
       ${critical ? '<span class="as-pin-ring"></span>' : ''}
       <div class="as-pin-body${selected ? ' as-pin-selected' : ''}">
         ${density === 'dot' ? '' : `<span class="as-pin-aqi">${aqi}</span>`}
