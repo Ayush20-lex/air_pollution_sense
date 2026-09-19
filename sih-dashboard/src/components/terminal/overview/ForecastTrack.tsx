@@ -256,10 +256,19 @@ export function ForecastTrack({
             <circle
               className="forecast-runner"
               r="4"
-              fill={TERM.primary}
-              opacity="0.9"
-              cy={y(points[0].aqi)}
-              cx={x(0)}
+              // Neutral, not a method colour. The runner carries no reading -
+              // it is a sweep - and painting it `primary` made it read as a
+              // blend marker while riding a track that was CAMS-only end to
+              // end, which is a claim about provenance made by decoration.
+              fill={TERM.ink}
+              opacity="0.55"
+              // Must be the origin. `animateMotion` translates an element from
+              // wherever it already sits, so a cx/cy here is added on top of
+              // the path's own absolute coordinates and the origin is counted
+              // twice - the dot rode 46 units right and 52 down of the line it
+              // was supposed to trace, floating in open space beside it.
+              cx={0}
+              cy={0}
             >
               <animateMotion
                 dur="2.4s"
