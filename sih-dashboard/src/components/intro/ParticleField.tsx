@@ -5,48 +5,39 @@ import { AdaptiveDpr, Preload } from '@react-three/drei';
 import { useTheme } from 'next-themes';
 import { PARTICLE } from '@/lib/tokens';
 import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
-import { LAND_FRACTION, isLandAtDirection } from '@/lib/earth-mask';
+import { isLandAtDirection } from '@/lib/earth-mask';
 import { seeded } from '@/lib/utils';
 
-const COUNT = 34000;
+/**
+ * Latitude rows across the globe. 340 rows is one dot every ~0.53 degrees.
+ *
+ * Rows, not a Fibonacci lattice. Fibonacci gives even coverage and no seams,
+ * which is the right answer for a cloud and the wrong one for this: even
+ * coverage with no alignment reads as noise, and the dot-globe look depends
+ * on the eye finding rows. The lattice was why the continents stayed mushy
+ * at any density.
+ */
+const ROWS = 340;
 
 /**
- * Share of points that should land on land.
- *
- * Land is 29% of Earth, so even coverage spends 71% of the budget on ocean —
- * which is the part with nothing to say. Oversampling the lattice and
- * discarding most ocean candidates buys continent definition at the same
- * point count and the same per-frame cost, since the frame loop walks COUNT
- * either way.
- *
- * Ocean is thinned, never emptied: without it the globe stops being a globe
- * and becomes a handful of floating continents.
+ * Dots on the equator. Every other row gets this scaled by cos(latitude), so
+ * the rows stay and the polar crowding that ruins a naive lat/long grid does
+ * not — the reason Fibonacci was chosen in the first place, recovered without
+ * giving up the alignment.
  */
-const LAND_SHARE = 0.94;
-/**
- * Candidate lattice size, sized so the two quotas meet exactly.
- *
- * It cannot simply be "generous". The lattice runs pole to pole in order, so
- * a lattice that offers more points than COUNT stops early and the points it
- * never reaches are the last ones — the south polar cap. Oversampling by a
- * round 2.2x shaved Antarctica off the globe. Solving for the exact size
- * means the loop runs to the end.
- */
-const CANDIDATES = Math.ceil((COUNT * LAND_SHARE) / LAND_FRACTION);
-/**
- * Probability an ocean candidate survives.
- *
- * Solved rather than tuned: the lattice offers CANDIDATES * (1 - LAND_FRACTION)
- * ocean points and the quota needs COUNT * (1 - LAND_SHARE) of them. Written
- * this way, changing LAND_SHARE changes the globe and nothing else has to be
- * re-guessed.
- */
-const OCEAN_KEEP =
-  (COUNT * (1 - LAND_SHARE)) / (CANDIDATES * (1 - LAND_FRACTION));
-/** Radius of the aerosol globe, in world units. */
+const EQUATOR_DOTS = ROWS * 2;
+
+/** Radius of the globe, in world units. */
 const RADIUS = 2.45;
-/** Golden angle — the spacing that keeps a Fibonacci sphere free of seams. */
-const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+
+/**
+ * Share of ocean dots kept.
+ *
+ * Not zero. With the sea empty the globe stops being a globe and becomes
+ * continents hanging in space; this is enough to carry the limb and the
+ * silhouette without competing with the land.
+ */
+const OCEAN_KEEP = 0.07;
 
 /**
  * Low-frequency field over the sphere. Three rotated sine lobes stand in for
@@ -87,7 +78,7 @@ function loadAt(x: number, y: number, z: number) {
 function makeGlobeMaterial(sprite: THREE.Texture, dark: boolean) {
   const material = new THREE.PointsMaterial({
     map: sprite,
-    size: dark ? 0.019 : 0.021,
+    size: dark ? 0.0145 : 0.016,
     transparent: true,
     opacity: dark ? 0.95 : 0.9,
     depthWrite: false,
@@ -119,9 +110,16 @@ function makeGlobeMaterial(sprite: THREE.Texture, dark: boolean) {
       .replace(
         '#include <begin_vertex>',
         `vec3 transformed = position;
-         float drift  = sin(uTime * 0.22 + aSeed.x * 6.28) * 0.09;
-         float wobble = sin(uTime * 0.60 + aSeed.y * 6.28) * 0.045;
-         float rise   = sin(uTime * 0.35 + aSeed.z * 6.28) * 0.06;
+         // Drift is held almost flat while the globe is at rest and opened
+         // up as it disperses. At full amplitude it moved every dot by up to
+         // 3.7% of the radius, which knocked the grid out of alignment and
+         // put the holes in the continents: the dots were all still there,
+         // just no longer in rows. The motion is wanted during the blast and
+         // is the enemy of a clean surface before it.
+         float stir = 0.12 + 0.88 * uDisperse;
+         float drift  = sin(uTime * 0.22 + aSeed.x * 6.28) * 0.09 * stir;
+         float wobble = sin(uTime * 0.60 + aSeed.y * 6.28) * 0.045 * stir;
+         float rise   = sin(uTime * 0.35 + aSeed.z * 6.28) * 0.06 * stir;
          float len = max(length(position), 1e-4);
          vec3 dir = position / len;
          float blast = uDisperse * (2.6 + aSeed.x * 5.5);
@@ -131,7 +129,7 @@ function makeGlobeMaterial(sprite: THREE.Texture, dark: boolean) {
          // translating it. Its z in view space is how far the point faces
          // the camera: +1 dead on, -1 directly behind the globe.
          vec3 viewDir = normalize((modelViewMatrix * vec4(dir, 0.0)).xyz);
-         vFade = mix(smoothstep(-0.25, 0.30, viewDir.z), 1.0, uDisperse);
+         vFade = mix(smoothstep(-0.12, 0.12, viewDir.z), 1.0, uDisperse);
          vTint = aColor;`,
       );
 
@@ -159,9 +157,14 @@ function makeSprite() {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d')!;
+  // Harder falloff than a plain gradient. The old stops put half the sprite's
+  // alpha outside its core, so at globe density every dot bled into its
+  // neighbours and the surface turned to haze instead of reading as dots.
+  // The edge stays soft enough to avoid square pixels, and no softer.
   const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
   g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+  g.addColorStop(0.5, 'rgba(255,255,255,0.92)');
+  g.addColorStop(0.82, 'rgba(255,255,255,0.18)');
   g.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, size, size);
@@ -185,11 +188,6 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
   const eased = React.useRef(0);
 
   const { positions, colors, seeds } = React.useMemo(() => {
-    const positions = new Float32Array(COUNT * 3);
-    const colors = new Float32Array(COUNT * 3);
-    const seeds = new Float32Array(COUNT * 3);
-    const sizes = new Float32Array(COUNT);
-
     // Light mode needs deeper pigments: the neon set greys out against white.
     const p = dark ? PARTICLE.dark : PARTICLE.light;
     const good = new THREE.Color(p.good);
@@ -197,84 +195,69 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
     const bad = new THREE.Color(p.bad);
     const ocean = new THREE.Color(p.ocean);
     const calm = new THREE.Color(p.calm);
+    const hotCol = new THREE.Color(p.hot);
     const tmp = new THREE.Color();
 
-    // Two passes over an oversampled lattice. The first takes every land
-    // candidate and a slice of the ocean; the second tops the quota back up
-    // from the ocean it passed over, so the buffer is always exactly full
-    // whatever the mask says. Both are seeded, so the globe is identical on
-    // every load — the same reason the lattice is Fibonacci and not random.
-    let n = 0;
-    for (let pass = 0; pass < 2 && n < COUNT; pass++) {
-      for (let i = 0; i < CANDIDATES && n < COUNT; i++) {
-        // Fibonacci lattice: even coverage of the sphere, with none of the
-        // polar clustering naive lat/long sampling produces.
-        const t = i / (CANDIDATES - 1);
-        const dy = 1 - t * 2;
-        const ring = Math.sqrt(Math.max(0, 1 - dy * dy));
-        const theta = GOLDEN_ANGLE * i;
-        const dx = Math.cos(theta) * ring;
-        const dz = Math.sin(theta) * ring;
+    // Grown, not pre-sized. The dot count falls out of the grid and the
+    // coastline rather than being chosen, so ROWS is the only number to turn
+    // and the buffers are always exactly as long as the globe needs.
+    const pos: number[] = [];
+    const col: number[] = [];
+    const sed: number[] = [];
+
+    let k = 0;
+    for (let r = 0; r < ROWS; r++) {
+      // Row centres, so no dot sits exactly on a pole.
+      const v = (r + 0.5) / ROWS;
+      const lat = Math.PI * (0.5 - v);
+      const dy = Math.sin(lat);
+      const ring = Math.cos(lat);
+
+      // Columns scale with cos(latitude): rows stay aligned, spacing stays
+      // even. A fixed column count would pile the poles with dots.
+      const cols = Math.max(1, Math.round(EQUATOR_DOTS * ring));
+      for (let c = 0; c < cols; c++) {
+        // Half-row stagger, so the rows do not line up into vertical seams.
+        const lon = ((c + (r % 2) * 0.5) / cols) * Math.PI * 2;
+        const dx = Math.cos(lon) * ring;
+        const dz = Math.sin(lon) * ring;
 
         const land = isLandAtDirection(dx, dy, dz);
-        const keptFirstPass = land || seeded(i * 3.31) < OCEAN_KEEP;
-        if (pass === 0 ? !keptFirstPass : keptFirstPass) continue;
+        k++;
+        if (!land && seeded(k * 3.31) >= OCEAN_KEEP) continue;
 
-        // Most mass sits in a thin shell; the rest drifts inside as depth haze.
-        const u = seeded(i * 2.71);
-        const shell =
-          u < 0.94 ? 0.985 + seeded(i * 5.19) * 0.015 : Math.pow(seeded(i * 7.13), 0.4) * 0.9;
-        const rad = RADIUS * shell;
-
-        positions[n * 3] = dx * rad;
-        positions[n * 3 + 1] = dy * rad;
-        positions[n * 3 + 2] = dz * rad;
-
-        seeds[n * 3] = seeded(i * 7.77);
-        seeds[n * 3 + 1] = seeded(i * 9.11);
-        seeds[n * 3 + 2] = seeded(i * 11.31);
+        pos.push(dx * RADIUS, dy * RADIUS, dz * RADIUS);
+        sed.push(seeded(k * 7.77), seeded(k * 9.11), seeded(k * 11.31));
 
         // Ocean carries no reading, so it carries no chroma: it is the thing
-        // the continents are legible against. Land keeps the pollution ramp,
-        // which is the only reason the globe is here.
-        let hot = false;
+        // the continents are legible against.
         if (land) {
           // Most land sits at one calm colour; only loaded regions leave it.
-          //
-          // The ramp used to spread green-amber-red across every dot, which
-          // made the continents a field of noise — the shapes were there and
-          // unreadable. A map is legible when most of it agrees and the
-          // exceptions stand out, so clean air is the base and pollution is
-          // the highlight. It also states the data more honestly: a
-          // continuous ramp implies a precision this synthetic field does
-          // not have, while "calm, with hotspots" is what it actually says.
+          // A ramp across every dot made the continents a field of noise —
+          // shapes present and unreadable. A map is legible when most of it
+          // agrees and the exceptions stand out.
           const load = loadAt(dx * 2, dy * 2, dz * 2);
           if (load > 0.86) tmp.copy(bad);
           else if (load > 0.74) tmp.lerpColors(warn, bad, (load - 0.74) / 0.12);
           else if (load > 0.62) tmp.lerpColors(calm, warn, (load - 0.62) / 0.12);
-          else tmp.lerpColors(calm, good, (0.62 - load) / 0.62 * 0.35);
+          else tmp.lerpColors(calm, good, ((0.62 - load) / 0.62) * 0.35);
 
-          // A small fraction burn bright as "hot" monitored parcels. Land only —
-          // a bright reading in the middle of the Pacific is a claim, not a mood.
-          hot = seeded(i * 13.7) > 0.965;
-          if (hot) tmp.lerp(new THREE.Color(p.hot), 0.5);
+          // A few burn bright as monitored parcels. Land only — a bright
+          // reading in the middle of the Pacific is a claim, not a mood.
+          if (seeded(k * 13.7) > 0.997) tmp.lerp(hotCol, 0.5);
         } else {
           tmp.copy(ocean);
         }
 
-        // Interior haze sits behind the shell, so sink it toward the sea
-        // colour and dim it for depth. It tinted toward `cool` before, which
-        // is now a land hue and would have put blue back inside the planet.
-        if (u >= 0.94) tmp.lerp(ocean, 0.42).multiplyScalar(land ? 0.62 : 0.4);
-
-        colors[n * 3] = tmp.r;
-        colors[n * 3 + 1] = tmp.g;
-        colors[n * 3 + 2] = tmp.b;
-        sizes[n] = hot ? 0.09 : 0.02 + seeded(i * 17.3) * 0.04;
-        n++;
+        col.push(tmp.r, tmp.g, tmp.b);
       }
     }
-    return { positions, colors, seeds, sizes };
+
+    return {
+      positions: new Float32Array(pos),
+      colors: new Float32Array(col),
+      seeds: new Float32Array(sed),
+    };
   }, [dark]);
 
   // The material is built once and mutated through uniforms. Its vertex
@@ -309,7 +292,7 @@ function AerosolCloud({ dispersing, dark, progress }: CloudProps) {
     u.uDisperse.value = d;
 
     mat.opacity = (dark ? 0.95 : 0.9) * (1 - d * 0.95);
-    mat.size = (dark ? 0.019 : 0.021) + d * 0.05;
+    mat.size = (dark ? 0.0145 : 0.016) + d * 0.055;
 
     // Gentle autorotation; accelerates as the field breaks apart.
     pts.rotation.y += delta * (0.045 + d * 0.9);
