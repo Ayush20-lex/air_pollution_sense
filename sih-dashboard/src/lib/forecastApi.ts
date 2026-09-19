@@ -45,6 +45,18 @@ export type ForecastSource = {
   stations?: number;
   real_channels?: number[];
   synthetic_channels?: number[];
+  /**
+   * What each of the 72 leads was built from, in order. A lead with a measured
+   * day behind it is the validated blend; past the observations there is no
+   * diurnal parent and CAMS runs alone, at a different and larger error. One
+   * figure over the whole horizon would be claiming the better of the two for
+   * hours that never earned it.
+   */
+  lead_methods?: ('blend' | 'blend_live' | 'cams_only')[];
+  lead_rmse_ugm3?: number[];
+  blend_leads?: number;
+  cams_only_leads?: number;
+  rmse_by_method?: Record<string, number>;
 };
 
 export type LiveForecast = { frames: Frame[]; source: ForecastSource };

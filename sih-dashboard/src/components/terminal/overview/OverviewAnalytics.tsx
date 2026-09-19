@@ -3,6 +3,8 @@ import { Label, SectionHead, TelemetryCard } from '@/components/terminal/Termina
 import { EXPOSURE_HISTORY, STRESSORS, TEMPORAL_TRACE } from '@/lib/terminal/content';
 import { POLLUTANTS } from '@/lib/terminal/content';
 import { cn } from '@/lib/utils';
+import { ForecastTrack, type ForecastPoint } from './ForecastTrack';
+import { useAppStore } from '@/store/useAppStore';
 import { TERM, TERM_SEVERITY } from '@/lib/terminal/palette';
 
 const TIMEFRAMES = ['24H', '7D', '30D', '90D'] as const;
@@ -11,13 +13,38 @@ const TIMEFRAMES = ['24H', '7D', '30D', '90D'] as const;
 export function OverviewAnalytics() {
   return (
     <>
-      <div id="analytics" className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+      {/* The forecast leads, because it is the only panel here whose numbers
+          come from the model. `TemporalTrend` charted twenty-four constants
+          under four timeframe buttons that all drew the same line; it is kept
+          below and labelled, not passed off as a record. */}
+      <ForecastPanel />
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <TemporalTrend />
         <StressorDonut />
       </div>
       <Correlator />
     </>
   );
+}
+
+/** The backend's 72-hour forecast, at 12-hour marks. */
+function ForecastPanel() {
+  const liveFrames = useAppStore((st) => st.liveFrames);
+  const source = useAppStore((st) => st.source);
+  const load = useAppStore((st) => st.loadLiveForecast);
+
+  // The console loads this on its own; the terminal is a separate entry point
+  // and can be opened without ever passing through it.
+  React.useEffect(() => {
+    if (!liveFrames) void load();
+  }, [liveFrames, load]);
+
+  const points: ForecastPoint[] = React.useMemo(
+    () => (liveFrames ?? []).map((f, i) => ({ hour: i, aqi: Math.round(f.avgAqi) })),
+    [liveFrames],
+  );
+
+  return <ForecastTrack points={points} source={source} />;
 }
 
 function TemporalTrend() {
@@ -38,7 +65,11 @@ function TemporalTrend() {
           <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">
             Continuous Temporal AQI Gradient
           </h3>
-          <Label>Composite index · rolling window</Label>
+          {/* Said "rolling window", which invited the reader to take it for a
+              record of one. The series is twenty-four constants in content.ts
+              and the timeframe buttons all draw it unchanged; the forecast
+              above is the panel with real numbers. */}
+          <Label>Illustrative shape · demo values</Label>
         </div>
         <div className="flex gap-1">
           {TIMEFRAMES.map((t) => (
