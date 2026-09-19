@@ -75,6 +75,13 @@ export type MeshStation = {
   freshness?: 'live' | 'archive';
   /** This station's own hour. Differs between the two freshnesses. */
   as_of?: string;
+  /**
+   * What `hourly` holds. The archive stores instantaneous hourly readings;
+   * the live feed publishes a 24-hour mean, so a recorded live series is a
+   * rolling mean sampled hourly - smoother than the real signal, and lagging,
+   * because every point still contains the previous day.
+   */
+  history_kind?: 'hourly_readings' | 'rolling_24h_mean';
 };
 
 export type MeshPayload = {
@@ -217,6 +224,8 @@ export type LiveStation = Station & {
   freshness: 'live' | 'archive';
   /** This station's own hour, which on a blended mesh is not the page's. */
   stationAsOf: string | null;
+  /** See MeshStation.history_kind. */
+  historyKind: 'hourly_readings' | 'rolling_24h_mean';
 };
 
 export type MergedMesh = {
@@ -280,6 +289,7 @@ export function mergeMesh(payload: MeshPayload): MergedMesh {
       coveragePct: s.coverage_pct,
       freshness: s.freshness ?? (payload.source === 'waqi_live' ? 'live' : 'archive'),
       stationAsOf: s.as_of ?? payload.as_of ?? null,
+      historyKind: s.history_kind ?? 'hourly_readings',
     }));
 
   return {

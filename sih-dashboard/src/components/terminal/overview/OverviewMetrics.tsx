@@ -16,7 +16,12 @@ export function OverviewMetrics() {
   // when it did not. Either way every card goes through the same component.
   const readings: LivePollutant[] = isLive(station)
     ? livePollutants(station)
-    : POLLUTANTS.map((p) => ({ ...p, measured: false, series: [] as (number | null)[] }));
+    : POLLUTANTS.map((p) => ({
+        ...p,
+        measured: false,
+        series: [] as (number | null)[],
+        caption: null,
+      }));
   const measuredCount = readings.filter((r) => r.measured).length;
 
   return (
@@ -170,7 +175,8 @@ function PollutantCard({
         </div>
 
         {p.measured ? (
-          <MeasuredTrend values={p.series} color={p.color} height={68} endsAt={asOf} />
+          <MeasuredTrend values={p.series} color={p.color} height={68} endsAt={asOf}
+            emptyNote={p.emptyNote} caption={p.caption} />
         ) : (
           <TrendChart values={p.trend} color={p.color} />
         )}

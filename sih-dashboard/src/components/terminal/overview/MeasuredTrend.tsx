@@ -40,6 +40,8 @@ export function MeasuredTrend({
   height = 72,
   showAxis = false,
   endsAt = null,
+  emptyNote,
+  caption = null,
 }: {
   values: (number | null)[];
   color: string;
@@ -47,6 +49,17 @@ export function MeasuredTrend({
   showAxis?: boolean;
   /** ISO timestamp of the final sample, for the hour axis. */
   endsAt?: string | null;
+  /**
+   * What to say when there is nothing to draw.
+   *
+   * The default is right for the archive, where an empty window means the
+   * instrument did not report. It is wrong for a live station, where no window
+   * exists yet at all - saying "no readings" there would blame the sensor for
+   * an absence that is ours. The caller knows which case it is in.
+   */
+  emptyNote?: string;
+  /** Printed under the line when the series is not hourly readings. */
+  caption?: string | null;
 }) {
   const id = React.useId();
   const w = 240;
@@ -60,7 +73,7 @@ export function MeasuredTrend({
         className="flex items-center justify-center font-mono text-[10px] text-term-outline"
         style={{ height: h }}
       >
-        No readings in this window
+        {emptyNote ?? 'No readings in this window'}
       </div>
     );
   }
@@ -162,6 +175,10 @@ export function MeasuredTrend({
           ),
         )}
       </svg>
+
+      {caption ? (
+        <div className="mt-0.5 font-mono text-[10px] text-term-outline">{caption}</div>
+      ) : null}
 
       {showAxis ? (
         <div className="mt-1 space-y-0.5">

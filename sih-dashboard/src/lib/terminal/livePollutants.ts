@@ -38,6 +38,10 @@ export type LivePollutant = PollutantReading & {
   validHours?: number;
   /** The measured 24-hour window, gaps as null. Empty when not measured. */
   series: (number | null)[];
+  /** What to show instead of a line when `series` has nothing in it. */
+  emptyNote?: string;
+  /** Printed under the line when it is not a series of hourly readings. */
+  caption: string | null;
 };
 
 /**
@@ -70,9 +74,12 @@ export function livePollutants(station: LiveStation): LivePollutant[] {
     // Zeroed, not carried over: this card is about to say "Not reported",
     // and a hand-written 24h change printed beside that reads as a
     // measurement of something the archive has no reading for.
-    if (!sub) return { ...p, measured: false, delta: 0, series: [] };
+    if (!sub) return { ...p, measured: false, delta: 0, series: [], caption: null };
 
     const { status, note } = statusFor(sub.sub_index);
+    const series = station.hourly[p.id] ?? [];
+    const rolling = station.historyKind === 'rolling_24h_mean';
+    const recorded = series.filter((v) => v != null).length;
     return {
       ...p,
       measured: true,
@@ -84,7 +91,20 @@ export function livePollutants(station: LiveStation): LivePollutant[] {
       subIndex: sub.sub_index,
       windowHours: sub.window_hours,
       validHours: sub.valid_hours,
-      series: station.hourly[p.id] ?? [],
+      series,
+      // A live station's window is recorded by us, not fetched: WAQI's feed is
+      // a single snapshot. So an empty series there is our own history not yet
+      // gathered, not an instrument that failed to report, and saying "no
+      // readings" would blame the sensor for it.
+      emptyNote: rolling
+        ? 'Live history recording — first hours appear shortly'
+        : undefined,
+      // Named on the chart because it is not the same quantity as the archive's
+      // hourly readings; see MeshStation.history_kind.
+      caption:
+        rolling && recorded > 0
+          ? `${recorded}h recorded · 24h rolling mean`
+          : null,
       // Per-pollutant 24h change is not in the payload — only the station's.
       // Leaving the hand-written delta here would read as measured.
       delta: 0,

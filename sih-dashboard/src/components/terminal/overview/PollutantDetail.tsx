@@ -155,6 +155,8 @@ export function PollutantDetail({
                   height={92}
                   showAxis
                   endsAt={asOf}
+                  emptyNote={p.emptyNote}
+                  caption={p.caption}
                 />
 
                 <dl className="space-y-1.5 font-mono text-[11px]">

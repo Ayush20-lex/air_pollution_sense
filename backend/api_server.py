@@ -51,6 +51,7 @@ from grap_policy import calculate_indian_aqi_pm25, evaluate_grap_stage
 import gfs_reader
 import station_registry
 import waqi_live
+import live_history
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────
@@ -110,6 +111,8 @@ class AppState:
     # Set when a forecast came from the blend baseline rather than the network,
     # so /api/v1/status can say which produced the numbers on screen.
     forecast_meta:  dict | None = None
+    # The live-history recorder, held so shutdown can cancel it.
+    recorder:       Any = None
 
 
 _state = AppState()
@@ -164,6 +167,50 @@ def _build_synthetic_history(
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
+#: How often the recorder samples the live mesh.
+#:
+#: WAQI publishes hourly, so anything under an hour is only insurance against
+#: missing the moment a station updates. Fifteen minutes gives four chances an
+#: hour, and because `waqi_live.mesh` caches for five it usually costs no
+#: request at all - the recorder reads the same build a page request just paid
+#: for. It also keeps the day's traffic near 2,400 requests, which matters on a
+#: free token.
+RECORD_EVERY_S = 900
+
+#: Pruning is cheap and the table is small; once a day is plenty.
+PRUNE_EVERY_S = 86_400
+
+
+async def _record_live_history() -> None:
+    """Keep every live mesh build, so the live stations accumulate a window.
+
+    This runs for the life of the process rather than on the request path. The
+    history has to be continuous to be worth anything, and a mesh recorded only
+    when somebody happens to load the page would have a hole through every quiet
+    night - exactly the hours a reader most wants to see.
+
+    Nothing here is allowed to escape. A failure to record is a gap in a chart;
+    a failure that propagates would take the task down permanently and every
+    later hour with it, silently, because a dead asyncio task raises nowhere.
+    """
+    log = _logging.getLogger("api_server")
+    since_prune = 0.0
+    while True:
+        try:
+            await asyncio.sleep(RECORD_EVERY_S)
+            mesh = await asyncio.to_thread(waqi_live.mesh)
+            if mesh:
+                await asyncio.to_thread(live_history.record, mesh)
+            since_prune += RECORD_EVERY_S
+            if since_prune >= PRUNE_EVERY_S:
+                since_prune = 0.0
+                await asyncio.to_thread(live_history.prune)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - a gap, never a dead recorder
+            log.warning("live history: skipped a sample (%s)", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import logging
@@ -187,8 +234,11 @@ async def lifespan(app: FastAPI):
             if warm:
                 log.info("live mesh warm: %d stations, %d indexable, as of %s",
                          warm["count"], warm["indexable"], warm["as_of"])
+                await asyncio.to_thread(live_history.record, warm)
         except Exception as exc:  # noqa: BLE001 - never block startup on a feed
             log.warning("could not warm the live mesh (%s)", exc)
+
+        _state.recorder = asyncio.create_task(_record_live_history())
 
     if not cfg.mock_mode:
         try:
@@ -227,6 +277,13 @@ async def lifespan(app: FastAPI):
         _state.data_mode = "synthetic"
 
     yield
+
+    if _state.recorder is not None:
+        _state.recorder.cancel()
+        try:
+            await _state.recorder
+        except asyncio.CancelledError:
+            pass
     _state.cache.clear()
 
 
@@ -509,6 +566,7 @@ async def model_status():
                 get_settings().baseline_season, _mesh_origin()
             ),
             "waqi_live": waqi_live.describe(),
+            "live_history": live_history.describe(),
         },
         # Which engine produced the numbers being served.
         "forecast_engine": (
@@ -782,7 +840,31 @@ def _blend(live: dict[str, Any], archive: dict[str, Any] | None) -> dict[str, An
 
     Where both feeds have the same site the live reading wins outright.
     """
-    out = [{**s, "freshness": "live", "as_of": live["as_of"]} for s in live["stations"]]
+    # The window the recorder has accumulated for these stations. The live feed
+    # itself carries no history - this is the only place a live station's chart
+    # can come from, and before the recorder has run it is simply empty, which
+    # the chart states rather than fills.
+    try:
+        recorded = live_history.history(
+            [int(s["id"]) for s in live["stations"]], live["as_of"]
+        )
+    except Exception as exc:  # noqa: BLE001 - a missing chart, not a failed mesh
+        _log.warning("live history unavailable (%s)", exc)
+        recorded = {}
+
+    out = [
+        {
+            **s,
+            "freshness": "live",
+            "as_of": live["as_of"],
+            "hourly": recorded.get(int(s["id"]), {}),
+            # Not the same quantity as the archive's hourly readings: the live
+            # feed publishes a 24-hour mean, so sampling it gives a rolling
+            # mean. Named here so the chart can say which it is drawing.
+            "history_kind": live_history.KIND,
+        }
+        for s in live["stations"]
+    ]
     if not archive or not archive.get("stations"):
         return {**live, "stations": out, "supplemented": 0, "supplement_as_of": None}
 
@@ -792,7 +874,8 @@ def _blend(live: dict[str, Any], archive: dict[str, Any] | None) -> dict[str, An
         if any(_km(s["lat"], s["lon"], f_lat, f_lon) <= SAME_SITE_KM
                for f_lat, f_lon in fixes):
             continue
-        out.append({**s, "freshness": "archive", "as_of": archive["as_of"]})
+        out.append({**s, "freshness": "archive", "as_of": archive["as_of"],
+                    "history_kind": "hourly_readings"})
         added += 1
 
     return {
@@ -854,7 +937,8 @@ async def stations(response: Response):
         return None
     data = {**archive, "source": "archive"}
     data["stations"] = [
-        {**s, "freshness": "archive", "as_of": archive["as_of"]}
+        {**s, "freshness": "archive", "as_of": archive["as_of"],
+         "history_kind": "hourly_readings"}
         for s in data["stations"]
     ]
     if not data["stations"]:
