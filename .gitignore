@@ -153,3 +153,6 @@ ml_pipeline/data/raw/gfs/*
 
 # Third-party subagents fetched with the caveman pack — per-machine, not project code
 .claude/agents/cavecrew-*.md
+
+# FIRMS fire pixels are cached per origin date; refetchable from NASA with a key.
+ml_pipeline/data/cache/

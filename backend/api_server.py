@@ -53,6 +53,7 @@ import station_registry
 import waqi_live
 import cpcb_live
 import live_history
+import firms_fire
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────
@@ -567,7 +568,12 @@ async def model_status():
                 else "live" if (cfg.aqicn_token and not cfg.mock_mode) else "synthetic"
             ),
             "imd_met": "archive" if _state.forecast_meta else "synthetic",
-            "nasa_firms": "synthetic",  # no live fire feed in either path
+            # Real VIIRS fire pixels over the Punjab/Haryana corridor, aligned
+            # to the forecast origin. Outside the burning season this reports
+            # few or no fires, which is the season and not a broken feed.
+            "nasa_firms": firms_fire.describe(
+                (_state.forecast_meta or {}).get("fire", {}).get("window_start")
+            ),
             # Read-only side channel from the partner ingestion pipeline. It
             # feeds no forecast: the blend baseline is validated at 62.23 and
             # adding an input would invalidate that number.

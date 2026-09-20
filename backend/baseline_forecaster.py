@@ -44,9 +44,12 @@ Honesty of the output
 ---------------------
 PM2.5 comes from the blend. PM10, O3 and NO2 come from CAMS. Temperature, RH,
 shortwave, PBL and the wind components come from the archived weather forecast.
-FRP and smoke are zero — there is no live FIRMS feed, and a fabricated fire field
-would be exactly the kind of number this module exists to remove. `describe()`
-reports which channels are real so the caller can surface it.
+FRP and smoke are real fire pixels from NASA FIRMS over the Punjab/Haryana
+corridor, observed up to the origin and advected by each lead hour's wind. When
+the corridor is quiet - which it is outside the mid-October to late-November
+burning season - they are honestly zero rather than filled in from the mock
+generator. `describe()` reports which channels are real so the caller can
+surface it.
 
 This replays a real period from the archive rather than fetching live data, so
 `meta['mode']` is 'archive_replay'. That is a demo posture, not a live one, and
@@ -184,6 +187,9 @@ class BlendBaselineForecaster:
     def __init__(self, season: int = 2025, data_dir: Path | None = None) -> None:
         self.season = season
         self.data = data_dir or DATA
+        # Built on first use: only the fire path needs it, and the corridor is
+        # quiet for most of the year.
+        self._fusion = None
         self._load()
         self._precompute_idw()
 
@@ -422,6 +428,73 @@ class BlendBaselineForecaster:
         idx = np.flatnonzero(covered)
         return int(idx[-1]) if idx.size else len(self.times) - 1
 
+    # ── fire channels ─────────────────────────────────────────────────────────
+
+    #: Wind is rounded to this before a transport field is reused, in m/s. The
+    #: advection alignment turns on the wind's direction, which a tenth of a
+    #: metre per second does not meaningfully change; bucketing takes 72 grid
+    #: interpolations down to a handful without altering the field.
+    WIND_BUCKET_MS = 0.5
+
+    def _fire_fields(self, t0: int) -> tuple[dict[int, tuple], bool, dict]:
+        """Per-lead (frp_grid, smoke_grid) from real fire pixels, and what they are.
+
+        The fires are those FIRMS observed in the three days ending at the
+        origin, held constant across the 72-hour lead and advected by each
+        hour's own wind. Holding them constant is the honest assumption: we can
+        see where the stubble is burning now, and we cannot forecast where a
+        farmer will light the next field. Emissions that stop early therefore
+        overstate the plume late in the horizon, which is the direction that
+        fails safe for an advisory.
+        """
+        import firms_fire
+
+        # Detections up to the origin, never after it - a forecast that used
+        # fires detected during its own lead would be reading the answer.
+        start = (pd.Timestamp(self.times[t0]).date() - pd.Timedelta(days=2).to_pytimedelta())
+        try:
+            fires = firms_fire.fetch(start, days=3)
+        except Exception as exc:  # noqa: BLE001 - the forecast still stands
+            logger.warning("FIRMS unavailable (%s); fire channels stay zero", exc)
+            return {}, False, {"fires": 0, "status": "unavailable"}
+
+        meta = {
+            "fires": int(len(fires)),
+            "window_start": str(start),
+            "window_days": 3,
+            "season": firms_fire.season_hint(start),
+            "assumption": "observed to origin, held constant over the lead",
+        }
+        if fires.empty:
+            meta["status"] = "corridor quiet - a real zero, not a missing feed"
+            return {}, False, meta
+        meta["status"] = "observed"
+        meta["frp_total_mw"] = round(float(fires["frp"].sum()), 1)
+
+        cache: dict[tuple[float, float], tuple] = {}
+        per_lead: dict[int, tuple] = {}
+        for lead in range(1, HORIZON + 1):
+            t = t0 + lead
+            if self.u is not None:
+                u = float(np.nanmean(self.u[t])) if np.isfinite(self.u[t]).any() else 0.0
+                v = float(np.nanmean(self.v[t])) if np.isfinite(self.v[t]).any() else 0.0
+            else:
+                u = v = 0.0
+            key = (round(u / self.WIND_BUCKET_MS) * self.WIND_BUCKET_MS,
+                   round(v / self.WIND_BUCKET_MS) * self.WIND_BUCKET_MS)
+            if key not in cache:
+                # firms_fire.plume_field, not spatial_fusion.compute_fire_transport:
+                # that one interpolates FRP as an average of the eight nearest
+                # fires, which makes the field independent of how many are
+                # burning. Measured here, 53x the fire energy moved the smoke
+                # mean by 3%. See the note above plume_field.
+                cache[key] = firms_fire.plume_field(fires, key[0], key[1],
+                                                    shape=(GRID_H, GRID_W))
+            per_lead[lead] = cache[key]
+
+        meta["wind_states"] = len(cache)
+        return per_lead, True, meta
+
     def forecast(
         self,
         origin: pd.Timestamp | None = None,
@@ -445,6 +518,7 @@ class BlendBaselineForecaster:
             raise ValueError(f"origin {origin} lacks 24 h history or 72 h lead")
 
         out = np.zeros((HORIZON, N_CHANNELS, GRID_H, GRID_W), dtype=np.float32)
+        fire_per_lead, fires_real, fire_meta = self._fire_fields(t0)
 
         lead_methods: list[str] = []
         for lead in range(1, HORIZON + 1):
@@ -485,8 +559,13 @@ class BlendBaselineForecaster:
             if self.u is not None:
                 out[lead - 1, CH_U] = self._to_grid(np.nan_to_num(self.u[t]))
                 out[lead - 1, CH_V] = self._to_grid(np.nan_to_num(self.v[t]))
-            # FRP and smoke stay zero: no live fire feed, and inventing one is
-            # precisely what this module exists to avoid.
+            fire = fire_per_lead.get(lead)
+            if fire is not None:
+                out[lead - 1, CH_FRP] = fire[0]
+                out[lead - 1, CH_SMOKE] = fire[1]
+            # Otherwise they stay zero - the corridor is quiet, or FIRMS was
+            # unreachable. Either way `meta['fires']` says which, and neither
+            # is filled in from the mock generator.
 
         out /= CHANNEL_NORMS[None, :, None, None]
 
@@ -502,8 +581,13 @@ class BlendBaselineForecaster:
             "cams_scale": round(self.scale, 4),
             "stations": len(self.station_ids),
             **VALIDATED.get(self.season, {}),
-            "real_channels": REAL_CHANNELS,
-            "synthetic_channels": SYNTHETIC_CHANNELS,
+            "real_channels": sorted({*REAL_CHANNELS, CH_FRP, CH_SMOKE}) if fires_real
+                             else REAL_CHANNELS,
+            # Nothing is synthetic any more: the fire channels are measured or
+            # they are a measured zero. The key stays so callers that read it
+            # keep working.
+            "synthetic_channels": [] if fires_real else SYNTHETIC_CHANNELS,
+            "fire": fire_meta,
             # Per lead, so the UI can mark where the validated figure stops
             # applying rather than printing one number over all 72 hours.
             "lead_methods": lead_methods,
