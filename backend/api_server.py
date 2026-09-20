@@ -1245,12 +1245,18 @@ async def forecast_frames():
         valid = base + timedelta(hours=t)
         local = valid + timedelta(hours=5, minutes=30)      # IST
         districts, pm_all, pbl_all, temp_all, solar_all, wind_all, inv_all = {}, [], [], [], [], [], []
+        rh_all: list[float] = []
 
         for did, hi, wi in cells:
             f = arr[t, :, hi, wi] * norms
             pm25, o3, nox = float(f[0]), float(f[2]), float(f[3])
             u, v = float(f[4]), float(f[5])
             temp, solar, pbl = float(f[6]), float(f[8]), float(f[9])
+            # Relative humidity, from the archived weather forecast like temp
+            # and PBL. It has been in the channel stack all along and was the
+            # one met field the frames payload dropped, so the dashboard's
+            # humidity card had nothing to read and carried a literal instead.
+            rh = float(f[7])
             wind = float(np.hypot(u, v))
             wind_dir = float((np.degrees(np.arctan2(-u, -v)) + 360.0) % 360.0)
             # Same proxy the console uses: a shallow layer with weak ventilation
@@ -1263,6 +1269,7 @@ async def forecast_frames():
                 "aqi": calculate_indian_aqi_pm25(pm25),
                 "pbl": round(pbl, 1),
                 "temp": round(temp, 1),
+                "rh": round(rh, 1),
                 "solar": round(solar, 1),
                 "windSpeed": round(wind, 2),
                 "windDir": round(wind_dir, 1),
@@ -1273,6 +1280,7 @@ async def forecast_frames():
             }
             pm_all.append(pm25); pbl_all.append(pbl); temp_all.append(temp)
             solar_all.append(solar); wind_all.append(wind); inv_all.append(inversion)
+            rh_all.append(rh)
 
         avg_pm = float(np.mean(pm_all))
         avg_inv = float(np.mean(inv_all))
@@ -1285,6 +1293,7 @@ async def forecast_frames():
             "avgAqi": calculate_indian_aqi_pm25(avg_pm),
             "avgPbl": round(float(np.mean(pbl_all))),
             "avgTemp": round(float(np.mean(temp_all)), 1),
+            "avgRh": round(float(np.mean(rh_all)), 1),
             "avgSolar": round(float(np.mean(solar_all))),
             "avgWind": round(float(np.mean(wind_all)), 1),
             "inversionIndex": round(avg_inv, 2),

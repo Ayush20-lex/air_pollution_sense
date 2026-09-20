@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Delta, Label, Meter, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
-import { KPI_CARDS, POLLUTANTS } from '@/lib/terminal/content';
+import { POLLUTANTS } from '@/lib/terminal/content';
+import { useKpiCards } from '@/lib/terminal/kpi';
 import { livePollutants, type LivePollutant } from '@/lib/terminal/livePollutants';
 import { isLive, useHubStation, useMesh } from '@/lib/terminal/useMesh';
 import { TERM } from '@/lib/terminal/palette';
@@ -12,6 +13,7 @@ import { PollutantDetail } from './PollutantDetail';
 export function OverviewMetrics() {
   const { station, live } = useHubStation();
   const { asOf } = useMesh();
+  const kpis = useKpiCards();
   // Measured cards when the archive answered for this node, the static grid
   // when it did not. Either way every card goes through the same component.
   const readings: LivePollutant[] = isLive(station)
@@ -28,7 +30,7 @@ export function OverviewMetrics() {
   return (
     <>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        {KPI_CARDS.map((k) => (
+        {kpis.map((k) => (
           <TelemetryCard key={k.label} className="space-y-2 p-4">
             <Label className="block">{k.label}</Label>
             <div className="flex items-baseline gap-1">
@@ -36,7 +38,18 @@ export function OverviewMetrics() {
               <span className="font-mono text-[10px] text-term-ink-variant">{k.unit}</span>
             </div>
             <Spark values={k.series} color={k.color} className="h-8 w-full" fill />
-            <Delta value={k.delta} className="text-[10px]" />
+            <div className="flex items-center justify-between gap-1">
+              {/* A forecast delta is a different claim from a measured one, so
+                  the window is printed beside it rather than left implied. */}
+              {k.delta == null ? (
+                <span className="font-mono text-[10px] text-term-outline">—</span>
+              ) : (
+                <Delta value={k.delta} className="text-[10px]" />
+              )}
+              <span className="font-mono text-[9px] uppercase tracking-wider text-term-outline">
+                {k.window}
+              </span>
+            </div>
           </TelemetryCard>
         ))}
       </div>

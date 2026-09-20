@@ -131,6 +131,8 @@ export type CellSample = {
   aqi: number;
   pbl: number;
   temp: number;
+  /** Relative humidity, %. Present once the backend carries it. */
+  rh?: number;
   solar: number;
   windSpeed: number;
   windDir: number;
@@ -150,6 +152,8 @@ export type Frame = {
   avgAqi: number;
   avgPbl: number;
   avgTemp: number;
+  /** Mean relative humidity across the districts, %. */
+  avgRh?: number;
   avgSolar: number;
   avgWind: number;
   inversionIndex: number;
