@@ -68,8 +68,21 @@ export function useKpiCards(): KpiCard[] {
     // ── measured: the station mesh ────────────────────────────────────────
     const live = fresh.filter(isLive);
 
-    const pm25Now = mean(live.map((s) => s.pm25 ?? NaN));
-    const pm10Now = mean(live.map((s) => s.subIndices?.PM10?.concentration ?? NaN));
+    // CPCB's live bulletin publishes sub-indices and leaves `concentration`
+    // null - all 74 live stations, every pollutant - while the archive carries
+    // both. So a particulate card takes the concentration when there is one and
+    // falls back to the sub-index, which is a different quantity and is
+    // labelled as one. The rest of the page already does exactly this; showing
+    // "no data" over a live feed that is reporting would be worse than either.
+    const particulate = (key: 'PM2.5' | 'PM10') => {
+      const conc = mean(live.map((s) => s.subIndices?.[key]?.concentration ?? NaN));
+      if (conc != null) return { value: conc, unit: 'µg/m³', asIndex: false };
+      const idx = mean(live.map((s) => s.subIndices?.[key]?.sub_index ?? NaN));
+      if (idx != null) return { value: idx, unit: 'CPCB sub-index', asIndex: true };
+      return null;
+    };
+    const pm25Now = particulate('PM2.5');
+    const pm10Now = particulate('PM10');
 
     // The city's hourly window is the mean across stations at each hour, not
     // one station's series: a single node dropping out would otherwise look
@@ -146,8 +159,8 @@ export function useKpiCards(): KpiCard[] {
         ? unavailable('PM2.5', 'µg/m³', SEVERITY.poor)
         : {
             label: 'PM2.5',
-            value: pm25Now.toFixed(1),
-            unit: 'µg/m³',
+            value: pm25Now.value.toFixed(pm25Now.asIndex ? 0 : 1),
+            unit: pm25Now.unit,
             series: cityHourly('pm25'),
             color: SEVERITY.poor,
             delta: measuredDelta,
@@ -158,8 +171,8 @@ export function useKpiCards(): KpiCard[] {
         ? unavailable('PM10', 'µg/m³', SEVERITY.moderate)
         : {
             label: 'PM10',
-            value: pm10Now.toFixed(0),
-            unit: 'µg/m³',
+            value: pm10Now.value.toFixed(0),
+            unit: pm10Now.unit,
             series: cityHourly('pm10'),
             color: SEVERITY.moderate,
             delta: null, // the payload carries a station delta, not a per-pollutant one
