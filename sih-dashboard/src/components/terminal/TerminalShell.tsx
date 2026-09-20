@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
+import { useAdvisories } from '@/lib/terminal/advisories';
 import { useLocation } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -48,7 +49,10 @@ const NAV: NavItem[] = [
   { href: '/terminal/geo-map', label: 'Geo Map', icon: <MapIcon className="size-4" /> },
   { href: '/terminal#analytics', label: 'Temporal Trends', icon: <LineChart className="size-4" /> },
   { href: '/terminal#matrices', label: 'Pollutant Matrices', icon: <ScatterChart className="size-4" /> },
-  { href: '/terminal#alerts', label: 'Incident Warnings', icon: <AlertTriangle className="size-4 text-amber-400" />, badge: '3 PENDING' },
+  // No literal badge. "3 PENDING" said three whatever the air was doing, on
+  // every page, including a day with nothing wrong. The count is now the number
+  // of advisories that are actually active - see lib/terminal/advisories.
+  { href: '/terminal#alerts', label: 'Incident Warnings', icon: <AlertTriangle className="size-4 text-amber-400" /> },
   { href: '/terminal#ledger', label: 'Spectrometry Ledger', icon: <Table2 className="size-4" /> },
 ];
 
@@ -71,6 +75,9 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
 
 function TerminalSidebar() {
   const pathname = useLocation().pathname;
+  // The sidebar is on every page, so this is the one count a reader sees
+  // constantly. It has to be the real one.
+  const advisories = useAdvisories().items.length;
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 hidden h-full w-64 flex-col justify-between border-r border-term-outline-variant/60 bg-term-surface-lowest p-4 shadow-2xl md:flex">
@@ -127,7 +134,11 @@ function TerminalSidebar() {
               >
                 {item.icon}
                 <span className="flex-1">{item.label}</span>
-                {item.badge ? (
+                {item.href.endsWith('#alerts') && advisories > 0 ? (
+                  <span className="rounded border border-amber-500/40 bg-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">
+                    {advisories}
+                  </span>
+                ) : item.badge ? (
                   <span className="rounded border border-amber-500/40 bg-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">
                     {item.badge}
                   </span>

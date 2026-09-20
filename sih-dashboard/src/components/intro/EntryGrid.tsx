@@ -6,7 +6,8 @@ import { ALERT_COLOR, aqiColor, bandForPm25 } from '@/lib/aqi';
 import { FORECAST_HOURS, MODEL_META, type Frame } from '@/lib/data';
 import { useMesh } from '@/lib/terminal/useMesh';
 import { useAppStore } from '@/store/useAppStore';
-import { INCIDENTS, POLLUTANTS } from '@/lib/terminal/content';
+import { POLLUTANTS } from '@/lib/terminal/content';
+import { useAdvisories } from '@/lib/terminal/advisories';
 import { cn } from '@/lib/utils';
 
 /**
@@ -32,9 +33,11 @@ import { cn } from '@/lib/utils';
  */
 
 /** Worst level in the feed, so the count is not painted calmer than it reads. */
-const worstIncidentColor = INCIDENTS.some((i) => i.level === 'CRITICAL')
-  ? ALERT_COLOR.EMERGENCY
-  : ALERT_COLOR.WARNING;
+function worstColor(items: { level: string }[]): string {
+  if (items.some((i) => i.level === 'CRITICAL')) return ALERT_COLOR.EMERGENCY;
+  if (items.some((i) => i.level === 'WARNING')) return ALERT_COLOR.WARNING;
+  return ALERT_COLOR.ADVISORY;
+}
 
 const rise = (i: number) => ({
   initial: { opacity: 0, y: 40 },
@@ -116,6 +119,7 @@ export function EntryGrid({
   // Null until the backend answers; MODEL_META carries the same figure as the
   // fallback so the panel never shows a blank where a number belongs.
   const source = useAppStore((st) => st.source);
+  const { items: advisories } = useAdvisories();
   const band = bandForPm25(frame.avgPm25);
 
   return (
@@ -154,10 +158,10 @@ export function EntryGrid({
         icon={<AlertTriangle className="size-3" />}
         eyebrow="Public terminal"
         title="Incident warnings"
-        body="The advisory feed: plume fronts, inversion events and the corridor each one threatens, newest first."
-        stat={String(INCIDENTS.length)}
-        statLabel="Open incidents"
-        statColor={worstIncidentColor}
+        body="The advisory feed: the GRAP stage in force, the zones about to trap, and how much of the mesh is reporting."
+        stat={String(advisories.length)}
+        statLabel={advisories.length === 1 ? 'Open advisory' : 'Open advisories'}
+        statColor={worstColor(advisories)}
       />
 
       {/* The CTA keeps its own tile so the scan hand-off stays the largest

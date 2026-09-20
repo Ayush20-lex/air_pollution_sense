@@ -4,7 +4,8 @@ import { AlertTriangle, CheckCircle2, CircleAlert, Info } from 'lucide-react';
 import { Delta, Label, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { GrapPanel } from './GrapPanel';
 import { InversionPanel } from './InversionPanel';
-import { INCIDENTS, POLLUTANTS } from '@/lib/terminal/content';
+import { useAdvisories } from '@/lib/terminal/advisories';
+import { POLLUTANTS } from '@/lib/terminal/content';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { bySeverity } from '@/lib/terminal/stations';
 import { useMesh } from '@/lib/terminal/useMesh';
@@ -111,13 +112,9 @@ const LEVEL_STYLE = {
 } as const;
 
 function IncidentBanners() {
+  const { items, loading } = useAdvisories();
   return (
     <div id="alerts" className="space-y-3">
-      {/* The real advisory first. Everything below it is a hand-written
-          scenario: INCIDENTS in lib/terminal/content carries fixed timestamps
-          and a fixed affected area, and it is what the "3 PENDING" badge
-          counts. It stays for now because the panel would otherwise be bare,
-          and it is labelled so it cannot be read as a live feed. */}
       <GrapPanel />
 
       {/* The mechanism behind the stage above it: GRAP says what to do, this
@@ -125,21 +122,39 @@ function IncidentBanners() {
       <InversionPanel />
 
       <SectionHead
-        title="Real-Time Incident &amp; Anomaly Warnings"
+        title="Incident &amp; Anomaly Warnings"
+        sub="Derived from the inversion scoring, the GRAP stage and the mesh's own health"
         right={
-          <span className="rounded border border-term-outline-variant/60 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-term-outline">
-            illustrative scenarios
+          <span className="font-mono text-xs uppercase tracking-wider text-term-ink-variant">
+            {items.length === 0 ? 'nothing active' : `${items.length} active`}
           </span>
         }
       />
+      {items.length === 0 ? (
+        <TelemetryCard className="p-5">
+          <div className="flex items-center gap-3">
+            <Info className="size-5 shrink-0 text-term-primary" />
+            <div>
+              <div className="font-display text-base font-bold text-term-primary">
+                {loading ? 'Checking the forecast…' : 'No active warnings'}
+              </div>
+              <div className="mt-0.5 font-mono text-xs text-term-ink-variant">
+                {loading
+                  ? 'Reading the inversion scoring and the policy engine.'
+                  : 'No GRAP stage in force, no zone trapping below the threshold, and the mesh is reporting in full.'}
+              </div>
+            </div>
+          </div>
+        </TelemetryCard>
+      ) : (
       <div className="space-y-3">
-        {INCIDENTS.map((a) => {
+        {items.map((a) => {
           const style = LEVEL_STYLE[a.level];
           const Icon = style.icon;
           return (
             <TelemetryCard
-              key={a.text}
-              className={cn('flex flex-col justify-between gap-3 rounded-xl border-l-4 p-4 sm:flex-row sm:items-center', style.border)}
+              key={a.id}
+              className="flex flex-col justify-between gap-3 rounded-xl p-4 sm:flex-row sm:items-center"
             >
               <div className="flex items-start gap-3">
                 <Icon className="mt-0.5 size-5 shrink-0" style={{ color: style.color }} />
@@ -156,16 +171,21 @@ function IncidentBanners() {
                   <p className="mt-1 text-sm font-medium text-term-ink">{a.text}</p>
                 </div>
               </div>
+              {/* The old rows carried a hand-picked station id to deep-link
+                  to. These advisories are regional - an inversion covers a
+                  basin and a GRAP stage covers the city - so the link goes to
+                  the map itself rather than inventing a station to blame. */}
               <Link
-                to={`/terminal/geo-map?station=${a.station}`}
+                to="/terminal/geo-map"
                 className="shrink-0 rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-3 py-1.5 text-center font-mono text-[10px] font-bold uppercase tracking-wider text-term-ink transition-colors hover:border-term-primary"
               >
-                Locate on map
+                Open map
               </Link>
             </TelemetryCard>
           );
         })}
       </div>
+      )}
     </div>
   );
 }

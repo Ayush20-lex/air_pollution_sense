@@ -2,7 +2,7 @@ import * as React from 'react';
 import { AlertTriangle, CircleAlert, Info, Search } from 'lucide-react';
 import { Delta, Label, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { AnimatedNumber, useRollDuration } from '@/components/terminal/MeshOdometer';
-import { INCIDENTS } from '@/lib/terminal/content';
+import { useAdvisories } from '@/lib/terminal/advisories';
 import type { LiveStation } from '@/lib/terminal/meshApi';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { DISPERSION, nodeSeries, type TerminalFrame } from '@/lib/terminal/field';
@@ -407,18 +407,33 @@ const ALERT_STYLE = {
 } as const;
 
 function SpatialAlerts() {
-  const select = useTerminalStore((s) => s.select);
+  const { items } = useAdvisories();
 
   return (
     <div id="alerts" className="space-y-3">
-      <SectionHead title="Spatial Anomaly Warnings" />
+      <SectionHead
+        title="Spatial Anomaly Warnings"
+        right={
+          <span className="font-mono text-xs uppercase tracking-wider text-term-ink-variant">
+            {items.length === 0 ? 'nothing active' : `${items.length} active`}
+          </span>
+        }
+      />
+      {items.length === 0 ? (
+        <TelemetryCard className="p-5">
+          <span className="font-mono text-xs text-term-ink-variant">
+            No GRAP stage in force, no zone trapping below the threshold, and the mesh is
+            reporting in full.
+          </span>
+        </TelemetryCard>
+      ) : (
       <div className="space-y-3">
-        {INCIDENTS.map((a) => {
+        {items.map((a) => {
           const style = ALERT_STYLE[a.level];
           return (
             <TelemetryCard
-              key={a.text}
-              className={cn('flex flex-col justify-between gap-3 rounded-xl border-l-4 p-4 sm:flex-row sm:items-center', style.border)}
+              key={a.id}
+              className="flex flex-col justify-between gap-3 rounded-xl p-4 sm:flex-row sm:items-center"
             >
               <div className="flex items-start gap-3">
                 <style.Icon className="mt-0.5 size-5 shrink-0" style={{ color: style.color }} />
@@ -435,20 +450,23 @@ function SpatialAlerts() {
                   <p className="mt-1 text-sm font-medium text-term-ink">{a.text}</p>
                 </div>
               </div>
+              {/* These advisories are regional, so there is no single station
+                  to select; the button scrolls to the map instead of picking
+                  one to blame. */}
               <button
                 type="button"
-                onClick={() => {
-                  select(a.station);
-                  document.getElementById('map')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
+                onClick={() =>
+                  document.getElementById('map')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
                 className="shrink-0 rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-term-ink transition-colors hover:border-term-primary"
               >
-                Locate on map
+                Show map
               </button>
             </TelemetryCard>
           );
         })}
       </div>
+      )}
     </div>
   );
 }
