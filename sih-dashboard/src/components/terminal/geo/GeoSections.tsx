@@ -5,11 +5,13 @@ import { AnimatedNumber, useRollDuration } from '@/components/terminal/MeshOdome
 import { useAdvisories } from '@/lib/terminal/advisories';
 import type { LiveStation } from '@/lib/terminal/meshApi';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
-import { DISPERSION, type TerminalFrame } from '@/lib/terminal/field';
+import { type TerminalFrame } from '@/lib/terminal/field';
+import { useMeasuredWind } from '@/lib/terminal/plumes';
 import { bySeverity, zoneSummary } from '@/lib/terminal/stations';
 import { useMesh } from '@/lib/terminal/useMesh';
 import { cn } from '@/lib/utils';
 import { useTerminalStore } from '@/store/useTerminalStore';
+import { useAppStore } from '@/store/useAppStore';
 import { TERM, TERM_SEVERITY } from '@/lib/terminal/palette';
 
 /** Everything below the map on the geo page. */
@@ -186,6 +188,14 @@ function MeshRanking({ frame }: { frame: TerminalFrame }) {
  * caps vertical mixing.
  */
 function TrappingProfile() {
+  // The layer depth at the hour on the timeline, not a constant. The prose used
+  // to say 412 m while the panel below reported 50.
+  const live = useAppStore((st) => st.liveFrames)?.[0];
+  const wind = useMeasuredWind(0);
+  const pbl = live?.avgPbl ?? null;
+  const inv = live?.inversionIndex ?? null;
+  // Mixing depth x transport wind, the standard ventilation index in m2/s.
+  const ventilation = pbl != null && wind ? pbl * (wind.speedKmh / 3.6) : null;
   return (
     // Flex column so the cross-section absorbs whatever height the taller
     // ranking card forces on this one, instead of leaving a void at the foot.
@@ -193,8 +203,8 @@ function TrappingProfile() {
       <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Topographic Trapping Profile</h3>
       <p className="font-body text-[11px] leading-relaxed text-term-ink-variant">
         Cross-section looking north. The Aravalli range to the south-west and the Himalayan foothills to
-        the north-east form a closed basin; the winter inversion lid caps vertical mixing at{' '}
-        {DISPERSION.boundaryLayer} m.
+        the north-east form a closed basin; the inversion lid currently caps vertical mixing at{' '}
+        {pbl == null ? 'the forecast layer depth' : `${pbl.toFixed(0)} m`}.
       </p>
 
       <div className="flex min-h-0 flex-1 items-center">
@@ -214,7 +224,7 @@ function TrappingProfile() {
         <rect x="0" y="0" width="400" height="210" fill={TERM.bgDeep} />
         <line x1="0" y1="60" x2="400" y2="60" stroke={TERM.secondary} strokeOpacity="0.45" strokeWidth="2" strokeDasharray="6 5" />
         <text x="200" y="52" fill={TERM.secondary} fontSize="9" fontWeight="700" letterSpacing="1.5" textAnchor="middle" fontFamily="var(--font-mono), monospace">
-          INVERSION LID — {DISPERSION.boundaryLayer} m
+          INVERSION LID — {pbl == null ? '—' : `${pbl.toFixed(0)} m`}
         </text>
         <path d="M 30,150 L 104,132 L 300,132 L 372,138 L 372,60 L 30,60 Z" fill="url(#term-smog)" />
         <path
@@ -245,17 +255,24 @@ function TrappingProfile() {
 
       <div className="grid grid-cols-3 gap-2 border-t border-term-outline-variant/40 pt-2 text-center">
         <div>
-          <Label className="block">Inversion height</Label>
-          <span className="font-mono text-sm font-bold text-term-ink">{DISPERSION.boundaryLayer} m</span>
+          <Label className="block">Mixing depth</Label>
+          <span className="font-mono text-sm font-bold text-term-ink">
+            {pbl == null ? '—' : `${pbl.toFixed(0)} m`}
+          </span>
         </div>
         <div>
-          <Label className="block">Mixing depth</Label>
-          <span className="font-mono text-sm font-bold text-orange-400">{DISPERSION.dispersionIndex}</span>
+          {/* This slot read "Mixing depth 0.38" - a dimensionless index under a
+              label that means a height in metres. The index belongs here and
+              the depth belongs beside it, which is now how they sit. */}
+          <Label className="block">Inversion index</Label>
+          <span className="font-mono text-sm font-bold text-orange-400">
+            {inv == null ? '—' : inv.toFixed(2)}
+          </span>
         </div>
         <div>
           <Label className="block">Ventilation idx</Label>
           <span className="font-mono text-sm font-bold text-term-ink">
-            {DISPERSION.ventilationIndex.toLocaleString('en-IN')}
+            {ventilation == null ? '—' : `${Math.round(ventilation).toLocaleString('en-IN')} m²/s`}
           </span>
         </div>
       </div>

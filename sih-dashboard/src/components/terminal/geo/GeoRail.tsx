@@ -179,20 +179,59 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
  * on 19 September it was 153 degrees - south-south-easterly - while the card
  * said north-west and the needle pointed there.
  */
+/**
+ * How well the basin is ventilating, at the hour on the timeline.
+ *
+ * Every row here was a literal: a 412 m boundary layer, a dispersion index of
+ * 0.38 "POOR", an inversion risk of "HIGH" and 3.4 days of bowl retention. The
+ * first of those was the problem - the frames payload puts the layer at 52 m
+ * right now, and the Inversion Trap Zones panel a few inches down the same page
+ * reports 50 m. The page was disagreeing with itself by a factor of eight.
+ *
+ * Three rows have a real source and use it. "Bowl retention" does not: nothing
+ * here models how long the basin holds an air mass, and the 3.4 days was a
+ * number someone liked. It is gone rather than approximated - the same call as
+ * "Interpolation Confidence" in the coverage strip.
+ *
+ * The ventilation index replaces the unsourced "dispersion idx". It is the
+ * standard quantity - mixing depth times mean wind speed, in m2/s - so it is
+ * defined rather than asserted, and it is what decides whether a given
+ * emission disperses or sits on the city.
+ */
 function TrappingDispersion({ frame }: { frame: TerminalFrame }) {
   const measured = useMeasuredWind(frame.offset);
+  const live = useAppStore((st) => st.liveFrames)?.[frame.offset];
+
+  const pbl = live?.avgPbl ?? null;
+  const windMs = measured ? measured.speedKmh / 3.6 : null;
+  // Ventilation index: mixing depth x transport wind. Below about 2000 m2/s is
+  // the range where emissions accumulate; above 6000 the basin clears.
+  const ventilation = pbl != null && windMs != null ? pbl * windMs : null;
+  const ventLabel =
+    ventilation == null ? '' : ventilation < 2000 ? 'POOR' : ventilation < 6000 ? 'FAIR' : 'GOOD';
+  const inv = live?.inversionIndex ?? null;
+  const invLabel =
+    inv == null ? '—' : inv >= 0.75 ? 'HIGH' : inv >= 0.5 ? 'MODERATE' : 'LOW';
+
   const rows = [
     {
       label: 'Wind',
       value: measured
         ? `${measured.speedKmh.toFixed(1)} km/h ${compassName(measured.fromDeg)}`
-        : `${DISPERSION.windSpeed} km/h ${DISPERSION.windDir}`,
+        : '—',
       cls: 'text-term-ink',
     },
-    { label: 'Boundary layer', value: `${DISPERSION.boundaryLayer} m`, cls: 'text-term-ink' },
-    { label: 'Dispersion idx', value: `${DISPERSION.dispersionIndex} ${DISPERSION.dispersionLabel}`, cls: 'text-orange-400' },
-    { label: 'Inversion risk', value: DISPERSION.inversionRisk, cls: 'text-amber-400' },
-    { label: 'Bowl retention', value: `${DISPERSION.bowlRetentionDays} days`, cls: 'text-term-ink' },
+    { label: 'Boundary layer', value: pbl == null ? '—' : `${pbl.toFixed(0)} m`, cls: 'text-term-ink' },
+    {
+      label: 'Ventilation idx',
+      value: ventilation == null ? '—' : `${ventilation.toFixed(0)} m²/s ${ventLabel}`,
+      cls: 'text-orange-400',
+    },
+    {
+      label: 'Inversion risk',
+      value: inv == null ? '—' : `${invLabel} (${inv.toFixed(2)})`,
+      cls: 'text-amber-400',
+    },
   ];
 
   return (
