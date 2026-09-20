@@ -337,6 +337,14 @@ U_REFERENCE_MS = 2.0
 #: influenced it.
 MAX_TRANSIT_H = 72.0
 
+#: Fires processed per block. The kernel is cells x fires, so 850 November
+#: fires over a 70x80 grid would allocate about 38 MB per intermediate and some
+#: six of them at once - 230 MB transient on a box with 258 MB free, which is an
+#: OOM on precisely the episode this feature exists to show. Blocking bounds the
+#: peak at a few tens of MB whatever the season does, and the sum is identical
+#: because contributions accumulate.
+FIRE_CHUNK = 128
+
 #: Below this the wind has no reliable direction, so a plume has no axis to be
 #: carried along. Under it the fires are treated as a still-air source that
 #: spreads symmetrically instead of being advected nowhere.
@@ -370,43 +378,53 @@ def plume_field(
     lons = np.linspace(lon_min, lon_max, w)
     glat, glon = np.meshgrid(lats, lons, indexing="ij")
 
-    f_lat = fires["latitude"].to_numpy(dtype=np.float64)
-    f_lon = fires["longitude"].to_numpy(dtype=np.float64)
-    f_frp = fires["frp"].to_numpy(dtype=np.float64)
-
-    # Local flat-earth km. Good to well under a percent over this domain.
-    KM_LAT, KM_LON = 111.0, 97.5
-    dy = (glat[..., None] - f_lat[None, None, :]) * KM_LAT   # (h, w, n) fire -> cell
-    dx = (glon[..., None] - f_lon[None, None, :]) * KM_LON
-
-    dist = np.hypot(dx, dy)
-
-    # What is burning: distance-weighted accumulation, no wind.
-    frp_grid = (f_frp[None, None, :] * np.exp(-(dist ** 2) / (2 * SIGMA_CROSS_KM ** 2))).sum(axis=2)
+    all_lat = fires["latitude"].to_numpy(dtype=np.float64)
+    all_lon = fires["longitude"].to_numpy(dtype=np.float64)
+    all_frp = fires["frp"].to_numpy(dtype=np.float64)
 
     speed = float(np.hypot(u_ms, v_ms))
-    if speed < CALM_MS:
-        # No axis to project onto, so the plume spreads symmetrically. It must
-        # still be diluted by distance the way a directed plume is: without
-        # that term the calm field was the undiluted accumulation and jumped by
-        # more than an order of magnitude as the wind crossed CALM_MS - a still
-        # night would have looked far smokier than a light breeze.
-        weight = np.exp(-(dist ** 2) / (2 * SIGMA_CROSS_KM ** 2)) / (1.0 + dist / DECAY_KM)
-        weight = weight * (U_REFERENCE_MS / CALM_MS)
-        smoke_grid = (f_frp[None, None, :] * weight).sum(axis=2)
-    else:
-        ux, vy = u_ms / speed, v_ms / speed
-        # Along-wind: positive when the cell is downwind of the fire.
-        d_along = dx * ux + dy * vy
-        d_perp = np.abs(-dx * vy + dy * ux)
-        weight = np.exp(-(d_perp ** 2) / (2 * SIGMA_CROSS_KM ** 2)) / (1.0 + np.maximum(d_along, 0.0) / DECAY_KM)
-        # Concentration falls as the wind rises: the same emission spread
-        # through a faster stream arrives thinner.
-        weight = weight * (U_REFERENCE_MS / max(speed, CALM_MS))
-        # Hours for the parcel to travel the along-wind distance, at this speed.
-        transit_h = np.maximum(d_along, 0.0) / (speed * 3.6)
-        weight = np.where((d_along > 0.0) & (transit_h <= MAX_TRANSIT_H), weight, 0.0)
-        smoke_grid = (f_frp[None, None, :] * weight).sum(axis=2)
+    frp_grid = np.zeros((h, w), dtype=np.float64)
+    smoke_grid = np.zeros((h, w), dtype=np.float64)
+
+    for lo in range(0, len(all_lat), FIRE_CHUNK):
+        f_lat = all_lat[lo:lo + FIRE_CHUNK]
+        f_lon = all_lon[lo:lo + FIRE_CHUNK]
+        f_frp = all_frp[lo:lo + FIRE_CHUNK]
+
+        # Local flat-earth km. Good to well under a percent over this domain.
+        KM_LAT, KM_LON = 111.0, 97.5
+        dy = (glat[..., None] - f_lat[None, None, :]) * KM_LAT   # (h, w, n)
+        dx = (glon[..., None] - f_lon[None, None, :]) * KM_LON
+
+        dist = np.hypot(dx, dy)
+
+        # What is burning: distance-weighted accumulation, no wind.
+        frp_grid += (f_frp[None, None, :]
+                     * np.exp(-(dist ** 2) / (2 * SIGMA_CROSS_KM ** 2))).sum(axis=2)
+
+        if speed < CALM_MS:
+            # No axis to project onto, so the plume spreads symmetrically. It
+            # must still be diluted by distance the way a directed plume is:
+            # without that term the calm field was the undiluted accumulation
+            # and jumped by more than an order of magnitude as the wind crossed
+            # CALM_MS - a still night looked far smokier than a light breeze.
+            weight = np.exp(-(dist ** 2) / (2 * SIGMA_CROSS_KM ** 2)) / (1.0 + dist / DECAY_KM)
+            weight = weight * (U_REFERENCE_MS / CALM_MS)
+        else:
+            ux, vy = u_ms / speed, v_ms / speed
+            # Along-wind: positive when the cell is downwind of the fire.
+            d_along = dx * ux + dy * vy
+            d_perp = np.abs(-dx * vy + dy * ux)
+            weight = (np.exp(-(d_perp ** 2) / (2 * SIGMA_CROSS_KM ** 2))
+                      / (1.0 + np.maximum(d_along, 0.0) / DECAY_KM))
+            # Concentration falls as the wind rises: the same emission spread
+            # through a faster stream arrives thinner.
+            weight = weight * (U_REFERENCE_MS / max(speed, CALM_MS))
+            # Hours for the parcel to travel the along-wind distance.
+            transit_h = np.maximum(d_along, 0.0) / (speed * 3.6)
+            weight = np.where((d_along > 0.0) & (transit_h <= MAX_TRANSIT_H), weight, 0.0)
+
+        smoke_grid += (f_frp[None, None, :] * weight).sum(axis=2)
 
     return (
         (frp_grid * EMISSION_TO_PROXY).astype(np.float32),
