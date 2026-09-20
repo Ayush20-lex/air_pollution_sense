@@ -174,6 +174,14 @@ def _build_synthetic_history(
 
 #: How often the recorder samples the live mesh.
 #:
+#: How much recorded live history the station payload carries.
+#:
+#: Three days, because that is the span the terminal's pollutant cards ask for
+#: and the longest the live feed can ever supply: CPCB publishes one hour at a
+#: time and keeps no history, so anything older than the current bulletin has to
+#: have been recorded by us. Well inside the recorder's 30-day retention.
+LIVE_HISTORY_HOURS = 72
+
 #: WAQI publishes hourly, so anything under an hour is only insurance against
 #: missing the moment a station updates. Fifteen minutes gives four chances an
 #: hour, and because `waqi_live.mesh` caches for five it usually costs no
@@ -928,9 +936,21 @@ def _blend(live: dict[str, Any], archive: dict[str, Any] | None) -> dict[str, An
         for sub in (st.get("sub_indices") or {}).values()
     )
     try:
+        # Three days rather than one. CPCB's own bulletin holds only the
+        # current hour - every record in it carries the same timestamp, and
+        # asking it for an earlier day returns nothing - so a multi-day window
+        # can only come from what we have kept ourselves. The recorder has been
+        # writing all along and prunes at 30 days; only the read was capped at
+        # 24h, which is why the card could never show more than a day.
+        #
+        # Trimmed at the head so the window is as long as the recording, not as
+        # long as the request: before the recorder existed there is nothing to
+        # draw, and padding it would render as days of dead instruments.
         recorded = live_history.history(
             [int(s["id"]) for s in live["stations"]], live["as_of"],
+            hours=LIVE_HISTORY_HOURS,
             unit=live_history.UGM3 if has_conc else live_history.SUBINDEX,
+            trim_empty_head=True,
         )
     except Exception as exc:  # noqa: BLE001 - a missing chart, not a failed mesh
         _log.warning("live history unavailable (%s)", exc)

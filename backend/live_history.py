@@ -208,6 +208,7 @@ def history(
     ends_at: str,
     hours: int = WINDOW_HOURS,
     unit: str = UGM3,
+    trim_empty_head: bool = False,
 ) -> dict[int, dict[str, list[float | None]]]:
     """The recorded window for each station, oldest first.
 
@@ -216,6 +217,18 @@ def history(
     two-point line stretched across the full axis. The gaps are honest: they are
     hours before the recorder existed, and the chart already draws a missing
     hour as a break rather than interpolating over it.
+
+    `trim_empty_head` drops the leading hours in which *nothing* was recorded,
+    for any station or pollutant, and shortens every series equally so they stay
+    aligned. Those two kinds of emptiness are not the same thing and only one is
+    worth drawing: an hour inside the recorded span is an instrument that did
+    not report, while an hour before the span began is simply one we did not
+    exist for. Asking for a three-day window a day after the recorder started
+    would otherwise render as two days of blank axis, which reads as two days of
+    dead sensors.
+
+    Gaps *within* the recorded span are never trimmed. Callers keep labelling
+    from the end of the window, so a shortened series still lines up.
     """
     end = _floor_hour(ends_at)
     if not station_ids or end is None or hours <= 0:
@@ -245,6 +258,20 @@ def history(
             continue
         series = out.setdefault(station_id, {}).setdefault(pollutant, [None] * hours)
         series[i] = value
+
+    if trim_empty_head and out:
+        # The earliest slot anything was recorded in. One cut for every series,
+        # so the windows stay comparable across stations and pollutants.
+        first = min(
+            (i for pols in out.values() for s in pols.values()
+             for i, v in enumerate(s) if v is not None),
+            default=None,
+        )
+        if first:
+            for pols in out.values():
+                for pol, s in pols.items():
+                    pols[pol] = s[first:]
+
     return out
 
 
