@@ -75,15 +75,51 @@ LABEL_TO_KEY = {"PM2.5": "pm25", "PM10": "pm10", "O3": "o3"}
 #: What a recorded series is, carried into the payload. See the module note.
 KIND = "rolling_24h_mean"
 
+#: What a stored value is. CPCB's bulletin publishes sub-indices and leaves
+#: concentration null on every pollutant, while WAQI and the archive give
+#: ug/m3, so the table has to hold both - and must never average one into the
+#: other. Every read names the unit it wants and gets only that.
+UGM3 = "ugm3"
+SUBINDEX = "subindex"
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS reading (
     station_id INTEGER NOT NULL,
     pollutant  TEXT    NOT NULL,
     hour_utc   TEXT    NOT NULL,
     value      REAL    NOT NULL,
-    PRIMARY KEY (station_id, pollutant, hour_utc)
+    unit       TEXT    NOT NULL DEFAULT 'ugm3',
+    PRIMARY KEY (station_id, pollutant, hour_utc, unit)
 ) WITHOUT ROWID;
 """
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Bring a pre-`unit` table forward without losing what it holds.
+
+    The first version keyed on (station_id, pollutant, hour_utc) and stored only
+    concentrations. `CREATE TABLE IF NOT EXISTS` leaves such a table alone, so
+    the new five-column insert would fail against it on every poll - and it
+    would fail on the deployed box, which is the only one with recorded hours in
+    it and the one place the data cannot be regenerated.
+
+    ALTER TABLE cannot widen a primary key, so the table is rebuilt and the
+    existing rows carried over as ug/m3, which is what they are: nothing but
+    concentrations could be written before this column existed.
+    """
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(reading)")}
+    if not cols or "unit" in cols:
+        return
+    logger.info("migrating live history to the unit-aware schema")
+    conn.execute("ALTER TABLE reading RENAME TO reading_legacy")
+    conn.execute(_SCHEMA)
+    conn.execute(
+        "INSERT OR IGNORE INTO reading (station_id, pollutant, hour_utc, value, unit) "
+        f"SELECT station_id, pollutant, hour_utc, value, '{UGM3}' FROM reading_legacy"
+    )
+    moved = conn.execute("SELECT COUNT(*) FROM reading").fetchone()[0]
+    conn.execute("DROP TABLE reading_legacy")
+    logger.info("live history migrated: %d reading(s) preserved", moved)
 
 
 def _connect() -> sqlite3.Connection:
@@ -93,6 +129,7 @@ def _connect() -> sqlite3.Connection:
     # default journal would serialise them.
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
+    _migrate(conn)
     conn.execute(_SCHEMA)
     return conn
 
@@ -137,19 +174,28 @@ def record(mesh: dict[str, Any]) -> int:
             continue
         for label, sub in (s.get("sub_indices") or {}).items():
             key = LABEL_TO_KEY.get(label)
-            value = (sub or {}).get("concentration")
-            if key is None or value is None:
+            if key is None or not sub:
                 continue
-            rows.append((int(s["id"]), key, hour, float(value)))
+            # Concentration when the feed gives one, the sub-index when it does
+            # not. Recording only concentrations meant CPCB's bulletin - which
+            # publishes neither - was skipped entirely, so the recorder filled
+            # with nothing while the page showed 74 live stations.
+            value, unit = sub.get("concentration"), UGM3
+            if value is None:
+                value, unit = sub.get("sub_index"), SUBINDEX
+            if value is None:
+                continue
+            rows.append((int(s["id"]), key, hour, float(value), unit))
 
     if not rows:
         return 0
 
     with _connect() as conn:
         conn.executemany(
-            "INSERT INTO reading (station_id, pollutant, hour_utc, value) "
-            "VALUES (?, ?, ?, ?) "
-            "ON CONFLICT (station_id, pollutant, hour_utc) DO UPDATE SET value = excluded.value",
+            "INSERT INTO reading (station_id, pollutant, hour_utc, value, unit) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT (station_id, pollutant, hour_utc, unit) "
+            "DO UPDATE SET value = excluded.value",
             rows,
         )
     logger.info("recorded %d live reading(s) across %d station(s)",
@@ -161,6 +207,7 @@ def history(
     station_ids: list[int],
     ends_at: str,
     hours: int = WINDOW_HOURS,
+    unit: str = UGM3,
 ) -> dict[int, dict[str, list[float | None]]]:
     """The recorded window for each station, oldest first.
 
@@ -185,8 +232,9 @@ def history(
     with _connect() as conn:
         cur = conn.execute(
             f"SELECT station_id, pollutant, hour_utc, value FROM reading "  # noqa: S608 - ids are ints
-            f"WHERE station_id IN ({placeholders}) AND hour_utc >= ? AND hour_utc <= ?",
-            [*station_ids, slots[0], slots[-1]],
+            f"WHERE station_id IN ({placeholders}) AND hour_utc >= ? AND hour_utc <= ? "
+            f"AND unit = ?",
+            [*station_ids, slots[0], slots[-1], unit],
         )
         found = cur.fetchall()
 

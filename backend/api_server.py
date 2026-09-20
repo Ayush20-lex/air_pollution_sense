@@ -870,9 +870,18 @@ def _blend(live: dict[str, Any], archive: dict[str, Any] | None) -> dict[str, An
     # itself carries no history - this is the only place a live station's chart
     # can come from, and before the recorder has run it is simply empty, which
     # the chart states rather than fills.
+    # The unit the feed publishes, so a concentration series and a sub-index
+    # series are never averaged into one another. CPCB's bulletin gives
+    # sub-indices only; WAQI and the archive give ug/m3.
+    has_conc = any(
+        (sub or {}).get("concentration") is not None
+        for st in live["stations"]
+        for sub in (st.get("sub_indices") or {}).values()
+    )
     try:
         recorded = live_history.history(
-            [int(s["id"]) for s in live["stations"]], live["as_of"]
+            [int(s["id"]) for s in live["stations"]], live["as_of"],
+            unit=live_history.UGM3 if has_conc else live_history.SUBINDEX,
         )
     except Exception as exc:  # noqa: BLE001 - a missing chart, not a failed mesh
         _log.warning("live history unavailable (%s)", exc)

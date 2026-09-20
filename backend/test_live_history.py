@@ -143,6 +143,66 @@ with live_history._connect() as c:
 check("prune keeps what is inside retention", left == {2})
 
 
+# ── units: CPCB publishes sub-indices, WAQI publishes concentrations ────────
+reset()
+
+
+def sub_only(sid: int, index: float) -> dict:
+    """A CPCB-style station: a sub-index and no concentration at all."""
+    return {
+        "id": sid,
+        "valid": True,
+        "sub_indices": {"PM2.5": {"sub_index": index, "concentration": None}},
+    }
+
+
+live_history.record(mesh(H, [sub_only(7, 143.0)]))
+with live_history._connect() as c:
+    rows = c.execute("SELECT value, unit FROM reading").fetchall()
+check("a station with no concentration records its sub-index",
+      rows == [(143.0, live_history.SUBINDEX)])
+
+got = live_history.history([7], H, unit=live_history.SUBINDEX)
+check("the sub-index series reads back under its own unit", got[7]["pm25"][-1] == 143.0)
+check("asking for ug/m3 does not return sub-indices",
+      live_history.history([7], H, unit=live_history.UGM3) == {})
+
+# Both units for one station-hour must coexist without overwriting.
+live_history.record(mesh(H, [station(7, 55.0)]))
+check("a concentration and a sub-index can share a station-hour",
+      live_history.history([7], H, unit=live_history.UGM3)[7]["pm25"][-1] == 55.0
+      and live_history.history([7], H, unit=live_history.SUBINDEX)[7]["pm25"][-1] == 143.0)
+
+
+# ── migration from the pre-unit schema ──────────────────────────────────────
+import sqlite3  # noqa: E402
+
+legacy = _tmp.parent / "legacy.db"
+con = sqlite3.connect(legacy)
+con.execute(
+    "CREATE TABLE reading (station_id INTEGER NOT NULL, pollutant TEXT NOT NULL, "
+    "hour_utc TEXT NOT NULL, value REAL NOT NULL, "
+    "PRIMARY KEY (station_id, pollutant, hour_utc)) WITHOUT ROWID"
+)
+con.execute("INSERT INTO reading VALUES (1, 'pm25', ?, 61.0)", (H,))
+con.commit()
+con.close()
+
+_saved = live_history.DB_PATH
+live_history.DB_PATH = legacy
+with live_history._connect() as c:
+    cols = {r[1] for r in c.execute("PRAGMA table_info(reading)")}
+    kept = c.execute("SELECT value, unit FROM reading").fetchall()
+check("the old schema gains a unit column", "unit" in cols)
+check("rows written before the column are preserved as ug/m3", kept == [(61.0, live_history.UGM3)])
+check("the legacy table is cleaned up after the move",
+      not list(live_history._connect().execute(
+          "SELECT name FROM sqlite_master WHERE name='reading_legacy'")))
+live_history.DB_PATH = _saved
+reset()
+live_history.record(mesh(new, [station(2, 20.0)]))
+
+
 # ── status ──────────────────────────────────────────────────────────────────
 d = live_history.describe()
 check("describe reports it is recording", d["recording"] is True)
