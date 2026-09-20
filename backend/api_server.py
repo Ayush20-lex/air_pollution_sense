@@ -346,6 +346,10 @@ class InversionAlert(BaseModel):
     lon_range: list[float]
     pm25_peak: float
     pbl_min: float
+    #: When the worst hour lands, and how far ahead. An inversion is a thing
+    #: that happens at a time; an alert that cannot say when is not actionable.
+    peak_at: str
+    lead_hours: int
     issued_at: str
     message: str
 
@@ -721,17 +725,30 @@ async def forecast_station(
 
 @app.get("/api/v1/alerts/inversion", response_model=list[InversionAlert])
 async def alerts_inversion(
-    isi_threshold: float = Query(default=0.75, ge=0.0, le=1.0),
+    isi_threshold: float = Query(default=0.65, ge=0.0, le=1.0),
     max_zones: int       = Query(default=10, ge=1, le=50),
 ):
     """
-    Returns active thermal inversion trap risk zones where ISI > threshold.
+    Thermal inversion trap zones whose worst forecast hour scores above
+    `isi_threshold`.
 
-    ISI (Inversion Severity Index) ∈ [0,1]:
-        < 0.50  → Low
-        0.50–0.65 → Moderate
-        0.65–0.75 → Severe
-        > 0.75  → EMERGENCY
+    ISI (Inversion Severity Index) in [0, 1], as the tiers below are applied:
+
+        < 0.65   not reported
+        0.65-0.75  MODERATE   elevated risk, enhanced monitoring
+        0.75-0.85  SEVERE     restrict outdoor activity, notify SAFAR
+        > 0.85     EMERGENCY  graded-response action required
+
+    The default threshold was 0.75, which is also the SEVERE cutoff, so every
+    zone that survived the filter was labelled SEVERE or worse and the MODERATE
+    branch below could never run. Ten zones came back SEVERE on a September
+    afternoon. The threshold now sits at the bottom of the reported range, so
+    the tiers separate a quiet month from a December night instead of pinning.
+
+    The sigmoid in compute_isi compresses the practical range - today's grid
+    spans 0.672 to 0.744 across the whole domain - so these cutoffs are close
+    together by construction. They are the documented ones and the code now
+    matches them; widening the index itself is a separate change.
     """
     cfg = get_settings()
     cache_key = f"alerts:inv:{isi_threshold:.2f}"
@@ -741,14 +758,33 @@ async def alerts_inversion(
 
     pred, _is_synthetic = await get_forecast_tensor()   # (1, 72, 12, 70, 80)
 
-    # Take worst-case step (max PM2.5 over forecast horizon)
-    pm25_max = pred[0, :, CH_PM25].max(dim=0).values   # (H, W) normalised
-    pbl_min  = pred[0, :, CH_PBL].min(dim=0).values    # (H, W) normalised
-    wind_min = torch.hypot(
-        pred[0, :, CH_UWIND], pred[0, :, CH_VWIND]
-    ).min(dim=0).values                                 # (H, W) normalised
+    # Score every hour on its own terms, then take the worst hour.
+    #
+    # This used to take the maximum PM2.5, the minimum PBL and the minimum wind
+    # independently over the whole 72-hour horizon and compute one ISI from the
+    # three. Those extremes do not occur together: the peak pollution might be
+    # on day one, the shallowest layer on night three and the stillest air on
+    # day two. Combining them described an hour that never happens, and over 72
+    # hours in Delhi every zone reaches all three at some point - so ISI
+    # saturated and all ten zones came back SEVERE, every time, which is not an
+    # alert but a constant.
+    pm25_t = pred[0, :, CH_PM25] * 500.0                       # (T, H, W) ug/m3
+    pbl_t = pred[0, :, CH_PBL] * 3000.0                        # (T, H, W) m
+    wind_t = torch.hypot(pred[0, :, CH_UWIND], pred[0, :, CH_VWIND]) * 20.0
 
-    isi_grid = compute_isi(pm25_max * 500, pbl_min * 3000, wind_min * 20)  # (H, W)
+    # The forecast origin, so a lead index can be named as a clock time. Same
+    # derivation the frames endpoint uses; lead h is hour h after the origin.
+    _meta = _state.forecast_meta or {}
+    base = (datetime.fromisoformat(_meta["origin"]) if _meta.get("origin")
+            else datetime.now(timezone.utc))
+
+    isi_t = compute_isi(pm25_t, pbl_t, wind_t)                 # (T, H, W)
+    worst = isi_t.max(dim=0)
+    isi_grid = worst.values                                    # (H, W)
+    peak_step = worst.indices                                  # (H, W) hour index
+
+    pm25_max = pm25_t.max(dim=0).values / 500.0                # kept for the payload
+    pbl_min = pbl_t.min(dim=0).values / 3000.0
 
     lat_vec = np.linspace(NCR_LAT_MIN, NCR_LAT_MAX, GRID_H)
     lon_vec = np.linspace(NCR_LON_MIN, NCR_LON_MAX, GRID_W)
@@ -761,8 +797,7 @@ async def alerts_inversion(
     for bi in range(0, GRID_H - block_h, block_h):
         for bj in range(0, GRID_W - block_w, block_w):
             block_isi  = isi_grid[bi:bi + block_h, bj:bj + block_w]
-            block_pm25 = pm25_max[bi:bi + block_h, bj:bj + block_w]
-            block_pbl  = pbl_min[bi:bi + block_h, bj:bj + block_w]
+            block_step = peak_step[bi:bi + block_h, bj:bj + block_w]
 
             mean_isi = block_isi.mean().item()
             if mean_isi < isi_threshold:
@@ -781,6 +816,16 @@ async def alerts_inversion(
             ctr_lat = float(lat_vec[bi + block_h // 2])
             ctr_lon = float(lon_vec[bj + block_w // 2])
 
+            # The hour this block is worst, taken from its worst cell, and the
+            # conditions AT that hour. Reporting a peak PM2.5 from one hour
+            # beside a minimum PBL from another is what produced a permanent
+            # emergency; these two now describe the same moment.
+            flat = int(block_isi.argmax().item())
+            lead = int(block_step.flatten()[flat].item())
+            peak_pm = float(pm25_t[lead, bi:bi + block_h, bj:bj + block_w].max().item())
+            peak_pbl = float(pbl_t[lead, bi:bi + block_h, bj:bj + block_w].min().item())
+            peak_at = (base + timedelta(hours=lead)).isoformat()
+
             alerts.append(InversionAlert(
                 zone_id    = f"ISI_{bi//block_h}_{bj//block_w}",
                 severity   = severity,
@@ -789,8 +834,10 @@ async def alerts_inversion(
                 lon_center = round(ctr_lon, 4),
                 lat_range  = [round(float(lat_vec[bi]), 4), round(float(lat_vec[min(bi + block_h, GRID_H - 1)]), 4)],
                 lon_range  = [round(float(lon_vec[bj]), 4), round(float(lon_vec[min(bj + block_w, GRID_W - 1)]), 4)],
-                pm25_peak  = round(float(block_pm25.max()) * 500, 1),
-                pbl_min    = round(float(block_pbl.min()) * 3000, 1),
+                pm25_peak  = round(peak_pm, 1),
+                pbl_min    = round(peak_pbl, 1),
+                peak_at    = peak_at,
+                lead_hours = lead,
                 issued_at  = now_str,
                 message    = msg,
             ))
