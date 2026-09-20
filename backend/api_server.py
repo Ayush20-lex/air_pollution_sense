@@ -201,7 +201,7 @@ async def _record_live_history() -> None:
     while True:
         try:
             await asyncio.sleep(RECORD_EVERY_S)
-            mesh = await asyncio.to_thread(waqi_live.mesh)
+            mesh = await asyncio.to_thread(_live_mesh)
             if mesh:
                 await asyncio.to_thread(live_history.record, mesh)
             since_prune += RECORD_EVERY_S
@@ -227,13 +227,17 @@ async def lifespan(app: FastAPI):
     ).to(cfg.device)
     _state.model.eval()
 
-    # Warm the live mesh off the request path. Building it costs 25 round trips
-    # to WAQI - about six seconds - and the dashboard gives up after eight, so
-    # the first visitor after a restart would have raced it and lost, seeing the
-    # archive and a DEMO badge with a live feed working perfectly behind it.
-    if waqi_live.available():
+    # Warm the live mesh off the request path. Building it costs a round trip
+    # per station - about six seconds - and the dashboard gives up after eight,
+    # so the first visitor after a restart would have raced it and lost, seeing
+    # the archive and a DEMO badge with a live feed working perfectly behind it.
+    #
+    # Gated on either feed, not on WAQI alone: CPCB's bulletin became the
+    # preferred source and a box configured for CPCB only would have skipped
+    # both the warm and the recorder.
+    if waqi_live.available() or cpcb_live.available():
         try:
-            warm = await asyncio.to_thread(waqi_live.mesh)
+            warm = await asyncio.to_thread(_live_mesh)
             if warm:
                 log.info("live mesh warm: %d stations, %d indexable, as of %s",
                          warm["count"], warm["indexable"], warm["as_of"])
@@ -909,6 +913,34 @@ def _blend(live: dict[str, Any], archive: dict[str, Any] | None) -> dict[str, An
     }
 
 
+def _live_mesh() -> dict[str, Any] | None:
+    """The live mesh the page is served, whichever feed answered.
+
+    Extracted because two callers need the *same* answer and did not have it.
+    `/api/v1/stations` prefers CPCB's bulletin and falls back to WAQI, while the
+    live-history recorder called `waqi_live.mesh()` directly. Once CPCB started
+    answering, the page was drawing CPCB station ids and the recorder was
+    storing WAQI ones, so every history lookup missed and the particulate cards
+    had empty sparklines over a recorder that was faithfully filling up with
+    stations nobody was displaying.
+    """
+    live = None
+    try:
+        live = cpcb_live.mesh()
+    except Exception as exc:  # noqa: BLE001 - WAQI and the archive still stand
+        _log.warning("CPCB bulletin unavailable (%s); trying WAQI", exc)
+
+    try:
+        if live is None or live["indexable"] < MIN_LIVE_STATIONS:
+            live = waqi_live.mesh() or live
+    except Exception as exc:  # noqa: BLE001 - the archive still stands
+        # `_log`, not `log`: this handler runs precisely when the live feed has
+        # failed, and a bare `log` is unbound at module scope, so the fallback
+        # would have raised NameError over the error it exists to report.
+        _log.warning("live mesh unavailable (%s); serving the archive", exc)
+    return live
+
+
 @app.get("/api/v1/stations")
 async def stations(response: Response):
     """
@@ -946,20 +978,7 @@ async def stations(response: Response):
     # bulletin - a whole band, on the pollutant that set the index.
     #
     # Without a data.gov.in key this returns None and nothing changes.
-    live = None
-    try:
-        live = cpcb_live.mesh()
-    except Exception as exc:  # noqa: BLE001 - WAQI and the archive still stand
-        _log.warning("CPCB bulletin unavailable (%s); trying WAQI", exc)
-
-    try:
-        if live is None or live["indexable"] < MIN_LIVE_STATIONS:
-            live = waqi_live.mesh() or live
-    except Exception as exc:  # noqa: BLE001 - the archive still stands
-        # `_log`, not `log`: this handler runs precisely when the live feed has
-        # failed, and a bare `log` is unbound at module scope, so the fallback
-        # would have raised NameError over the error it exists to report.
-        _log.warning("live mesh unavailable (%s); serving the archive", exc)
+    live = _live_mesh()
 
     archive = None
     try:

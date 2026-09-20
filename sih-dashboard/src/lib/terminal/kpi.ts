@@ -57,6 +57,41 @@ function unavailable(label: string, unit: string, color: string): KpiCard {
            basis: 'unavailable', window: 'no data' };
 }
 
+/**
+ * A particulate card, drawn from whatever history exists.
+ *
+ * The sparkline is the city's recorded window: the archive supplies a full 24
+ * hours of it, and a live feed supplies however many hours the backend's
+ * recorder has gathered since it started - CPCB's bulletin carries no history
+ * of its own, so on a fresh box that is one point and it grows hourly.
+ *
+ * The window label follows the series rather than claiming 24 hours over two.
+ * An empty one draws no line at all, which is the honest picture of a feed
+ * whose history has not accumulated yet, and is why the card still shows its
+ * current reading beside it.
+ */
+function particulateCard(
+  label: string,
+  now: { value: number; unit: string; asIndex: boolean } | null,
+  series: number[],
+  color: string,
+  delta: number | null,
+): KpiCard {
+  if (now == null) return unavailable(label, 'µg/m³', color);
+  return {
+    label,
+    value: now.value.toFixed(now.asIndex ? 0 : 1),
+    unit: now.unit,
+    series,
+    color,
+    delta,
+    basis: 'measured',
+    window: series.length >= 24 ? '24h measured'
+          : series.length > 1 ? `${series.length}h recorded`
+          : 'current reading',
+  };
+}
+
 export function useKpiCards(): KpiCard[] {
   // `fresh` is derived from the mesh and is the only station input used here;
   // subscribing to the whole mesh as well would recompute on changes that
@@ -155,30 +190,10 @@ export function useKpiCards(): KpiCard[] {
     })();
 
     return [
-      pm25Now == null
-        ? unavailable('PM2.5', 'µg/m³', SEVERITY.poor)
-        : {
-            label: 'PM2.5',
-            value: pm25Now.value.toFixed(pm25Now.asIndex ? 0 : 1),
-            unit: pm25Now.unit,
-            series: cityHourly('pm25'),
-            color: SEVERITY.poor,
-            delta: measuredDelta,
-            basis: 'measured',
-            window: '24h measured',
-          },
-      pm10Now == null
-        ? unavailable('PM10', 'µg/m³', SEVERITY.moderate)
-        : {
-            label: 'PM10',
-            value: pm10Now.value.toFixed(0),
-            unit: pm10Now.unit,
-            series: cityHourly('pm10'),
-            color: SEVERITY.moderate,
-            delta: null, // the payload carries a station delta, not a per-pollutant one
-            basis: 'measured',
-            window: '24h measured',
-          },
+      particulateCard('PM2.5', pm25Now, cityHourly('pm25'), SEVERITY.poor, measuredDelta),
+      // The payload carries a station-level 24h change, not a per-pollutant
+      // one, so PM10 has no delta to show rather than borrowing PM2.5's.
+      particulateCard('PM10', pm10Now, cityHourly('pm10'), SEVERITY.moderate, null),
       met('Ambient Temp', '°C', SEVERITY.fair, (f) => f.avgTemp, (v) => v.toFixed(1)),
       met('Humidity', '%', TERM.secondary, (f) => f.avgRh ?? NaN, (v) => v.toFixed(0)),
       met('Wind', `km/h ${windDirName}`.trim(), TERM.secondary,
