@@ -470,6 +470,14 @@ class BlendBaselineForecaster:
             return {}, False, meta
         meta["status"] = "observed"
         meta["frp_total_mw"] = round(float(fires["frp"].sum()), 1)
+        # FRP-weighted centroid: where the burning actually is this window, so
+        # the map can draw the inflow from the fires rather than from a literal
+        # someone typed once. Weighted because a hundred smouldering pixels
+        # should not outvote the front that is producing the smoke.
+        w = fires["frp"].to_numpy(dtype=float)
+        if w.sum() > 0:
+            meta["centroid_lat"] = round(float((fires["latitude"] * w).sum() / w.sum()), 4)
+            meta["centroid_lon"] = round(float((fires["longitude"] * w).sum() / w.sum()), 4)
 
         cache: dict[tuple[float, float], tuple] = {}
         per_lead: dict[int, tuple] = {}
@@ -566,6 +574,18 @@ class BlendBaselineForecaster:
             # Otherwise they stay zero - the corridor is quiet, or FIRMS was
             # unreachable. Either way `meta['fires']` says which, and neither
             # is filled in from the mock generator.
+
+        # What share of the forecast PM2.5 the fire plume accounts for. The map
+        # printed "STUBBLE BURNING - 34%" as a literal; this is the same claim
+        # measured, and it moves with the fires and the wind because both
+        # grids do.
+        with np.errstate(invalid="ignore", divide="ignore"):
+            pm_mean = float(np.nanmean(out[:, CH_PM25]))
+            smoke_mean = float(np.nanmean(out[:, CH_SMOKE]))
+        if np.isfinite(pm_mean) and pm_mean > 0 and np.isfinite(smoke_mean):
+            fire_meta["smoke_share_pct"] = round(
+                min(100.0, max(0.0, smoke_mean / pm_mean * 100.0)), 1
+            )
 
         # ── the aerosol-radiation-PBL loop ────────────────────────────────
         # Reported, not applied. The radiative half is computed from the

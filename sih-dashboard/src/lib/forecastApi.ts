@@ -57,6 +57,19 @@ export type ForecastSource = {
   blend_leads?: number;
   cams_only_leads?: number;
   rmse_by_method?: Record<string, number>;
+  /**
+   * Real VIIRS fire pixels over the Punjab/Haryana corridor for this origin,
+   * and what share of the forecast PM2.5 their smoke accounts for. The map's
+   * stubble ribbon is drawn from this instead of from a literal.
+   */
+  fire?: {
+    fires?: number;
+    smoke_share_pct?: number;
+    centroid_lat?: number;
+    centroid_lon?: number;
+    season?: string;
+    status?: string;
+  };
 };
 
 export type LiveForecast = { frames: Frame[]; source: ForecastSource };

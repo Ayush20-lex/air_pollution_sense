@@ -25,11 +25,11 @@ import { useAppStore } from '@/store/useAppStore';
 import {
   NCR_BOUNDS,
   NCR_CENTER,
-  PLUME_SOURCES,
   type Station,
 } from '@/lib/terminal/stations';
 import { stationHour } from '@/lib/terminal/meshApi';
 import { useMesh, useFreshStations, isStale } from '@/lib/terminal/useMesh';
+import { livePlumeSources, shareLabel, useMeasuredWind } from '@/lib/terminal/plumes';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { TERM } from '@/lib/terminal/palette';
 
@@ -554,10 +554,19 @@ function IsoContours({ frame }: { frame: TerminalFrame }) {
  */
 function SourceRibbons() {
   const renderer = React.useMemo(() => L.svg({ padding: 0.4 }), []);
+  // The stubble ribbon is measured when the backend has a wind bearing and a
+  // fire plume; the rest stay the editorial sectors they always were. See
+  // lib/terminal/plumes.
+  const wind = useMeasuredWind(0);
+  const fire = useAppStore((st) => st.source?.fire);
+  const sources = React.useMemo(
+    () => livePlumeSources(wind?.fromDeg ?? null, fire),
+    [wind?.fromDeg, fire],
+  );
 
   const ribbons = React.useMemo(
     () =>
-      PLUME_SOURCES.map((src) => {
+      sources.map((src) => {
         const [aLat, aLng] = src.entry;
         const [bLat, bLng] = src.target;
 
@@ -583,7 +592,7 @@ function SourceRibbons() {
         }
         return { ...src, positions };
       }),
-    [],
+    [sources],
   );
 
   return (
@@ -628,7 +637,7 @@ function SourceRibbons() {
               iconAnchor: [66, 8],
               html:
                 `<span class="term-ribbon-label" style="--c:${r.color}">` +
-                `${r.label.toUpperCase()} · ${r.share}%</span>`,
+                `${r.label.toUpperCase()} · ${shareLabel(r)}</span>`,
             })}
           />
         </React.Fragment>

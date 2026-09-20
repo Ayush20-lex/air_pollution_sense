@@ -4,10 +4,11 @@ import { MeshOdometer, useRollDuration } from '@/components/terminal/MeshOdomete
 import { Label, Meter, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { DISPERSION, type TerminalFrame } from '@/lib/terminal/field';
-import { PLUME_SOURCES, findById } from '@/lib/terminal/stations';
+import { findById } from '@/lib/terminal/stations';
+import { livePlumeSources, shareLabel, useMeasuredWind } from '@/lib/terminal/plumes';
 import { useMesh } from '@/lib/terminal/useMesh';
 import { useTerminalStore } from '@/store/useTerminalStore';
-import { compassName, meanBearing } from '@/lib/terminal/wind';
+import { compassName } from '@/lib/terminal/wind';
 import { useAppStore } from '@/store/useAppStore';
 import { TERM } from '@/lib/terminal/palette';
 
@@ -23,6 +24,12 @@ export function GeoRail({ frame }: { frame: TerminalFrame }) {
 }
 
 function SourceAttribution({ frame }: { frame: TerminalFrame }) {
+  const wind = useMeasuredWind(0);
+  const fire = useAppStore((st) => st.source?.fire);
+  const sources = React.useMemo(
+    () => livePlumeSources(wind?.fromDeg ?? null, fire),
+    [wind?.fromDeg, fire],
+  );
   const measured = useMeasuredWind(frame.offset);
   return (
     <TelemetryCard className="space-y-3 p-5">
@@ -32,15 +39,23 @@ function SourceAttribution({ frame }: { frame: TerminalFrame }) {
       </div>
 
       <div className="space-y-2.5">
-        {PLUME_SOURCES.map((s) => (
+        {sources.map((s) => (
           <div key={s.id}>
             <div className="mb-1 flex items-center justify-between text-xs">
               <span className="flex items-center gap-2">
                 <span className="size-2.5 rounded-full" style={{ background: s.color }} />
                 <span className="font-medium text-term-ink">{s.label}</span>
+                {/* Only one of these four is measured. Without the mark a
+                    reader takes all four for readings, which is the claim the
+                    hardcoded 34% was quietly making. */}
+                {!s.measured && (
+                  <span className="font-mono text-[9px] uppercase tracking-wider text-term-outline">
+                    est.
+                  </span>
+                )}
               </span>
               <span className="font-mono font-bold" style={{ color: s.color }}>
-                {s.share}%
+                {shareLabel(s)}
               </span>
             </div>
             <Meter pct={s.share} color={s.color} />
@@ -169,27 +184,6 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
  * on 19 September it was 153 degrees - south-south-easterly - while the card
  * said north-west and the needle pointed there.
  */
-function useMeasuredWind(offset: number): { fromDeg: number; speedKmh: number } | null {
-  const liveFrames = useAppStore((st) => st.liveFrames);
-  return React.useMemo(() => {
-    const live = liveFrames?.[Math.min(offset, (liveFrames?.length ?? 1) - 1)];
-    if (!live) return null;
-    const cells = Object.values(live.districts);
-    const deg = meanBearing(
-      cells.map((d) => d.windDir).filter((d): d is number => typeof d === 'number'),
-    );
-    if (deg == null) return null;
-    const speeds = cells
-      .map((d) => d.windSpeed)
-      .filter((v): v is number => typeof v === 'number');
-    // The payload is m/s and the card has always been labelled km/h.
-    const speedKmh = speeds.length
-      ? (speeds.reduce((a, b) => a + b, 0) / speeds.length) * 3.6
-      : DISPERSION.windSpeed;
-    return { fromDeg: deg, speedKmh };
-  }, [liveFrames, offset]);
-}
-
 function TrappingDispersion({ frame }: { frame: TerminalFrame }) {
   const measured = useMeasuredWind(frame.offset);
   const rows = [
