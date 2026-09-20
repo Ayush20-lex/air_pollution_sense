@@ -137,14 +137,21 @@ function PollutantCard({
           </span>
         </div>
 
-        <div className="flex items-baseline justify-between">
-          <span className="font-display text-3xl font-extrabold text-term-ink">
+        {/* Label under the number, not beside it.
+            Eight of these cards share a row, so each is narrow, and the widest
+            label - "CPCB sub-index (100 = the standard)" - does not fit next to
+            a three-digit figure at this size. Side by side, `justify-between`
+            forced them onto one line anyway: the label broke mid-phrase and its
+            column overlapped the number by 24px. Stacking costs one line and
+            holds at any width. */}
+        <div className="space-y-0.5">
+          <span className="block font-display text-3xl font-extrabold leading-none text-term-ink">
             {/* CPCB's bulletin publishes the sub-index without the
                 concentration behind it, so the card leads with whichever it
                 actually has rather than inverting one out of the other. */}
             {!p.measured ? '—' : p.value != null ? p.value.toFixed(p.value < 10 ? 1 : 0) : p.subIndex}
           </span>
-          <span className="font-mono text-xs text-term-ink-variant">
+          <span className="block font-mono text-[11px] leading-tight text-term-ink-variant">
             {p.value != null ? p.unit : 'CPCB sub-index'}{' '}
             <span className="font-normal text-term-outline">
               {p.value != null ? `(Ref: ${p.reference})` : '(100 = the standard)'}
