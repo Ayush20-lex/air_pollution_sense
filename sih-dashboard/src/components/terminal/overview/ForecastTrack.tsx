@@ -113,15 +113,21 @@ export function ForecastTrack({
     <div id="analytics" className="space-y-3">
       <SectionHead
         title="72-Hour Forecast"
-        sub={`Composite AQI across the mesh, ${TICK_HOURS}-hourly · ${
-          source?.method ?? 'blend(diurnal_persistence, cams_bias)'
-        }`}
+        // The method expression - blend(diurnal_persistence, cams_bias) - was
+        // the whole subtitle. It names the algorithm to someone who already
+        // knows it and tells everyone else nothing about what the chart shows.
+        // The plain sentence goes here; the method is still on the page, in
+        // the footnote where a reader who wants it will look.
+        sub="What the air is expected to do over the next three days. Higher is worse."
         right={
           <span className="flex items-center gap-3 font-mono text-xs uppercase tracking-wider text-term-ink-variant">
             {blendLeads > 0 ? (
               <span className="flex items-center gap-1.5">
                 <span className="h-0.5 w-4" style={{ background: TERM.primary }} />
-                blend {rmse.blend ? `· ${rmse.blend}` : ''}
+                {/* Units matter here more than anywhere on the page: the axis
+                    is AQI and this figure is PM2.5 in ug/m3, so printing the
+                    bare number beside an AQI chart read as "+/- 62 AQI". */}
+                anchored to readings{rmse.blend ? ` · typically off by ${Math.round(rmse.blend)} ug/m3` : ''}
               </span>
             ) : null}
             {camsLeads > 0 ? (
@@ -132,7 +138,7 @@ export function ForecastTrack({
                     backgroundImage: `repeating-linear-gradient(90deg, ${TERM.secondary} 0 4px, transparent 4px 7px)`,
                   }}
                 />
-                CAMS only {rmse.cams_only ? `· ${rmse.cams_only}` : ''}
+                model only{rmse.cams_only ? ` · typically off by ${Math.round(rmse.cams_only)} ug/m3` : ''}
               </span>
             ) : null}
           </span>
@@ -159,6 +165,46 @@ export function ForecastTrack({
               />
             );
           })}
+
+          {/* The band's own name, on the band. The footer listed them in order
+              and left the reader to map four words onto four stripes by
+              counting; naming each one in place removes that step. Drawn only
+              where the stripe is tall enough to hold the text. */}
+          {AQI_RAMP.map((b) => {
+            const top = y(Math.min(b.to, maxAqi));
+            const bottom = y(Math.min(b.from, maxAqi));
+            if (bottom - top < 16) return null;
+            return (
+              <text
+                key={`bl-${b.label}`}
+                x={w - 12}
+                y={(top + bottom) / 2 + 3}
+                textAnchor="end"
+                fontSize="9"
+                fill={b.color}
+                opacity={0.75}
+                fontFamily="var(--font-mono), monospace"
+                letterSpacing="0.08em"
+              >
+                {b.label.toUpperCase()}
+              </text>
+            );
+          })}
+
+          {/* The axis had numbers and no name, so 301 could have been anything.
+              AQI is the one word that makes the whole scale legible. */}
+          <text
+            x={10}
+            y={padT + (h - padT - padB) / 2}
+            transform={`rotate(-90 10 ${padT + (h - padT - padB) / 2})`}
+            textAnchor="middle"
+            fontSize="9"
+            fill={TERM.inkVariant}
+            fontFamily="var(--font-mono), monospace"
+            letterSpacing="0.12em"
+          >
+            AQI
+          </text>
 
           {/* y gridlines at the band edges, which are the numbers that matter */}
           {AQI_RAMP.map((b) =>
@@ -255,13 +301,18 @@ export function ForecastTrack({
           {reduced ? null : (
             <circle
               className="forecast-runner"
-              r="4"
+              // Was r=4 at 0.55 opacity in neutral ink, crossing 72 hours in
+              // 2.4s. It was moving the whole time and read as a static dot:
+              // too small, too faint, and too fast to follow. Bigger, brighter
+              // and slower, with the halo below, so the eye can actually track
+              // it along the line.
+              r="5.5"
               // Neutral, not a method colour. The runner carries no reading -
               // it is a sweep - and painting it `primary` made it read as a
               // blend marker while riding a track that was CAMS-only end to
               // end, which is a claim about provenance made by decoration.
               fill={TERM.ink}
-              opacity="0.55"
+              opacity="0.95"
               // Must be the origin. `animateMotion` translates an element from
               // wherever it already sits, so a cx/cy here is added on top of
               // the path's own absolute coordinates and the origin is counted
@@ -271,10 +322,32 @@ export function ForecastTrack({
               cy={0}
             >
               <animateMotion
-                dur="2.4s"
+                dur="6s"
                 repeatCount="indefinite"
                 path={path(points)}
                 rotate="auto"
+              />
+            </circle>
+          )}
+
+          {/* A halo riding the same path, pulsing as it goes. The sweep has to
+              be visible at a glance from across a room during a demo, and one
+              small dot is not. It carries no reading - same neutral ink as the
+              runner - so it cannot be mistaken for a value. */}
+          {reduced ? null : (
+            <circle r="11" fill="none" stroke={TERM.ink} strokeWidth="1.5" opacity="0.28" cx={0} cy={0}>
+              <animateMotion dur="6s" repeatCount="indefinite" path={path(points)} />
+              <animate
+                attributeName="r"
+                values="7;13;7"
+                dur="1.5s"
+                repeatCount="indefinite"
+              />
+              <animate
+                attributeName="opacity"
+                values="0.35;0.05;0.35"
+                dur="1.5s"
+                repeatCount="indefinite"
               />
             </circle>
           )}
@@ -324,14 +397,14 @@ export function ForecastTrack({
 
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-term-outline-variant/40 pt-2">
           <Label>
-            {AQI_RAMP.map((b) => b.label).slice(0, 4).join(' · ')} — bands shown as background
+            Each point is the AQI expected at that hour · colour bands are CPCB categories
           </Label>
           <Label>
             {blendLeads > 0 && camsLeads > 0
-              ? `${blendLeads}h blended with measurements, ${camsLeads}h on CAMS alone`
+              ? `Solid: ${blendLeads}h anchored to yesterday's measurements. Dashed: ${camsLeads}h from the CAMS model alone, which is less accurate.`
               : camsLeads > 0
-                ? 'Every hour on CAMS alone — no measured day behind this origin yet'
-                : 'Every hour blended with measurements'}
+                ? 'Dashed throughout: no measured day sits behind this forecast yet, so every hour comes from the CAMS model alone — less accurate than an anchored hour.'
+                : 'Solid throughout: every hour is anchored to a measured day.'}
           </Label>
         </div>
       </TelemetryCard>
