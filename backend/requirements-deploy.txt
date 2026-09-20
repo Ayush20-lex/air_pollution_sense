@@ -37,3 +37,10 @@ shapely>=2.0.4
 
 pydantic>=2.7.4
 pydantic-settings>=2.3.4
+
+# waqi_live and cpcb_live both import it at module level, and api_server
+# imports them, so the service cannot start without it. Its absence was
+# invisible for as long as no host was built from this file alone - the old
+# box had it pulled in by something in the full requirements.txt - and it
+# stopped a clean deploy at the first import.
+requests>=2.31.0
