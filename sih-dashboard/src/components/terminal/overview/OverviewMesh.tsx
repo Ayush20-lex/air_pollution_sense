@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, CircleAlert, Info } from 'lucide-react';
 import { Delta, Label, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { GrapPanel } from './GrapPanel';
 import { InversionPanel } from './InversionPanel';
+import { MetSourcePanel } from './MetSourcePanel';
 import { useAdvisories } from '@/lib/terminal/advisories';
 import { POLLUTANTS } from '@/lib/terminal/content';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
@@ -120,6 +121,11 @@ function IncidentBanners() {
       {/* The mechanism behind the stage above it: GRAP says what to do, this
           says why the air is about to do what it does. */}
       <InversionPanel />
+
+      {/* The meteorology the project reads but does not forecast from, and
+          whether that file is still current. It is expired as this ships, which
+          is precisely why it belongs on screen. */}
+      <MetSourcePanel />
 
       <SectionHead
         title="Incident &amp; Anomaly Warnings"
