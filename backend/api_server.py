@@ -54,6 +54,7 @@ import waqi_live
 import cpcb_live
 import live_history
 import firms_fire
+import coupled_feedback
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────
@@ -577,6 +578,10 @@ async def model_status():
             # Read-only side channel from the partner ingestion pipeline. It
             # feeds no forecast: the blend baseline is validated at 62.23 and
             # adding an input would invalidate that number.
+            # The two-way loop the problem statement is built around. Computed
+            # from the forecast's own aerosol and reported; it does not move the
+            # published PM2.5, and describe() says why.
+            "aerosol_pbl_coupling": coupled_feedback.describe(),
             "noaa_gfs": gfs_reader.describe(),
             "station_mesh": station_registry.describe(
                 get_settings().baseline_season, _mesh_origin()

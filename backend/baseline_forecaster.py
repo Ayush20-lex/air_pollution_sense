@@ -567,6 +567,23 @@ class BlendBaselineForecaster:
             # unreachable. Either way `meta['fires']` says which, and neither
             # is filled in from the mock generator.
 
+        # ── the aerosol-radiation-PBL loop ────────────────────────────────
+        # Reported, not applied. The radiative half is computed from the
+        # forecast's own PM2.5, so it says what today's aerosol is doing to
+        # sunlight and to the boundary layer; the PM2.5 response stays off
+        # because the blend is built from observations that already happened
+        # under it. 20_score_coupling.py is why: turning it on costs 1.51 ug/m3
+        # of RMSE and is beaten there by a single multiplication.
+        try:
+            import coupled_feedback
+            cpl = coupled_feedback.couple(
+                out[:, CH_PM25], out[:, CH_SOLAR], out[:, CH_PBL], out[:, CH_TEMP],
+            )
+            coupling_meta = {**cpl.summary(), **coupled_feedback.describe()}
+        except Exception as exc:  # noqa: BLE001 - a diagnostic, never the forecast
+            logger.warning("coupling diagnostic unavailable (%s)", exc)
+            coupling_meta = {"available": False, "reason": str(exc)}
+
         out /= CHANNEL_NORMS[None, :, None, None]
 
         n_blend = lead_methods.count("blend") + lead_methods.count("blend_live")
@@ -588,6 +605,7 @@ class BlendBaselineForecaster:
             # keep working.
             "synthetic_channels": [] if fires_real else SYNTHETIC_CHANNELS,
             "fire": fire_meta,
+            "coupling": coupling_meta,
             # Per lead, so the UI can mark where the validated figure stops
             # applying rather than printing one number over all 72 hours.
             "lead_methods": lead_methods,
