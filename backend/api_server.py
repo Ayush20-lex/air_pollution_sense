@@ -344,6 +344,12 @@ class StationForecast(BaseModel):
     unit: str
     values: list[float]           # 72 hourly values
     timestamps: list[str]
+    #: The same forecast expressed as a CPCB sub-index, or null per hour where
+    #: one cannot be computed. See `_forecast_sub_indices`.
+    sub_index_series: list[int | None] | None = None
+    #: Why the series looks the way it does - the averaging window, or why the
+    #: channel has no sub-index at all.
+    sub_index_note: str | None = None
 
 
 class InversionAlert(BaseModel):
@@ -681,6 +687,49 @@ async def forecast_grid(
     return Response(content=body, media_type="application/json", headers={"X-Cache": "MISS"})
 
 
+
+#: Forecast channel -> the pollutant CPCB indexes under that name.
+#:
+#: `nox` is deliberately absent. The channel is oxides of nitrogen and CPCB's
+#: ladder is for NO2 specifically; they are not the same quantity and running
+#: one through the other's breakpoints would produce a number that looks like a
+#: sub-index and is not one. The card says "no CPCB sub-index" instead.
+_CHANNEL_POLLUTANT: dict[str, str] = {"pm25": "pm25", "pm10": "pm10", "o3": "o3"}
+
+
+def _forecast_sub_indices(channel: str, values: list[float]) -> tuple[list[int | None] | None, str | None]:
+    """The forecast as a rolling CPCB sub-index, hour by hour.
+
+    The pollutant cards read in sub-index, not concentration - CPCB's bulletin
+    publishes the index and withholds the concentration behind it, so that is
+    the only quantity the measured half of the chart has. The forecast is in
+    ug/m3. Drawing the two on one axis without converting would put a
+    concentration beside an index and, for PM2.5 below about 60, the two run
+    close enough together that the mistake would look right.
+
+    So the conversion happens here, using `aqi_cpcb`'s own ladder rather than a
+    second copy of the breakpoints, and on the pollutant's own averaging window:
+    24 hours for the particulates, a trailing 8 for ozone.
+
+    The first hours of the horizon have no complete window behind them - the
+    hours that would fill it sit before the origin - so they come back null.
+    That is the honest answer and the chart already draws a null as a break
+    rather than inventing a point.
+    """
+    pollutant = _CHANNEL_POLLUTANT.get(channel)
+    if pollutant is None:
+        return None, f"{channel.upper()} has no CPCB sub-index"
+
+    window = aqi_cpcb.AVERAGING_HOURS[pollutant]
+    out: list[int | None] = []
+    for i in range(len(values)):
+        if i + 1 < window:
+            out.append(None)
+            continue
+        avg, _n_valid = aqi_cpcb.window_average(pollutant, values[i + 1 - window : i + 1])
+        out.append(None if avg is None else aqi_cpcb.sub_index(pollutant, avg))
+    return out, f"CPCB sub-index on a rolling {window}h mean"
+
 @app.get("/api/v1/forecast/station/{station_id}", response_model=StationForecast)
 async def forecast_station(
     station_id: str,
@@ -721,13 +770,17 @@ async def forecast_station(
         for t in range(N_STEPS)
     ]
 
+    values = [round(float(v) * ch_norms[channel], 2) for v in series]
+    sub_series, sub_note = _forecast_sub_indices(ch_names[channel], values)
     result = StationForecast(
         station_id=station_id,
         lat=lat, lon=lon,
         channel=ch_names[channel],
         unit=ch_units[channel],
-        values=[round(float(v) * ch_norms[channel], 2) for v in series],
+        values=values,
         timestamps=timestamps,
+        sub_index_series=sub_series,
+        sub_index_note=sub_note,
     )
     _cache_set(cache_key, result)
     return result
