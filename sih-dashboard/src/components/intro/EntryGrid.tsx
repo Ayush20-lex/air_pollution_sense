@@ -5,6 +5,7 @@ import { ScanButton } from './ScanButton';
 import { ALERT_COLOR, aqiColor, bandForPm25 } from '@/lib/aqi';
 import { FORECAST_HOURS, MODEL_META, type Frame } from '@/lib/data';
 import { useMesh } from '@/lib/terminal/useMesh';
+import { useAppStore } from '@/store/useAppStore';
 import { INCIDENTS, POLLUTANTS } from '@/lib/terminal/content';
 import { cn } from '@/lib/utils';
 
@@ -112,6 +113,9 @@ export function EntryGrid({
   scanning: boolean;
 }) {
   const mesh = useMesh();
+  // Null until the backend answers; MODEL_META carries the same figure as the
+  // fallback so the panel never shows a blank where a number belongs.
+  const source = useAppStore((st) => st.source);
   const band = bandForPm25(frame.avgPm25);
 
   return (
@@ -164,9 +168,17 @@ export function EntryGrid({
           <h3 className="mt-3 font-mono text-base font-bold uppercase leading-tight tracking-[0.1em] text-ink sm:text-lg">
             Open the <span className="text-accent">live terminal</span>
           </h3>
+          {/* This sentence used to claim a WRF-Chem run on a nested 3 km
+              domain. It is the first line anyone reads and it described a
+              system nobody built; see MODEL_META. The RMSE is taken from the
+              backend when it has answered, so the figure on the landing panel
+              is the one the forecast was actually scored at rather than a
+              number typed beside it. */}
           <p className="mt-2 max-w-md text-pretty text-sm leading-relaxed text-muted">
-            {MODEL_META.model} on a {MODEL_META.resolution} grid, {MODEL_META.cycle} cycle,{' '}
-            {FORECAST_HOURS}-hour horizon.
+            {FORECAST_HOURS}-hour PM2.5 forecast for Delhi NCR on a{' '}
+            {MODEL_META.resolution} grid, scored at{' '}
+            {(source?.validated_rmse_ugm3 ?? MODEL_META.validatedRmse).toFixed(2)} µg/m³
+            against a held-out window. Current conditions are measured, live.
           </p>
         </div>
         <div>

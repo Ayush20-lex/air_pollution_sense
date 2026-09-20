@@ -420,14 +420,36 @@ export function autoAnalysis(frame: Frame, iv: Interventions): Analysis[] {
   return out;
 }
 
+/**
+ * What this system actually is.
+ *
+ * Every field here was a claim about a system nobody built. It read
+ * "WRF-CHEM COUPLED V4.2 ... ARW / RADM2-MADE-SORGAM ... 3 km x 3 km nested
+ * (d03) ... NCUM-G 12 km + IMD AWS assimilation", with a confidence of 91% and
+ * 1,284 observations assimilated - and it was printed on the landing panel,
+ * which is the first thing anyone reads.
+ *
+ * None of it was true. There is no WRF-Chem run, no nested domain, no
+ * assimilation, and the two numbers were invented. The problem statement asks
+ * for exactly that model, so the page was claiming the one thing the project
+ * does not have, to the people best placed to ask about it.
+ *
+ * What it does have is a blend baseline scored at RMSE 62.23 ug/m3 over a
+ * held-out window, on a 1 km grid, with a real aerosol-radiation-PBL diagnostic
+ * and real VIIRS fire input. That is a weaker claim and a defensible one, and
+ * the numbers below can be checked against /api/v1/status.
+ *
+ * `latencyMs`, `confidence` and `assimilated` are gone rather than corrected:
+ * there is nothing to correct them to, and leaving plausible keys in place is
+ * how an invented number ends up back on screen.
+ */
 export const MODEL_META = {
-  model: 'WRF-CHEM COUPLED V4.2',
-  core: 'ARW / RADM2-MADE-SORGAM',
-  resolution: '3 km × 3 km nested (d03)',
-  ic: 'NCUM-G 12 km + IMD AWS assimilation',
-  emissions: 'SAFAR-2024 + VIIRS FRP burn detects',
-  cycle: '00Z',
-  latencyMs: 340,
-  confidence: 91,
-  assimilated: 1284,
+  model: 'BLEND BASELINE · DIURNAL PERSISTENCE + BIAS-CORRECTED CAMS',
+  core: 'Aerosol-radiation-PBL coupling diagnostic (SAFAR constants)',
+  resolution: '1 km × 1 km (70 × 80 cells)',
+  ic: 'CPCB/OpenAQ observations + CAMS reanalysis + archived ERA5 meteorology',
+  emissions: 'NASA VIIRS active fire detections (Punjab/Haryana corridor)',
+  /** The archive window replayed, not an NWP cycle - see the note above. */
+  cycle: 'archive replay',
+  validatedRmse: 62.23,
 };

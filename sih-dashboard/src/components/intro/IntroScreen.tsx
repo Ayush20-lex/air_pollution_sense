@@ -299,8 +299,11 @@ export function IntroScreen() {
               {provenance.label}
             </Badge>
           </span>
+          {/* Was "00Z cycle", which is what an NWP run issues. This system
+              replays a scored archive window; calling that a 00Z cycle
+              borrowed the vocabulary of a model it does not run. */}
           <Badge color={SEVERITY.good} dot className="hidden md:inline-flex">
-            {MODEL_META.cycle} cycle
+            {MODEL_META.cycle}
           </Badge>
           <span className="hidden font-mono text-2xs tabular-nums text-muted sm:inline">
           {clock} IST
