@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, CircleAlert, Info } from 'lucide-react';
 import { Delta, Label, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { GrapPanel } from './GrapPanel';
+import { InversionPanel } from './InversionPanel';
 import { INCIDENTS, POLLUTANTS } from '@/lib/terminal/content';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { bySeverity } from '@/lib/terminal/stations';
@@ -118,6 +119,10 @@ function IncidentBanners() {
           counts. It stays for now because the panel would otherwise be bare,
           and it is labelled so it cannot be read as a live feed. */}
       <GrapPanel />
+
+      {/* The mechanism behind the stage above it: GRAP says what to do, this
+          says why the air is about to do what it does. */}
+      <InversionPanel />
 
       <SectionHead
         title="Real-Time Incident &amp; Anomaly Warnings"
