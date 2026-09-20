@@ -24,6 +24,7 @@ from functools import lru_cache
 from typing import Any
 
 import numpy as np
+import pandas as pd
 import torch
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,6 +50,7 @@ from coupled_model import (
 from physics_loss import compute_isi
 from grap_policy import calculate_indian_aqi_pm25, evaluate_grap_stage
 import gfs_reader
+import aqi_cpcb
 import station_registry
 import waqi_live
 import cpcb_live
@@ -1058,6 +1060,110 @@ async def stations(response: Response):
         response.status_code = 204
         return None
     return data
+
+
+@app.get("/api/v1/history/city")
+async def history_city(days: int = Query(default=30, ge=1, le=365)):
+    """Daily city PM2.5 and AQI from the archive, oldest first.
+
+    The dashboard carried two literals that both wanted this: a 30-day exposure
+    histogram - days spent in each CPCB band - and a "temporal trend" line. The
+    archive has held a year of observations the whole time and nothing served
+    them.
+
+    A day's figure is built the way CPCB builds one: each station's own 24-hour
+    mean, then the mean across stations. Averaging every hourly reading in one
+    pass would weight a station that reported all 24 hours the same as one that
+    reported six, and the network's coverage is not uniform.
+
+    Unfilled observations are used. The forecaster forward-fills for its own
+    grid, and a filled hour is a copy of an earlier one - counting it here would
+    let a dead station vote on a day it never measured. `coverage` reports how
+    much of each day was real so a reader can discount a thin one.
+    """
+    cfg = get_settings()
+    cache_key = f"history:city:{days}"
+    cached = _cache_get(cache_key, 900)
+    if cached:
+        return cached
+
+    try:
+        from baseline_forecaster import get_forecaster
+        fc = get_forecaster(cfg.baseline_season)
+    except Exception as exc:  # noqa: BLE001 - no archive, no history
+        _log.warning("history unavailable (%s)", exc)
+        raise HTTPException(status_code=503, detail="archive unavailable") from exc
+
+    # A day the network barely reported is not a measurement of that day. The
+    # archive's newest day is usually partial - 2.8% of its station-hours when
+    # this was written, from five stations - and drawn on a trend line beside
+    # days at 88% it reads as a real swing rather than a thin sample.
+    MIN_DAY_COVERAGE = 20.0
+
+    times = pd.DatetimeIndex(fc.times)
+    obs = fc._obs_raw                                   # (T, S), unfilled
+    # Local days, because "a day of exposure" is a day where the reader lives.
+    local = times.tz_convert("Asia/Kolkata")
+    frame = pd.DataFrame({"day": local.date})
+    out: list[dict[str, Any]] = []
+    thin = 0
+
+    for day, idx in frame.groupby("day").groups.items():
+        rows = obs[np.asarray(idx, dtype=int)]
+        if rows.size == 0:
+            continue
+        finite = np.isfinite(rows)
+        # Stations with nothing that day are excluded before the mean rather
+        # than nan-meaned, which keeps numpy from warning on an empty slice.
+        keep = finite.any(axis=0)
+        if not keep.any():
+            continue
+        with np.errstate(invalid="ignore"):
+            per_station = np.nanmean(
+                np.where(finite[:, keep], rows[:, keep], np.nan), axis=0
+            )
+        valid = per_station[np.isfinite(per_station)]
+        if valid.size == 0:
+            continue
+        pm = float(valid.mean())
+        coverage = round(float(finite.mean()) * 100, 1)
+        if coverage < MIN_DAY_COVERAGE:
+            thin += 1
+            continue
+        idx_val = aqi_cpcb.sub_index("pm25", pm)
+        out.append({
+            "date": str(day),
+            "pm25": round(pm, 1),
+            "aqi": idx_val,
+            "band": aqi_cpcb.category_for(idx_val) if idx_val is not None else None,
+            "stations": int(valid.size),
+            # Share of the day's station-hours that were actually reported.
+            "coverage_pct": coverage,
+        })
+
+    out = out[-days:]
+    bands: dict[str, int] = {}
+    for d in out:
+        if d["band"]:
+            bands[d["band"]] = bands.get(d["band"], 0) + 1
+
+    payload = {
+        "days": out,
+        "band_days": bands,
+        "window_days": len(out),
+        # Reported rather than hidden: a reader comparing this to a 30-day
+        # request should be able to see why it is shorter.
+        "days_excluded_thin": thin,
+        "min_coverage_pct": MIN_DAY_COVERAGE,
+        "season": cfg.baseline_season,
+        "index": "CPCB National AQI (2014), PM2.5 sub-index",
+        "note": (
+            "Each day is the mean across stations of each station's own 24-hour "
+            "mean, from unfilled observations."
+        ),
+    }
+    _cache_set(cache_key, payload)
+    return payload
 
 
 @app.get("/api/v1/met/gfs")
