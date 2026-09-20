@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Label, SectionHead, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
-import { EXPOSURE_HISTORY, STRESSORS, TEMPORAL_TRACE } from '@/lib/terminal/content';
+import { EXPOSURE_HISTORY, TEMPORAL_TRACE } from '@/lib/terminal/content';
+import { isLive, useFreshStations } from '@/lib/terminal/useMesh';
 import { POLLUTANTS } from '@/lib/terminal/content';
 import { cn } from '@/lib/utils';
 import { ForecastTrack, type ForecastPoint } from './ForecastTrack';
@@ -130,30 +131,79 @@ function TemporalTrend() {
   );
 }
 
+/**
+ * Which pollutant is driving the index, measured across the mesh.
+ *
+ * STRESSORS in ./content was five literals - 38/24/14/11/13 - summing neatly
+ * to a hundred under a heading that said "share of composite index". The mesh
+ * has said which pollutant sets each station's AQI all along: CPCB's index is
+ * the worst of the sub-indices, and `prominent_pollutant` names the one
+ * responsible. Counting stations by that is the same question, answered.
+ *
+ * It is a share of STATIONS, not a share of the index, and the label says so.
+ * Sub-indices are not additive - three pollutants at 100 do not make 300 - so
+ * a percentage "of the composite index" was never a quantity that existed.
+ */
+function useStressors(): { label: string; share: number; color: string; count: number }[] {
+  const stations = useFreshStations();
+  return React.useMemo(() => {
+    const live = stations.filter(isLive);
+    if (!live.length) return [];
+    const counts = new Map<string, number>();
+    for (const st of live) counts.set(st.dominant, (counts.get(st.dominant) ?? 0) + 1);
+    const palette: Record<string, string> = {
+      'PM2.5': TERM_SEVERITY.high,
+      PM10: TERM_SEVERITY.caution,
+      O3: TERM.secondary,
+      NO2: TERM.tertiary,
+      SO2: TERM.outline,
+    };
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, count]) => ({
+        label,
+        count,
+        share: (count / live.length) * 100,
+        color: palette[label] ?? TERM.outline,
+      }));
+  }, [stations]);
+}
+
 function StressorDonut() {
-  const total = STRESSORS.reduce((sum, s) => sum + s.share, 0);
+  const stressors = useStressors();
+  const total = stressors.reduce((sum, s) => sum + s.share, 0) || 1;
   const r = 62;
   const c = 2 * Math.PI * r;
+
+  if (!stressors.length) {
+    return (
+      <TelemetryCard className="flex items-center justify-center p-5 lg:col-span-4">
+        <span className="font-mono text-xs text-term-outline">
+          No indexable stations — nothing to attribute
+        </span>
+      </TelemetryCard>
+    );
+  }
 
   return (
     <TelemetryCard className="space-y-4 p-5 lg:col-span-4">
       <div>
-        <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Stressor Contribution</h3>
-        <Label>Share of composite index</Label>
+        <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Dominant Stressor</h3>
+        <Label>Share of reporting stations each pollutant leads</Label>
       </div>
 
       <div className="flex items-center justify-center">
         <div className="relative size-44">
           <svg viewBox="0 0 160 160" className="size-full -rotate-90" aria-hidden="true">
             <circle cx="80" cy="80" r={r} fill="none" stroke={TERM.surfaceRaised} strokeWidth="18" />
-            {STRESSORS.map((s, i) => {
+            {stressors.map((s, i) => {
               const len = (s.share / total) * c;
               const dash = `${len} ${c - len}`;
               // Offset is the arc length of everything before this segment.
               // Derived rather than accumulated into a closure variable: a
               // render that runs the map twice would otherwise double every
               // offset and scramble the ring.
-              const offset = -STRESSORS.slice(0, i).reduce((a, x) => a + (x.share / total) * c, 0);
+              const offset = -stressors.slice(0, i).reduce((a, x) => a + (x.share / total) * c, 0);
               return (
                 <circle
                   key={s.label}
@@ -170,21 +220,23 @@ function StressorDonut() {
             })}
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-display text-3xl font-extrabold text-term-ink">{STRESSORS[0].share}%</span>
-            <Label>PM2.5 lead</Label>
+            <span className="font-display text-3xl font-extrabold text-term-ink">
+              {stressors[0].share.toFixed(0)}%
+            </span>
+            <Label>{stressors[0].label} leads</Label>
           </div>
         </div>
       </div>
 
       <ul className="space-y-1.5 border-t border-term-outline-variant/40 pt-3">
-        {STRESSORS.map((s) => (
+        {stressors.map((s) => (
           <li key={s.label} className="flex items-center justify-between font-mono text-xs">
             <span className="flex items-center gap-2 text-term-ink-variant">
               <span className="size-2.5 rounded-full" style={{ background: s.color }} />
               {s.label}
             </span>
             <span className="font-bold tabular-nums" style={{ color: s.color }}>
-              {s.share}%
+              {s.count} · {s.share.toFixed(0)}%
             </span>
           </li>
         ))}

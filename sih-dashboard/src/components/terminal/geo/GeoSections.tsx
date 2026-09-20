@@ -5,7 +5,7 @@ import { AnimatedNumber, useRollDuration } from '@/components/terminal/MeshOdome
 import { useAdvisories } from '@/lib/terminal/advisories';
 import type { LiveStation } from '@/lib/terminal/meshApi';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
-import { DISPERSION, nodeSeries, type TerminalFrame } from '@/lib/terminal/field';
+import { DISPERSION, type TerminalFrame } from '@/lib/terminal/field';
 import { bySeverity, zoneSummary } from '@/lib/terminal/stations';
 import { useMesh } from '@/lib/terminal/useMesh';
 import { cn } from '@/lib/utils';
@@ -141,13 +141,26 @@ function MeshRanking({ frame }: { frame: TerminalFrame }) {
                   {s.zone} • {s.agency}
                 </Label>
               </span>
-              <Spark
-                values={nodeSeries(i + 7, sample.aqi)}
-                color={color}
-                width={48}
-                height={16}
-                className="hidden h-4 w-12 shrink-0 sm:block"
-              />
+              {/* The station's own recorded window. This was nodeSeries(i + 7,
+                  aqi) - a linear congruential generator seeded on the row
+                  index, so the shape of a node's "trend" was decided by where
+                  it happened to sort. A station with no history yet draws
+                  nothing rather than a line that means nothing. */}
+              {(() => {
+                const hourly = 'hourly' in s ? (s.hourly?.pm25 ?? []) : [];
+                const pts = hourly.filter((v): v is number => v != null);
+                return pts.length > 1 ? (
+                  <Spark
+                    values={pts}
+                    color={color}
+                    width={48}
+                    height={16}
+                    className="hidden h-4 w-12 shrink-0 sm:block"
+                  />
+                ) : (
+                  <span className="hidden h-4 w-12 shrink-0 sm:block" />
+                );
+              })()}
               <span className="w-10 shrink-0 text-right font-mono text-sm font-bold" style={{ color }}>
                 <AnimatedNumber value={sample.aqi} duration={rollMs} />
               </span>
