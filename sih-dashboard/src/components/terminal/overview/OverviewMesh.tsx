@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, CircleAlert, Info } from 'lucide-react';
 import { Delta, Label, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
+import { GrapPanel } from './GrapPanel';
 import { INCIDENTS, POLLUTANTS } from '@/lib/terminal/content';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { bySeverity } from '@/lib/terminal/stations';
@@ -111,7 +112,21 @@ const LEVEL_STYLE = {
 function IncidentBanners() {
   return (
     <div id="alerts" className="space-y-3">
-      <SectionHead title="Real-Time Incident &amp; Anomaly Warnings" />
+      {/* The real advisory first. Everything below it is a hand-written
+          scenario: INCIDENTS in lib/terminal/content carries fixed timestamps
+          and a fixed affected area, and it is what the "3 PENDING" badge
+          counts. It stays for now because the panel would otherwise be bare,
+          and it is labelled so it cannot be read as a live feed. */}
+      <GrapPanel />
+
+      <SectionHead
+        title="Real-Time Incident &amp; Anomaly Warnings"
+        right={
+          <span className="rounded border border-term-outline-variant/60 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-term-outline">
+            illustrative scenarios
+          </span>
+        }
+      />
       <div className="space-y-3">
         {INCIDENTS.map((a) => {
           const style = LEVEL_STYLE[a.level];
