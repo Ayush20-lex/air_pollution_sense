@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Label, SectionHead, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
-import { EXPOSURE_HISTORY, TEMPORAL_TRACE } from '@/lib/terminal/content';
+import { BAND_ORDER, fetchCityHistory, type CityHistory } from '@/lib/historyApi';
+import { SEVERITY } from '@/lib/tokens';
 import { isLive, useFreshStations } from '@/lib/terminal/useMesh';
 import { POLLUTANTS } from '@/lib/terminal/content';
 import { cn } from '@/lib/utils';
@@ -9,6 +10,26 @@ import { useAppStore } from '@/store/useAppStore';
 import { TERM, TERM_SEVERITY } from '@/lib/terminal/palette';
 
 const TIMEFRAMES = ['24H', '7D', '30D', '90D'] as const;
+
+/**
+ * The archive's daily city history, shared by the exposure histogram and the
+ * temporal trend so the two cannot describe different months.
+ */
+function useCityHistory(days = 30): CityHistory | null {
+  const [data, setData] = React.useState<CityHistory | null>(null);
+  React.useEffect(() => {
+    let alive = true;
+    void fetchCityHistory(days).then((d) => {
+      if (alive && d) setData(d);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [days]);
+  return data;
+}
+
+
 
 /** Temporal trend + stressor donut, then the multi-pollutant correlator. */
 export function OverviewAnalytics() {
@@ -48,16 +69,53 @@ function ForecastPanel() {
   return <ForecastTrack points={points} source={source} />;
 }
 
+/** How many days of archive each timeframe asks for. */
+const RANGE_DAYS: Record<string, number> = { '24H': 7, '7D': 7, '30D': 30, '90D': 90 };
+
 function TemporalTrend() {
-  const [range, setRange] = React.useState<(typeof TIMEFRAMES)[number]>('24H');
+  const [range, setRange] = React.useState<(typeof TIMEFRAMES)[number]>('30D');
+
+  // The buttons used to redraw the same twenty-four constants whatever was
+  // pressed. Each now asks the archive for its own window, so they differ.
+  const history = useCityHistory(RANGE_DAYS[range] ?? 30);
+  const series = (history?.days ?? [])
+    .map((d) => d.aqi)
+    .filter((v): v is number => v != null);
 
   const w = 720;
   const h = 260;
-  const max = 200;
-  const x = (i: number) => (i / (TEMPORAL_TRACE.length - 1)) * w;
+  // Scaled to the data with a floor at the Moderate boundary, so a calm month
+  // does not fill the card and look alarming.
+  const max = Math.max(200, ...series);
+  const x = (i: number) => (i / Math.max(series.length - 1, 1)) * w;
   const y = (v: number) => h - (v / max) * h;
-  const line = TEMPORAL_TRACE.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-  const lastIdx = TEMPORAL_TRACE.length - 1;
+  const line = series.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const lastIdx = series.length - 1;
+
+  // Six evenly spaced day labels across the window, the last one marked.
+  const axisDates = (() => {
+    const days = history?.days ?? [];
+    if (days.length < 2) return [];
+    const picks = 6;
+    return Array.from({ length: picks }, (_, k) => {
+      const d = days[Math.round((k / (picks - 1)) * (days.length - 1))];
+      if (!d) return '';
+      const dt = new Date(d.date);
+      return Number.isNaN(dt.getTime())
+        ? d.date
+        : new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(dt);
+    });
+  })();
+
+  if (series.length < 2) {
+    return (
+      <TelemetryCard className="flex h-64 items-center justify-center p-5 lg:col-span-8">
+        <span className="font-mono text-xs text-term-outline">
+          {history ? 'Not enough archived days to draw a trend' : 'Reading the archive…'}
+        </span>
+      </TelemetryCard>
+    );
+  }
 
   return (
     <TelemetryCard className="space-y-3 p-5 lg:col-span-8">
@@ -66,11 +124,12 @@ function TemporalTrend() {
           <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">
             Continuous Temporal AQI Gradient
           </h3>
-          {/* Said "rolling window", which invited the reader to take it for a
-              record of one. The series is twenty-four constants in content.ts
-              and the timeframe buttons all draw it unchanged; the forecast
-              above is the panel with real numbers. */}
-          <Label>Illustrative shape · demo values</Label>
+          {/* It is now a record of one: daily city AQI from the archive, each
+              day the mean across stations of that station's own 24-hour mean. */}
+          <Label>
+            Daily city AQI · {series.length} archived days ·{' '}
+            {history?.days[0]?.date} to {history?.days[lastIdx]?.date}
+          </Label>
         </div>
         <div className="flex gap-1">
           {TIMEFRAMES.map((t) => (
@@ -115,15 +174,21 @@ function TemporalTrend() {
 
         <path d={`${line} L${w},${h} L0,${h} Z`} fill="url(#tt-area)" />
         <path d={line} fill="none" stroke={TERM_SEVERITY.high} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx={x(lastIdx)} cy={y(TEMPORAL_TRACE[lastIdx])} r="5" fill={TERM_SEVERITY.high} stroke="#fff" strokeWidth="2">
+        <circle cx={x(lastIdx)} cy={y(series[lastIdx])} r="5" fill={TERM_SEVERITY.high} stroke="#fff" strokeWidth="2">
           <animate attributeName="r" values="5;9;5" dur="2.2s" repeatCount="indefinite" />
         </circle>
       </svg>
 
+      {/* Dates, not hours. The axis read 00:00 to 20:00 under a series that
+          was twenty-four constants; now that each point is a day, hour labels
+          would be describing a different quantity from the line above them. */}
       <div className="flex justify-between border-t border-term-outline-variant/40 pt-2 font-mono text-[10px] text-term-ink-variant">
-        {['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', 'NOW'].map((t) => (
-          <span key={t} className={cn(t === 'NOW' && 'font-bold text-orange-400')}>
-            {t}
+        {axisDates.map((d, i) => (
+          <span
+            key={`${d}-${i}`}
+            className={cn(i === axisDates.length - 1 && 'font-bold text-orange-400')}
+          >
+            {d}
           </span>
         ))}
       </div>
@@ -255,6 +320,30 @@ function Correlator() {
     Object.fromEntries(POLLUTANTS.map((p, i) => [p.id, i < 4])),
   );
 
+  // The exposure histogram shares this card's grid row, so it reads the archive
+  // here rather than fetching a second copy.
+  const history = useCityHistory(30);
+  const bandColor: Record<string, string> = {
+    Good: SEVERITY.good,
+    Satisfactory: SEVERITY.fair,
+    Moderate: TERM_SEVERITY.caution,
+    Poor: TERM_SEVERITY.high,
+    'Very Poor': TERM_SEVERITY.severe,
+    Severe: TERM.tertiary,
+  };
+  const bands = history
+    ? BAND_ORDER.filter((b) => (history.band_days[b] ?? 0) > 0).map((b) => ({
+        label: b,
+        days: history.band_days[b],
+        color: bandColor[b] ?? TERM.outline,
+      }))
+    : [];
+  const total = bands.reduce((a, b) => a + b.days, 0);
+  // CPCB's sensitive-group advice begins at Moderate.
+  const aboveSensitive = bands
+    .filter((b) => b.label !== 'Good' && b.label !== 'Satisfactory')
+    .reduce((a, b) => a + b.days, 0);
+
   const w = 720;
   const h = 240;
 
@@ -322,29 +411,49 @@ function Correlator() {
 
       <TelemetryCard className="space-y-3 p-5 lg:col-span-4">
         <div>
-          <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">30-Day Exposure Frequency</h3>
-          <Label>Days spent in each band</Label>
+          <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">
+            {history ? `${history.window_days}-Day Exposure Frequency` : 'Exposure Frequency'}
+          </h3>
+          <Label>Days spent in each CPCB band, from the archive</Label>
         </div>
+        {/* Was five literals - 2/6/13/7/2 - summing to thirty under a heading
+            that promised thirty days of history nothing had. Bands with no days
+            in them are not listed: a row reading "Severe 0d" implies the band
+            was checked and nearly reached, and it was simply absent. */}
         <ul className="space-y-2.5 pt-1">
-          {EXPOSURE_HISTORY.map((e) => (
-            <li key={e.label} className="space-y-1">
-              <div className="flex items-center justify-between font-mono text-xs">
-                <span className="flex items-center gap-2 text-term-ink-variant">
-                  <span className="size-2.5 rounded-full" style={{ background: e.color }} />
-                  {e.label}
-                </span>
-                <span className="font-bold tabular-nums" style={{ color: e.color }}>
-                  {e.days}d
-                </span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-term-surface-high">
-                <div className="h-full rounded-full" style={{ width: `${(e.days / 30) * 100}%`, background: e.color }} />
-              </div>
+          {bands.length === 0 ? (
+            <li className="font-mono text-xs text-term-outline">
+              {history ? 'No indexable days in the window' : 'Reading the archive…'}
             </li>
-          ))}
+          ) : (
+            bands.map((e) => (
+              <li key={e.label} className="space-y-1">
+                <div className="flex items-center justify-between font-mono text-xs">
+                  <span className="flex items-center gap-2 text-term-ink-variant">
+                    <span className="size-2.5 rounded-full" style={{ background: e.color }} />
+                    {e.label}
+                  </span>
+                  <span className="font-bold tabular-nums" style={{ color: e.color }}>
+                    {e.days}d
+                  </span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-term-surface-high">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${(e.days / Math.max(total, 1)) * 100}%`, background: e.color }}
+                  />
+                </div>
+              </li>
+            ))
+          )}
         </ul>
         <div className="border-t border-term-outline-variant/40 pt-3 font-mono text-[10px] text-term-ink-variant">
-          20 of 30 days above the sensitive-group threshold
+          {history
+            ? `${aboveSensitive} of ${total} days above the sensitive-group threshold` +
+              (history.days_excluded_thin
+                ? ` · ${history.days_excluded_thin} day${history.days_excluded_thin === 1 ? '' : 's'} excluded for thin coverage`
+                : '')
+            : 'Waiting for the archive'}
         </div>
       </TelemetryCard>
     </div>
