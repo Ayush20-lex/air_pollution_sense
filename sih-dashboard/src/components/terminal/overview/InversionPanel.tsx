@@ -100,10 +100,12 @@ export function InversionPanel() {
           {zones.slice(0, SHOWN).map((z) => {
             const tier = INVERSION_TIER[z.severity] ?? INVERSION_TIER.MODERATE;
             return (
+              // No accent bar down the side: the tier colour is already on the
+              // icon, the severity pill and the layer-depth figure, so a fourth
+              // repetition of one signal added weight and no information.
               <TelemetryCard
                 key={z.zone_id}
-                className="flex flex-col gap-3 border-l-4 p-4 sm:flex-row sm:items-center sm:justify-between"
-                style={{ borderLeftColor: tier.color }}
+                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex items-start gap-3">
                   <Layers className="mt-0.5 size-5 shrink-0" style={{ color: tier.color }} />

@@ -88,10 +88,9 @@ export function GrapPanel() {
         }
       />
 
-      <TelemetryCard
-        className="border-l-4 p-5"
-        style={{ borderLeftColor: stage.color }}
-      >
+      {/* Same reasoning as the inversion cards: the stage colour is already on
+          the shield icon, the stage name and the action bullets. */}
+      <TelemetryCard className="p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-3">
             <Icon className="mt-0.5 size-6 shrink-0" style={{ color: stage.color }} />
