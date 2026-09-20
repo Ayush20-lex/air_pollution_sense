@@ -45,14 +45,9 @@ function SourceAttribution({ frame }: { frame: TerminalFrame }) {
               <span className="flex items-center gap-2">
                 <span className="size-2.5 rounded-full" style={{ background: s.color }} />
                 <span className="font-medium text-term-ink">{s.label}</span>
-                {/* Only one of these four is measured. Without the mark a
-                    reader takes all four for readings, which is the claim the
-                    hardcoded 34% was quietly making. */}
-                {!s.measured && (
-                  <span className="font-mono text-[9px] uppercase tracking-wider text-term-outline">
-                    est.
-                  </span>
-                )}
+                {/* The share itself carries "est." here, so a badge beside it
+                    said the same word twice. The map label has no room for the
+                    suffix and keeps its own mark instead. */}
               </span>
               <span className="font-mono font-bold" style={{ color: s.color }}>
                 {shareLabel(s)}

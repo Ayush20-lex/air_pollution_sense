@@ -53,6 +53,27 @@ export type FireMeta = {
  */
 const ENTRY_RADIUS_DEG = 0.34;
 
+/**
+ * Bearing from the city centre to the fires, in compass degrees.
+ *
+ * This, and not the wind bearing, is where the ribbon comes from. Pointing it
+ * upwind was the first thing tried and it is wrong: on 20 September the wind is
+ * from about 128 degrees, so the stubble ribbon swung round to enter Delhi from
+ * the south-east - from open country where nothing is burning - and asserted
+ * that Punjab's smoke was arriving from the opposite direction to Punjab.
+ *
+ * The fires are where they are. What the wind decides is how much of their
+ * smoke reaches the city, and that is already carried by the share: 0.7% on a
+ * day the flow runs the wrong way, 22.7% at the November peak when it does not.
+ */
+function bearingToFires(lat: number, lon: number): number {
+  const dLat = lat - NCR_CENTER[0];
+  // Scaled to kilometres before taking the angle, or the bearing is skewed by
+  // a longitude degree being shorter than a latitude one at this latitude.
+  const dLon = (lon - NCR_CENTER[1]) * (97.5 / 111);
+  return (Math.atan2(dLon, dLat) * 180) / Math.PI;
+}
+
 /** Place a point at `ENTRY_RADIUS_DEG` from the centre, on a compass bearing. */
 function upwindEntry(fromDeg: number): [number, number] {
   const rad = (fromDeg * Math.PI) / 180;
@@ -74,7 +95,11 @@ export function livePlumeSources(
   fire: FireMeta | undefined,
 ): LivePlumeSource[] {
   const share = fire?.smoke_share_pct;
-  const canMeasure = windFromDeg != null && typeof share === 'number';
+  const hasFires =
+    typeof fire?.centroid_lat === 'number' && typeof fire?.centroid_lon === 'number';
+  // The wind is still required: without it there is no measured transport
+  // behind the share, and the ribbon would be a direction with no quantity.
+  const canMeasure = windFromDeg != null && typeof share === 'number' && hasFires;
 
   return PLUME_SOURCES.map((src): LivePlumeSource => {
     if (src.id !== 'stubble' || !canMeasure) {
@@ -91,7 +116,7 @@ export function livePlumeSources(
       // Rounded to a tenth: the share moves with the wind hour to hour and a
       // whole number would read as steadier than it is.
       share: Math.round(share * 10) / 10,
-      entry: upwindEntry(windFromDeg as number),
+      entry: upwindEntry(bearingToFires(fire!.centroid_lat as number, fire!.centroid_lon as number)),
       target: [NCR_CENTER[0], NCR_CENTER[1]],
       // Bowing the ribbon sideways made sense for a fixed arrow. A measured one
       // should lie along the wind, so it is drawn straight.
@@ -99,7 +124,7 @@ export function livePlumeSources(
       measured: true,
       detail:
         fires > 0
-          ? `${fires} VIIRS fire${fires === 1 ? '' : 's'} upwind · ${fire?.season ?? ''}`.trim()
+          ? `${fires} VIIRS fire${fires === 1 ? '' : 's'} · ${fire?.season ?? ''}`.trim()
           : 'no active fires in the corridor',
       note: 'measured',
     };
