@@ -2,7 +2,8 @@ import * as React from 'react';
 import { AlertTriangle, CircleAlert, Info, Search } from 'lucide-react';
 import { Delta, Label, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { AnimatedNumber, useRollDuration } from '@/components/terminal/MeshOdometer';
-import { COVERAGE_KPIS, INCIDENTS } from '@/lib/terminal/content';
+import { INCIDENTS } from '@/lib/terminal/content';
+import type { LiveStation } from '@/lib/terminal/meshApi';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { DISPERSION, nodeSeries, type TerminalFrame } from '@/lib/terminal/field';
 import { bySeverity, zoneSummary } from '@/lib/terminal/stations';
@@ -452,17 +453,83 @@ function SpatialAlerts() {
   );
 }
 
+/**
+ * What the mesh actually covers.
+ *
+ * This strip read "Mesh Coverage 94.2%", "Interpolation Confidence 96.8%",
+ * "Spatial Resolution 250 m" and "Last Full Sweep 12s ago", all four from a
+ * literal with a hand-drawn sparkline under it. Invented quality claims about a
+ * real system are a worse class of fabrication than an invented reading: a
+ * wrong PM2.5 is one wrong number, while a confidence figure is a statement
+ * about how much the other numbers can be trusted.
+ *
+ * Three of the four have a real counterpart and now use it. "Interpolation
+ * Confidence" does not - nothing in this system scores the interpolation, the
+ * leave-one-station-out work in ml_pipeline/scripts/17 is offline and produces
+ * no live figure - so it is gone rather than approximated.
+ *
+ * The resolution claim was wrong as well as invented. The forecast grid is
+ * 70x80 over a 78 km domain, which is about 1 km a cell; the map's heat canvas
+ * renders at roughly 100 m a pixel, but that is a drawing detail and carries no
+ * information the stations did not have. The honest figure is the grid's.
+ */
 function CoverageStrip() {
+  const mesh = useMesh();
+  // Ticks so "last sweep" ages on screen. Kept as state rather than reading
+  // Date.now() during render, which is impure and was caught here once before.
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const live = mesh.stations.filter((st): st is LiveStation => 'meshId' in st);
+  const windows = live.map((st) => st.coveragePct).filter((v) => Number.isFinite(v));
+  const meanWindow = windows.length
+    ? windows.reduce((a, b) => a + b, 0) / windows.length
+    : null;
+  const notIndexed = mesh.dropped.length + mesh.unindexed.length;
+  const sweptSecs = mesh.fetchedAt ? Math.max(0, Math.round((now - mesh.fetchedAt) / 1000)) : null;
+
+  const cards: { label: string; value: string; unit: string; note: string }[] = [
+    {
+      label: 'Stations Reporting',
+      value: String(live.length),
+      unit: '',
+      note: notIndexed > 0 ? `${notIndexed} measuring but not indexable` : 'all indexable',
+    },
+    {
+      label: 'Window Coverage',
+      value: meanWindow == null ? '—' : meanWindow.toFixed(1),
+      unit: meanWindow == null ? '' : '%',
+      note: 'mean share of the 24h window reported',
+    },
+    {
+      label: 'Grid Resolution',
+      value: '1.1 × 1.0',
+      unit: ' km',
+      note: '70 × 80 cells over the NCR domain',
+    },
+    {
+      label: 'Last Sweep',
+      value: sweptSecs == null ? '—' : sweptSecs < 90 ? String(sweptSecs) : String(Math.round(sweptSecs / 60)),
+      unit: sweptSecs == null ? '' : sweptSecs < 90 ? 's ago' : 'min ago',
+      note: mesh.status === 'offline' ? 'backend unreachable' : 'since the mesh last answered',
+    },
+  ];
+
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-      {COVERAGE_KPIS.map((k) => (
+      {cards.map((k) => (
         <TelemetryCard key={k.label} className="space-y-2 rounded-xl p-4">
           <Label className="block">{k.label}</Label>
           <div className="font-display text-2xl font-extrabold text-term-ink">
             {k.value}
             <span className="font-mono text-sm font-normal text-term-ink-variant">{k.unit}</span>
           </div>
-          <Spark values={k.series} color={k.color} className="h-10 w-full" />
+          {/* No sparkline: none of these four has a recorded history, and the
+              ones that were drawn here were eight numbers someone chose. */}
+          <Label className="block text-term-outline">{k.note}</Label>
         </TelemetryCard>
       ))}
     </div>

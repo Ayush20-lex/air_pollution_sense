@@ -110,7 +110,10 @@ export function GeoMapPanel({
             </span>
           </div>
           <div className="rounded-md border border-term-outline-variant/70 bg-term-surface-lowest/80 px-2.5 py-1.5 text-left font-mono text-[10px] leading-relaxed text-term-outline backdrop-blur-xl">
-            <div>IDW interpolation · 250 m</div>
+            {/* The grid is 70x80 over a 78 km domain, so a cell is about a
+                kilometre. "250 m" was neither the grid nor the canvas (which
+                draws at roughly 100 m a pixel and adds no information). */}
+            <div>IDW interpolation · ~1 km grid</div>
             <div>28.28–28.92°N · 76.82–77.62°E</div>
           </div>
         </div>

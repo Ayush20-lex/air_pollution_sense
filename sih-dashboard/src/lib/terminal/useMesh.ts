@@ -72,6 +72,11 @@ export type MeshState = {
    * `freshStations`.
    */
   supplemented: number;
+  /**
+   * When the mesh last came back, as epoch ms. The coverage strip reported a
+   * "last full sweep" from a literal; this is the real one.
+   */
+  fetchedAt: number | null;
 };
 
 const OFFLINE: MeshState = {
@@ -89,6 +94,8 @@ const OFFLINE: MeshState = {
   // The offline fallback is a frozen snapshot of stations that *did* index;
   // it carries no record of the ones that did not.
   unindexed: [],
+  // Never fetched, so there is no sweep to report an age for.
+  fetchedAt: null,
 };
 
 /**
@@ -140,6 +147,7 @@ async function refresh(force = false) {
     curatedCount: STATIONS.length,
     feed: merged.source === 'waqi_live' ? 'waqi_live' : 'archive',
     supplemented: merged.supplemented,
+    fetchedAt: Date.now(),
   });
 }
 

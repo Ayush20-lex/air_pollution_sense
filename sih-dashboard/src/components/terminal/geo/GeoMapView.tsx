@@ -101,7 +101,7 @@ export function GeoMapView() {
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-c px-3 py-1.5 font-mono text-xs text-term-ink-variant">
             <Radio className="size-4 text-term-primary" />
-            Interpolation: <strong className="text-term-ink">IDW 250m</strong>
+            Interpolation: <strong className="text-term-ink">IDW ~1 km</strong>
           </span>
           <span className="flex items-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-c px-3 py-1.5 font-mono text-xs text-term-ink-variant">
             <Crosshair className="size-4 text-term-secondary" />
