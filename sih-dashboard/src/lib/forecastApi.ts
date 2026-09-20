@@ -155,3 +155,44 @@ export function applyInterventionRatio(live: Frame[], iv: Interventions): Frame[
     };
   });
 }
+
+/**
+ * One station's own 72-hour forecast.
+ *
+ * `/api/v1/forecast/station/{id}` has served this since the backend existed and
+ * nothing called it. It is not the same thing as the mesh-wide track: that is
+ * the composite across every node, and this is the line for the node a reader
+ * has actually clicked on. A basin does not move as one - the north-west traps
+ * hours before the south does - so the difference is the point.
+ */
+export type StationForecast = {
+  station_id: string;
+  lat: number;
+  lon: number;
+  channel: string;
+  unit: string;
+  values: number[];
+  timestamps: string[];
+};
+
+export async function fetchStationForecast(
+  stationId: string | number,
+  timeoutMs = 12000,
+): Promise<StationForecast | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/forecast/station/${stationId}`, {
+      signal: ctrl.signal,
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const d = (await res.json()) as StationForecast;
+    return Array.isArray(d?.values) && d.values.length ? d : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}

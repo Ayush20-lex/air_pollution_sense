@@ -3,6 +3,7 @@ import { Compass, Navigation, Wind } from 'lucide-react';
 import { MeshOdometer, useRollDuration } from '@/components/terminal/MeshOdometer';
 import { Label, Meter, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
+import { fetchStationForecast, type StationForecast } from '@/lib/forecastApi';
 import { DISPERSION, type TerminalFrame } from '@/lib/terminal/field';
 import { findById } from '@/lib/terminal/stations';
 import { livePlumeSources, shareLabel, useMeasuredWind } from '@/lib/terminal/plumes';
@@ -76,6 +77,34 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
   const selectedId = useTerminalStore((s) => s.selectedId);
   const rollMs = useRollDuration();
   const station = findById(useMesh().stations, selectedId);
+
+  // The node's own 72-hour line. The mesh-wide track on the overview is a
+  // composite; this is the station a reader has actually selected.
+  //
+  // Declared above the guards below on purpose: React counts hooks by call
+  // order, so one sitting behind an early return changes that count the moment
+  // a station is deselected.
+  const meshId = station && 'meshId' in station ? station.meshId : null;
+  const [forecast, setForecast] = React.useState<StationForecast | null>(null);
+  React.useEffect(() => {
+    if (meshId == null) return;
+    let alive = true;
+    void fetchStationForecast(meshId).then((f) => {
+      if (alive) setForecast(f);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [meshId]);
+
+  // Matched rather than cleared. Blanking the state on every station change is
+  // a setState inside an effect, which starts a second render for nothing; the
+  // previous station's line simply is not drawn while the new one loads.
+  const track =
+    forecast && meshId != null && String(forecast.station_id) === String(meshId)
+      ? forecast
+      : null;
+
   if (!station) return null;
 
   // The mesh and the frames are separate state and land one render apart, so
@@ -91,9 +120,24 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
   const circumference = 302;
   const offset = circumference - circumference * Math.min(1, sample.aqi / 300);
 
+  // PM10 read from the station, not derived from PM2.5.
+  //
+  // This row was `sample.pm25 * 1.74` - a fixed ratio applied to a different
+  // pollutant and printed in ug/m3 beside three measured channels. The frames
+  // payload carries no PM10, but the mesh does per station, so the reading is
+  // available and was simply not being asked for. Where the feed gives only a
+  // sub-index (CPCB's bulletin does) the row says so rather than converting.
+  const pm10sub = 'subIndices' in station ? station.subIndices?.PM10 : undefined;
+  const pm10 =
+    pm10sub?.concentration != null
+      ? { value: pm10sub.concentration, unit: 'µg/m³', pct: (pm10sub.concentration / 250) * 100 }
+      : pm10sub?.sub_index != null
+        ? { value: pm10sub.sub_index, unit: 'sub-index', pct: (pm10sub.sub_index / 200) * 100 }
+        : null;
+
   const channels = [
     { label: 'PM2.5', value: sample.pm25, unit: 'µg/m³', pct: (sample.pm25 / 120) * 100 },
-    { label: 'PM10', value: sample.pm25 * 1.74, unit: 'µg/m³', pct: (sample.pm25 * 1.74) / 250 * 100 },
+    ...(pm10 ? [{ label: 'PM10', ...pm10 }] : []),
     { label: 'O₃', value: sample.o3, unit: 'µg/m³', pct: (sample.o3 / 120) * 100 },
     { label: 'NOx', value: sample.nox, unit: 'ppb', pct: (sample.nox / 140) * 100 },
   ];
@@ -167,7 +211,39 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
           </div>
         ))}
       </div>
-    </TelemetryCard>
+          {track ? (
+        <div className="border-t border-term-outline-variant/40 pt-3">
+          <div className="flex items-center justify-between">
+            <Label>Next {track.values.length}h at this node</Label>
+            <span className="font-mono text-[10px] text-term-ink-variant">
+              {Math.min(...track.values).toFixed(0)}–{Math.max(...track.values).toFixed(0)} {track.unit}
+            </span>
+          </div>
+          {/* This node's own forecast, not the mesh composite on the overview.
+              A basin does not move as one - the north-west traps hours before
+              the south - so the two lines differ and that is the point. */}
+          <svg viewBox="0 0 240 48" className="mt-1 h-12 w-full" role="img"
+               aria-label={`72 hour ${track.channel} forecast for this node`}>
+            <path
+              d={track.values
+                .map((v, k) => {
+                  const x = (k / Math.max(track.values.length - 1, 1)) * 240;
+                  const hi = Math.max(...track.values) || 1;
+                  const y = 44 - (v / hi) * 40;
+                  return `${k === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+                })
+                .join(' ')}
+              fill="none"
+              stroke={color}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+      ) : null}
+
+</TelemetryCard>
   );
 }
 
