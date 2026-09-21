@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, CircleAlert, Info } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, CircleAlert, Info } from 'lucide-react';
 import { Delta, Label, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { GrapPanel } from './GrapPanel';
 import { InversionPanel } from './InversionPanel';
@@ -204,12 +204,37 @@ function SpectrometryLedger() {
         sub="The eight channels the CPCB National AQI indexes"
       />
       <TelemetryCard className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse text-left">
+        {/* Nine columns need 900px and a phone gives the table 334, so 566px
+            of it - status, delta, trajectory, calibration - sat behind a
+            horizontal scroll with nothing to announce it. Readers who never
+            guessed to swipe saw a three-column ledger and no sign the rest
+            existed. The same readings are stacked as cards further up this
+            page, so this stays a table and says outright that it scrolls. */}
+        <div className="flex items-center justify-between gap-2 border-b border-term-outline-variant/40 px-4 py-2 md:hidden">
+          <span className="font-mono text-[10px] uppercase tracking-wider text-term-ink-variant">
+            Swipe for status, trend and calibration
+          </span>
+          <ArrowRight className="size-3 shrink-0 text-term-ink-variant" aria-hidden="true" />
+        </div>
+        <div className="relative">
+          {/* Marks the cut rather than letting a column end mid-glyph. */}
+          <div
+            className="pointer-events-none absolute inset-y-0 right-0 z-[3] w-8 bg-gradient-to-l from-term-surface-lowest to-transparent md:hidden"
+            aria-hidden="true"
+          />
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] border-collapse text-left">
             <thead className="bg-term-surface-high">
               <tr className="font-mono text-[10px] uppercase tracking-wider text-term-ink-variant">
-                {['Channel', 'Formula', 'Reading', 'Threshold', 'Status', 'Δ24h', 'Trajectory', 'Calibration', ''].map((h) => (
-                  <th key={h} scope="col" className="px-4 py-3 font-semibold">
+                {['Channel', 'Formula', 'Reading', 'Threshold', 'Status', 'Δ24h', 'Trajectory', 'Calibration', ''].map((h, i) => (
+                  <th
+                    key={h}
+                    scope="col"
+                    className={cn(
+                      'px-4 py-3 font-semibold',
+                      i === 0 && 'sticky left-0 z-[2] bg-[var(--t-surface-high)]',
+                    )}
+                  >
                     {h}
                   </th>
                 ))}
@@ -218,7 +243,11 @@ function SpectrometryLedger() {
             <tbody>
               {POLLUTANTS.map((p) => (
                 <tr key={p.id} className="border-b border-term-outline-variant/40 transition-colors hover:bg-term-surface-c/60">
-                  <td className="px-4 py-2.5 text-xs font-semibold text-term-ink">{p.name}</td>
+                  {/* Opaque fill of its own: the card behind is translucent
+                      and the scrolling columns would read straight through. */}
+                  <td className="sticky left-0 z-[2] bg-[var(--t-surface-lowest)] px-4 py-2.5 text-xs font-semibold text-term-ink">
+                    {p.name}
+                  </td>
                   <td className="px-4 py-2.5 font-mono text-xs" style={{ color: p.color }}>
                     {p.symbol}
                   </td>
@@ -253,8 +282,9 @@ function SpectrometryLedger() {
                   </td>
                 </tr>
               ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
         </div>
       </TelemetryCard>
     </div>

@@ -12,7 +12,7 @@ import { EntryGrid } from './EntryGrid';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { CommandPalette } from '@/components/ui/command-palette';
 import { Badge } from '@/components/ui/badge';
-import { aqiColor } from '@/lib/aqi';
+import { ALERT_COLOR, aqiColor } from '@/lib/aqi';
 import { DISTRICTS, MODEL_META } from '@/lib/data';
 import { SEVERITY } from '@/lib/tokens';
 import { useProvenance } from '@/lib/useProvenance';
@@ -256,6 +256,11 @@ export function IntroScreen() {
       <div className="pointer-events-none absolute inset-0 radial-vignette" />
       {/* bottom scrim keeps the headline and CTA legible over the haze */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-base via-base/80 to-transparent" />
+      {/* The same move at the top, for the same reason. The particle field
+          reaches the masthead on a narrow screen, where the subtitle wraps to
+          two lines of dim grey directly over the densest part of the cloud and
+          stops being readable. Short enough not to touch the headline. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-base via-base/70 to-transparent sm:h-24" />
 
       {/* the HUD fades out as the panels take over */}
       <motion.div style={{ opacity: stageOpacity, y: stageY }} className="absolute inset-0">
@@ -371,6 +376,39 @@ export function IntroScreen() {
           <MiniStat icon={<Gauge className="size-3" />} label="PM2.5" value={`${frame.avgPm25.toFixed(0)}`} color={aqiColor(frame.avgPm25)} />
           <MiniStat icon={<Wind className="size-3" />} label="PBL" value={`${frame.avgPbl}m`} />
           <MiniStat icon={<Cpu className="size-3" />} label="INV" value={frame.inversionIndex.toFixed(2)} color={SEVERITY.moderate} />
+        </div>
+
+        {/* The zone pills float over the particle field from md up, and below
+            it they are hidden - on a phone they would cover the thing they
+            annotate. That took the readings with them, so the stage named no
+            sector at all and a phone reader saw a city average and nothing
+            underneath it. The same four compass sectors and the same numbers,
+            set in flow instead of over the map. The level is carried by colour, so it is
+            also written into the label for anyone who cannot use colour. */}
+        <div className="pointer-events-auto grid w-full grid-cols-4 gap-1.5 md:hidden">
+          {SLOTS.map((slot) => {
+            const d = DISTRICTS.find((x) => x.id === slot.id)!;
+            const s = frame.districts[d.id];
+            const color = ALERT_COLOR[s.alert];
+            return (
+              <div
+                key={slot.id}
+                className="flex flex-col gap-0.5 rounded-lg border px-2 py-1.5"
+                style={{ borderColor: `${color}55`, background: `${color}14` }}
+                aria-label={`${d.zone}, ${s.alert}, ${s.pm25.toFixed(0)} micrograms per cubic metre`}
+              >
+                <span className="flex items-center gap-1.5">
+                  <span className="size-1.5 shrink-0 rounded-full" style={{ background: color }} />
+                  <span className="truncate font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+                    {d.zone.replace('DELHI-NCR-', '')}
+                  </span>
+                </span>
+                <span className="font-mono text-sm font-bold tabular-nums" style={{ color }}>
+                  {s.pm25.toFixed(0)}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
         {/* second axis: lede left, action right, divided by a hairline */}

@@ -150,7 +150,7 @@ function TemporalTrend() {
         </div>
       </div>
 
-      <svg viewBox={`0 0 ${w} ${h}`} className="h-64 w-full" role="img" aria-label="24-hour composite AQI trace">
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full" role="img" aria-label="24-hour composite AQI trace">
         <defs>
           <linearGradient id="tt-area" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={TERM_SEVERITY.high} stopOpacity="0.45" />
@@ -377,7 +377,7 @@ function Correlator() {
           })}
         </div>
 
-        <svg viewBox={`0 0 ${w} ${h}`} className="h-60 w-full" role="img" aria-label="Correlated pollutant channels">
+        <svg viewBox={`0 0 ${w} ${h}`} className="w-full" role="img" aria-label="Correlated pollutant channels">
           {[0.25, 0.5, 0.75].map((f) => (
             <line key={f} x1="0" y1={h * f} x2={w} y2={h * f} stroke={TERM.outlineVariant} strokeWidth="1" strokeDasharray="4 6" />
           ))}
