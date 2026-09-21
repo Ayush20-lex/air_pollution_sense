@@ -76,8 +76,12 @@ export function NcrPlumeMap({ frame }: { frame: TerminalFrame }) {
       {layers.contours && <IsoContours frame={frame} />}
       {layers.tracks && <SourceRibbons />}
       {layers.wind && <WindStreamlines frame={frame} />}
-      {layers.pins && <StationPins frame={frame} selectedId={selectedId} select={select} />}
-      {layers.pins && <UnindexedPins />}
+      {layers.pins && (
+        <MeshCanvasProvider>
+          <StationPins frame={frame} selectedId={selectedId} select={select} />
+          <UnindexedPins />
+        </MeshCanvasProvider>
+      )}
     </MapContainer>
   );
 }
@@ -107,9 +111,37 @@ const CHEAP_PINS =
   (typeof document !== 'undefined' ? document.documentElement.dataset.perf : undefined) ===
     'low' || deviceTier() === 'low';
 
-/** One canvas for the whole mesh, so 98 markers cost one element between them. */
+/**
+ * One canvas for the whole mesh, shared by every layer that draws into it.
+ *
+ * This has to be a single renderer, not one per component. A Leaflet canvas
+ * renderer is a full-size element with pointer-events enabled that hit-tests
+ * only the paths it owns: when a click lands on it and matches none of them,
+ * it stops there rather than falling through to whatever is underneath. Two
+ * renderers therefore means the upper one silently eats every click meant for
+ * the lower - which is exactly what happened when StationPins and
+ * UnindexedPins each memoised their own, and the seven hollow rings on top
+ * swallowed the taps for all 91 stations below.
+ *
+ * Created by the map and passed down, so its lifetime matches the map's; a
+ * module-level singleton would outlive the map it was bound to.
+ */
+const MeshCanvasContext = React.createContext<L.Canvas | undefined>(undefined);
+
 function useMeshCanvas(): L.Canvas | undefined {
-  return React.useMemo(() => (CHEAP_PINS ? L.canvas({ padding: 0.3 }) : undefined), []);
+  return React.useContext(MeshCanvasContext);
+}
+
+function MeshCanvasProvider({ children }: { children: React.ReactNode }) {
+  const renderer = React.useMemo(
+    // `tolerance` widens hit-testing without widening the dot. A canvas path
+    // is hit-tested against its actual radius, so a 6px circle is a 6px tap
+    // target - fine for a mouse, not for a finger. The DOM pin it replaces was
+    // a whole card, so without this the mesh looks right and answers nothing.
+    () => (CHEAP_PINS ? L.canvas({ padding: 0.3, tolerance: 10 }) : undefined),
+    [],
+  );
+  return <MeshCanvasContext.Provider value={renderer}>{children}</MeshCanvasContext.Provider>;
 }
 
 /** Radius in px. Selected reads larger; the rest are uniform, because the
