@@ -3,7 +3,7 @@ import { Delta, Label, Meter, SectionHead, Spark, TelemetryCard } from '@/compon
 import { POLLUTANTS } from '@/lib/terminal/content';
 import { useKpiCards } from '@/lib/terminal/kpi';
 import { livePollutants, type LivePollutant } from '@/lib/terminal/livePollutants';
-import { isLive, useHubStation, useMesh } from '@/lib/terminal/useMesh';
+import { isLive, useFreshStations, useHubStation, useMesh } from '@/lib/terminal/useMesh';
 import { TERM } from '@/lib/terminal/palette';
 import { cn } from '@/lib/utils';
 import { MeasuredTrend } from './MeasuredTrend';
@@ -14,6 +14,15 @@ export function OverviewMetrics() {
   const { station, live } = useHubStation();
   const { asOf } = useMesh();
   const kpis = useKpiCards();
+  // These two blocks report the same named quantity at two different scopes,
+  // and until now neither said so. The row is the mean across the mesh; the
+  // grid is one station, which with no selection falls through to the worst in
+  // the network. So on a normal day the row read "PM2.5 150 CPCB sub-index"
+  // and the grid read "PM2.5 253 CPCB sub-index" a few hundred pixels below
+  // it, both true and both unqualified - which reads as the page contradicting
+  // itself rather than as two honest figures. Naming the scope is the whole
+  // fix; the numbers were never wrong.
+  const meshCount = useFreshStations().filter(isLive).length;
   // Measured cards when the archive answered for this node, the static grid
   // when it did not. Either way every card goes through the same component.
   const readings: LivePollutant[] = isLive(station)
@@ -29,6 +38,14 @@ export function OverviewMetrics() {
 
   return (
     <>
+      <SectionHead
+        title="Regional Summary"
+        sub={
+          meshCount > 0
+            ? `Averaged across ${meshCount} reporting station${meshCount === 1 ? '' : 's'} — not any single node`
+            : 'Averaged across the station mesh — not any single node'
+        }
+      />
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         {kpis.map((k) => (
           <TelemetryCard key={k.label} className="space-y-2 p-4">
@@ -57,7 +74,11 @@ export function OverviewMetrics() {
       <div id="matrices" className="space-y-3">
         <SectionHead
           title="8-Pollutant Chemical Telemetry Grid"
-          sub="Continuous spectrometry • Hover any card for its 24-hour trajectory, sampled every 2 hours"
+          sub={
+            isLive(station)
+              ? `${station.name} only • hover any card for its 24-hour trajectory, sampled every 2 hours`
+              : 'Continuous spectrometry • Hover any card for its 24-hour trajectory, sampled every 2 hours'
+          }
           right={
             <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-term-ink-variant">
               <span className={cn('size-2 rounded-full', live ? 'bg-term-primary' : 'bg-amber-400')} />
