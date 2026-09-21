@@ -5,6 +5,7 @@ import { AdaptiveDpr, Preload } from '@react-three/drei';
 import { useTheme } from 'next-themes';
 import { PARTICLE } from '@/lib/tokens';
 import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
+import { deviceTier, type DeviceTier } from '@/lib/device-tier';
 import { isLandAtDirection } from '@/lib/earth-mask';
 import { seeded } from '@/lib/utils';
 
@@ -20,6 +21,38 @@ import { seeded } from '@/lib/utils';
 const ROWS_DESKTOP = 340;
 /** Phones get a coarser grid: ~62k dots against ~147k. */
 const ROWS_COMPACT = 220;
+/**
+ * And an old phone gets coarser still: ~18k dots.
+ *
+ * 220 rows was chosen against "a phone", but a 2019 midrange handset and a
+ * current flagship are not the same machine, and this globe is the heaviest
+ * thing on the site - a WebGL scene behind the entire hero. On a weak GPU the
+ * cost is dominated by fill rate rather than geometry, so the tier below drops
+ * multisampling and the pixel ratio alongside the dot count; those two are the
+ * larger win and the dot count is what keeps the silhouette readable.
+ */
+const ROWS_LOW = 120;
+
+const ROWS_FOR_TIER: Record<DeviceTier, number> = {
+  low: ROWS_LOW,
+  mobile: ROWS_COMPACT,
+  desktop: ROWS_DESKTOP,
+};
+
+/**
+ * Pixel-ratio ceiling per tier.
+ *
+ * A phone reporting dpr 3 renders nine times the pixels of a CSS-pixel buffer,
+ * and this canvas covers the whole viewport, so the ceiling matters more than
+ * anything else here. 1.75 was already a cap; on the low tier the buffer is
+ * held at 1:1, which is roughly a 3x cut in pixels shaded per frame against an
+ * uncapped phone.
+ */
+const DPR_FOR_TIER: Record<DeviceTier, [number, number]> = {
+  low: [1, 1],
+  mobile: [1, 1.5],
+  desktop: [1, 1.75],
+};
 
 /**
  * Grid resolution for this device, read once at mount.
@@ -31,8 +64,7 @@ const ROWS_COMPACT = 220;
  * nobody asked for is the more expensive mistake.
  */
 function rowsForViewport(): number {
-  if (typeof window === 'undefined') return ROWS_COMPACT;
-  return window.innerWidth < 768 ? ROWS_COMPACT : ROWS_DESKTOP;
+  return ROWS_FOR_TIER[deviceTier()];
 }
 
 /**
@@ -440,14 +472,21 @@ export function ParticleField({ dispersing, progress }: { dispersing: boolean; p
   // Gate 27: the canvas is continuous motion, so honour the OS setting by
   // rendering a single static frame instead of running the loop.
   const reduced = usePrefersReducedMotion();
+  // Read once, like the grid: re-tiering mid-session would rebuild the scene
+  // to chase a number that does not change.
+  const [tier] = React.useState(deviceTier);
 
   return (
     <Canvas
       aria-hidden
       frameloop={reduced ? 'demand' : 'always'}
       className="!absolute inset-0"
-      dpr={[1, 1.75]}
-      gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+      dpr={DPR_FOR_TIER[tier]}
+      // Multisampling is the single most expensive setting here on a mobile
+      // GPU - it multiplies the work per covered pixel across a canvas that
+      // fills the viewport. These are round dots on a dark field, so dropping
+      // it costs very little of the look and buys back a lot of the frame.
+      gl={{ antialias: tier === 'desktop', alpha: true, powerPreference: 'high-performance' }}
       camera={{ position: [0, 0.55, 5.5], fov: 55, near: 0.01, far: 100 }}
     >
       <Rig dispersing={dispersing} progress={progress} />

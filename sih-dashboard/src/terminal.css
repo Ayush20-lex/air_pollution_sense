@@ -415,3 +415,52 @@
     animation: none;
   }
 }
+
+/* ── Cheap mode ────────────────────────────────────────────────────────────
+   Dropped effects for devices that cannot afford them.
+
+   `backdrop-filter` is the most expensive thing on this site, and not because
+   any single panel is costly. The intro stacks seventeen blurred surfaces over
+   a WebGL canvas that repaints every frame, and a blur whose backdrop changes
+   must be recomputed every frame with it. On a weak GPU that is a per-frame
+   full-screen cost paid seventeen times over, which is felt as the whole page
+   being slow rather than as one effect being heavy.
+
+   The panels stay panels. Each blurred surface already sits on a translucent
+   fill, so raising the fill toward opaque keeps the separation the blur was
+   providing - on a dark theme the two read almost identically, and what is
+   lost is the faint smear of whatever sits behind, which nothing depends on.
+
+   Scoped by tier rather than width: an old tablet is a wide viewport on a weak
+   GPU and a phone in landscape is a wide viewport on a good one, so width
+   alone gets both wrong. See lib/device-tier. */
+:root[data-perf='low'] .telemetry-card,
+:root[data-perf='low'] .glass {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+:root[data-perf='low'] {
+  --t-glass-bg: rgb(255 255 255 / 0.97);
+}
+
+.dark:root[data-perf='low'],
+:root[data-perf='low'] .dark {
+  --t-glass-bg: rgb(14 26 42 / 0.97);
+}
+
+/* The sticky header blurs the entire page scrolling underneath it, so it is
+   the one surface whose backdrop is guaranteed to change on every frame of
+   every scroll - the worst case for this effect on a phone. */
+:root[data-perf='low'] .terminal-root header {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Decorative infinite animations. Each is small, but they never stop, so on a
+   device already missing frames they are pure overhead - and `animate-ping`
+   scales and fades a layer continuously, which keeps the compositor awake. */
+:root[data-perf='low'] .animate-ping,
+:root[data-perf='low'] .pulse-live {
+  animation: none !important;
+}
