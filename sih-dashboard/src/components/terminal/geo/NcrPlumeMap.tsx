@@ -1,7 +1,8 @@
 import * as React from 'react';
 import L from 'leaflet';
+import { deviceTier } from '@/lib/device-tier';
 import 'leaflet/dist/leaflet.css';
-import { MapContainer, Marker, Polyline, TileLayer, Tooltip as LTooltip, useMap } from 'react-leaflet';
+import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip as LTooltip, useMap } from 'react-leaflet';
 import {
   DISPERSION_STOPS,
   TERMINAL_ALERT_COLOR,
@@ -85,6 +86,38 @@ export function NcrPlumeMap({ frame }: { frame: TerminalFrame }) {
  * The station mesh. Split out of the map body because usePinDensity calls
  * useMap, which only resolves inside a MapContainer child.
  */
+/**
+ * Whether to draw the mesh into a canvas instead of as DOM pins.
+ *
+ * Each pin is a divIcon - a real element with its own markup - and Leaflet
+ * repositions every one of them on each zoom. Measured on a Samsung M12
+ * (Exynos 850, 4GB): with the flow animations already stopped, the geo route
+ * still held 2.5-5.5fps while the rest of the site sat at 20-37, and 98 pins
+ * is what was left. Drawn into a shared canvas they stop being DOM at all.
+ *
+ * Every station still appears and still carries its tooltip and its click -
+ * this trades the pin's shape, not the mesh's contents.
+ *
+ * Read from the attribute main.tsx stamps rather than re-deriving the tier, so
+ * there is one answer per session and the stylesheet and the map cannot
+ * disagree about which tier this is. This module is lazy-loaded, so the stamp
+ * is always already there by the time it evaluates.
+ */
+const CHEAP_PINS =
+  (typeof document !== 'undefined' ? document.documentElement.dataset.perf : undefined) ===
+    'low' || deviceTier() === 'low';
+
+/** One canvas for the whole mesh, so 98 markers cost one element between them. */
+function useMeshCanvas(): L.Canvas | undefined {
+  return React.useMemo(() => (CHEAP_PINS ? L.canvas({ padding: 0.3 }) : undefined), []);
+}
+
+/** Radius in px. Selected reads larger; the rest are uniform, because the
+ *  density pass that varied DOM pins by zoom has nothing to vary here. */
+function cheapRadius(selected: boolean): number {
+  return selected ? 9 : 6;
+}
+
 function StationPins({
   frame,
   selectedId,
@@ -96,6 +129,7 @@ function StationPins({
 }) {
   const density = usePinDensity(selectedId);
   const { stations } = useMesh();
+  const meshCanvas = useMeshCanvas();
 
   return (
     <>
@@ -104,11 +138,28 @@ function StationPins({
           const n = frame.nodes[s.id];
           if (!n) return null;
           const d = density[s.id] ?? 'full';
-          return (
-            <Marker
+          const selected = selectedId === s.id;
+          const stale = isStale(s);
+
+          // Same station, same colour, same tooltip, same click - drawn into
+          // the shared canvas rather than as an element of its own. The AQI
+          // number and the station name go with the DOM pin; on a phone that
+          // could not render this map at all, the reading is a tap away and
+          // the alternative was no map.
+          const marker = CHEAP_PINS ? (
+            <CircleMarker
               key={s.id}
-              position={[s.lat, s.lng]}
-              icon={buildPin(s, n.pm25, n.aqi, n.alert, selectedId === s.id, d, isStale(s))}
+              center={[s.lat, s.lng]}
+              renderer={meshCanvas}
+              radius={cheapRadius(selected)}
+              pathOptions={{
+                color: selected ? '#ffffff' : aqiColor(n.aqi),
+                weight: selected ? 2 : 1,
+                fillColor: aqiColor(n.aqi),
+                // Stale nodes read fainter, the way the DOM pin does.
+                fillOpacity: stale ? 0.35 : 0.85,
+                opacity: stale ? 0.5 : 1,
+              }}
               eventHandlers={{ click: () => select(s.id) }}
             >
               <LTooltip direction="top" offset={[0, d === 'dot' ? -10 : d === 'compact' ? -36 : -50]} opacity={1} className="as-tip">
@@ -134,8 +185,41 @@ function StationPins({
                   )}
                 </div>
               </LTooltip>
+            </CircleMarker>
+          ) : (
+            <Marker
+              key={s.id}
+              position={[s.lat, s.lng]}
+              icon={buildPin(s, n.pm25, n.aqi, n.alert, selected, d, stale)}
+              eventHandlers={{ click: () => select(s.id) }}
+            >
+              <LTooltip direction="top" offset={[0, d === 'dot' ? -10 : d === 'compact' ? -36 : -50]} opacity={1} className="as-tip">
+                <div style={{ minWidth: 160 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 4, color: '#fff' }}>{s.name}</div>
+                  <div>
+                    AQI {n.aqi} · {bandForAqi(n.aqi).label}
+                  </div>
+                  <div>PM2.5 {n.pm25.toFixed(1)} µg/m³ · {bandForPm25(n.pm25).label}</div>
+                  <div>
+                    PBL {n.pbl} m · {n.windSpeed.toFixed(1)} m/s
+                  </div>
+                  <div>
+                    O₃ {n.o3.toFixed(0)} · NOx {n.nox.toFixed(0)} ppb
+                  </div>
+                  <div style={{ opacity: 0.7 }}>
+                    {s.zone} zone · {s.agency}
+                  </div>
+                  {stale && (
+                    <div style={{ opacity: 0.75, marginTop: 4, color: '#f0b429' }}>
+                      ARCHIVED · last reported {stationHour(s)}
+                    </div>
+                  )}
+                </div>
+              </LTooltip>
             </Marker>
           );
+
+          return marker;
         })}
     </>
   );
@@ -161,10 +245,31 @@ function StationPins({
  */
 function UnindexedPins() {
   const { unindexed } = useMesh();
+  const meshCanvas = useMeshCanvas();
 
   return (
     <>
-      {unindexed.map((s) => (
+      {unindexed.map((s) =>
+        CHEAP_PINS ? (
+          // Hollow on the canvas too: no fill is what says "measuring, but
+          // carrying no index", and that distinction is the whole reason these
+          // are drawn at all.
+          <CircleMarker
+            key={s.id}
+            center={[s.lat, s.lng]}
+            renderer={meshCanvas}
+            radius={5}
+            pathOptions={{ color: '#f0b429', weight: 1.5, fill: false, opacity: 0.9 }}
+          >
+            <LTooltip direction="top" offset={[0, -10]} opacity={1} className="as-tip">
+              <div style={{ minWidth: 180 }}>
+                <div style={{ fontWeight: 700, marginBottom: 4, color: '#fff' }}>{s.name}</div>
+                <div style={{ color: '#f0b429' }}>No CPCB index this hour</div>
+                <div style={{ opacity: 0.85, marginTop: 2 }}>{s.reason}</div>
+              </div>
+            </LTooltip>
+          </CircleMarker>
+        ) : (
         <Marker key={s.id} position={[s.lat, s.lng]} icon={buildUnindexedPin()}>
           <LTooltip direction="top" offset={[0, -10]} opacity={1} className="as-tip">
             <div style={{ minWidth: 180 }}>
@@ -198,7 +303,8 @@ function UnindexedPins() {
             </div>
           </LTooltip>
         </Marker>
-      ))}
+        ),
+      )}
     </>
   );
 }
