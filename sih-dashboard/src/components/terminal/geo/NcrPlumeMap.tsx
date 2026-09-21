@@ -163,6 +163,33 @@ function StationPins({
   const { stations } = useMesh();
   const meshCanvas = useMeshCanvas();
 
+  /**
+   * The few stations that carry a visible number on the cheap tier.
+   *
+   * A canvas circle cannot draw text, and a phone has no hover - there is no
+   * pointer resting over anything for the browser to report - so on the low
+   * tier every reading sat behind a tap, where on desktop the pin prints its
+   * AQI on its face. That is the real gap, and it is about information being
+   * visible rather than about the hover event itself.
+   *
+   * Six, by severity, because the whole mesh labelled is what the density pass
+   * exists to prevent: at the fitted zoom these overlap into an unreadable
+   * stack. The worst nodes are also the ones a reader is looking for. They are
+   * non-interactive, so taps fall through to the canvas underneath and
+   * selection still works on every station, labelled or not.
+   */
+  const labelled = React.useMemo(() => {
+    if (!CHEAP_PINS) return new Set<string>();
+    return new Set(
+      stations
+        .map((st) => ({ id: st.id, aqi: frame.nodes[st.id]?.aqi ?? -1 }))
+        .filter((x) => x.aqi >= 0)
+        .sort((a, b) => b.aqi - a.aqi)
+        .slice(0, 6)
+        .map((x) => x.id),
+    );
+  }, [stations, frame]);
+
   return (
     <>
       {stations.map((s) => {
@@ -250,6 +277,24 @@ function StationPins({
               </LTooltip>
             </Marker>
           );
+
+          if (CHEAP_PINS && labelled.has(s.id)) {
+            return (
+              <React.Fragment key={s.id}>
+                {marker}
+                <Marker
+                  position={[s.lat, s.lng]}
+                  interactive={false}
+                  icon={L.divIcon({
+                    className: 'as-pin-wrap',
+                    iconSize: [40, 16],
+                    iconAnchor: [20, 22],
+                    html: `<span class="as-canvas-label" style="--c:${aqiColor(n.aqi)}">${n.aqi}</span>`,
+                  })}
+                />
+              </React.Fragment>
+            );
+          }
 
           return marker;
         })}
@@ -860,7 +905,15 @@ function WindStreamlines({ frame }: { frame: TerminalFrame }) {
       stations.map((st) => frame.nodes[st.id]).filter(Boolean),
       cells,
     );
-    return streamlines(ctx);
+    // Fewer seeds on a weak GPU, not fewer animations.
+    //
+    // Stopping the flow entirely was the wrong trade: the drift of these lines
+    // is the only thing on the map that shows the wind actually moving, and a
+    // still field reads as a broken layer rather than a fast one. The cost is
+    // per animated path - stroke-dashoffset cannot be composited, so each one
+    // is re-rasterised every frame - so the fix is to animate a thinner field,
+    // which keeps the motion and roughly a third of the work.
+    return streamlines(ctx, CHEAP_PINS ? { seeds: 6 } : {});
   }, [frame, stations, liveFrames]);
 
   return (
