@@ -6,12 +6,36 @@ import { DISTRICTS } from '@/lib/data';
 
 /**
  * Floating zone pills scattered over the particle grid.
- * Positions are hand-placed so they frame the cloud rather than cover it.
+ *
+ * One per compass sector, and each sits on the side of the cloud its district
+ * actually lies on - north near the top, south near the bottom, east to the
+ * right, west to the left. The probe card reads the nearest pill to the cursor,
+ * so a pill in the wrong place would name the wrong zone.
+ *
+ * This used to be three: Ghaziabad, Delhi and Gurugram, which is north, centre
+ * and west. South and east were in the data and never drawn, so half the mesh
+ * was invisible on the page that introduces it - and Delhi, the one labelled
+ * CENTRAL, sat at the lower left where a reader would take it for the
+ * south-west.
+ *
+ * Positions are hand-placed to frame the cloud rather than cover it, and the
+ * ordering is by bearing from Delhi: Ghaziabad is the only district north of it
+ * (28.669 against 28.614), Faridabad the southernmost, Noida east, Gurugram
+ * west.
  */
+//
+// The percentages are bounded by the pill, not just by taste: each is about
+// 295px wide, so `left` has to leave that much room at the narrowest width the
+// page is read at. At 74% a 1024px window put the east pill's right edge at
+// 1048 and it wrapped against the frame; 66% clears it and still reads as the
+// east side at 1560. `top` for the south pill is held above the headline for
+// the same reason - at 72% it landed on "TWO-WAY COUPLED" on a 768px-tall
+// window.
 export const SLOTS: { id: string; top: string; left: string; delay: number }[] = [
-  { id: 'ghaziabad', top: '21%', left: '61%', delay: 0.5 },
-  { id: 'delhi', top: '57%', left: '20%', delay: 0.65 },
-  { id: 'gurgaon', top: '25%', left: '17%', delay: 0.8 },
+  { id: 'ghaziabad', top: '18%', left: '56%', delay: 0.5 },
+  { id: 'noida', top: '44%', left: '66%', delay: 0.65 },
+  { id: 'faridabad', top: '62%', left: '46%', delay: 0.8 },
+  { id: 'gurgaon', top: '30%', left: '12%', delay: 0.95 },
 ];
 
 export function StatusPills({ frame }: { frame: Frame }) {
