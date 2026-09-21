@@ -30,6 +30,27 @@ import { cn } from '@/lib/utils';
 /** Matches the mesh's cadence so the two age together. */
 const REFRESH_MS = 120_000;
 
+/**
+ * Where each GRAP stage begins, on CPCB's own PM2.5 scale.
+ *
+ * The AQI figures are CAQM's stage thresholds and the concentrations are the
+ * CPCB breakpoints that produce them - 201 is exactly 90.1 ug/m3 as a 24-hour
+ * mean, which is the window the stage is judged on, so the two columns
+ * describe one quantity rather than two. Stage IV is open-ended upward, so it
+ * has no successor to count towards.
+ */
+const STAGE_ONSET: Record<number, { aqi: number; ugm3: string }> = {
+  1: { aqi: 201, ugm3: '90.1' },
+  2: { aqi: 301, ugm3: '120.1' },
+  3: { aqi: 401, ugm3: '250.1' },
+  4: { aqi: 451, ugm3: '300.6' },
+};
+
+/** "Stage II", without the category - the sentence supplies the context. */
+function stageLabel(stage: number): string {
+  return (GRAP_STAGE[stage]?.name ?? `Stage ${stage}`).split('—')[0].trim();
+}
+
 export function GrapPanel() {
   const [data, setData] = React.useState<GrapPayload | null>(null);
   const [status, setStatus] = React.useState<'loading' | 'live' | 'offline'>('loading');
@@ -73,6 +94,8 @@ export function GrapPanel() {
   }
 
   const stage = GRAP_STAGE[data.grap.stage] ?? GRAP_STAGE[0];
+  // Null at Stage IV, which nothing escalates past.
+  const nextStep = STAGE_ONSET[data.grap.stage + 1] ?? null;
   const active = data.grap.stage > 0;
   const Icon = active ? ShieldAlert : ShieldCheck;
 
@@ -129,6 +152,35 @@ export function GrapPanel() {
               </div>
             ) : null}
           </div>
+        </div>
+
+        {/* How far the forecast is from the next stage.
+            "No stage active" on its own is indistinguishable from a panel that
+            is broken, or from one wired to nothing - and for most of the year
+            in Delhi it is the honest answer, so it is what a reader sees
+            almost every time they look. Printing the distance to the next
+            threshold shows the mechanism is live and being evaluated, and how
+            near the city is to it, without inventing an alarm that CAQM would
+            not raise. CPCB indexes PM2.5 on 24-hour means, so the µg/m³ figure
+            is the breakpoint for the same window the stage is judged on. */}
+        <div className="mt-3 rounded-lg border border-term-outline-variant/50 bg-term-surface-low px-3 py-2">
+          <span className="font-mono text-[11px] text-term-ink-variant">
+            {nextStep == null ? (
+              <>Stage IV is the highest stage CAQM defines — nothing escalates beyond this.</>
+            ) : (
+              <>
+                {stageLabel(data.grap.stage + 1)} begins at{' '}
+                <span className="font-bold text-term-ink">AQI {nextStep.aqi}</span>
+                {' '}({nextStep.ugm3} µg/m³ as a 24-hour mean). The forecast peaks at{' '}
+                <span className="font-bold text-term-ink">{data.city_aqi}</span>
+                {', '}
+                <span className="font-bold" style={{ color: stage.color }}>
+                  {nextStep.aqi - data.city_aqi} below
+                </span>
+                {' '}the threshold.
+              </>
+            )}
+          </span>
         </div>
 
         <ul className="mt-4 space-y-1.5 border-t border-term-outline-variant/40 pt-3">
