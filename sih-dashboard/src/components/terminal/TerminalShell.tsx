@@ -11,11 +11,13 @@ import {
   LineChart,
   MapPin,
   Map as MapIcon,
+  Menu,
   RefreshCw,
   Radio,
   ScatterChart,
   Search,
   SlidersHorizontal,
+  X,
   Table2,
 } from 'lucide-react';
 import { CERTIFICATIONS, HUB, LOCATIONS } from '@/lib/terminal/content';
@@ -57,11 +59,14 @@ const NAV: NavItem[] = [
 ];
 
 export function TerminalShell({ children }: { children: React.ReactNode }) {
+  const [navOpen, setNavOpen] = React.useState(false);
+  const closeNav = React.useCallback(() => setNavOpen(false), []);
+
   return (
     <div className="terminal-root min-h-dvh font-body antialiased">
-      <TerminalSidebar />
+      <TerminalSidebar open={navOpen} onClose={closeNav} />
       <div className="flex min-h-dvh w-full flex-col md:pl-64">
-        <TerminalHeader />
+        <TerminalHeader onOpenNav={() => setNavOpen(true)} />
         <main className="w-full flex-1 px-5 py-6 lg:px-8">
           <TerminalEnter>
             <div className="space-y-6">{children}</div>
@@ -73,14 +78,72 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TerminalSidebar() {
+function TerminalSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = useLocation().pathname;
+
+  // Every nav item either changes route or jumps to a hash on this one, and in
+  // both cases the drawer has done its job. Closing on pathname alone would
+  // miss the hash links, which are most of the rail, so the handler on each
+  // link covers those and this covers the back-button case.
+  React.useEffect(() => {
+    onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  // A drawer that traps you is worse than no drawer.
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
   // The sidebar is on every page, so this is the one count a reader sees
   // constantly. It has to be the real one.
   const advisories = useAdvisories().items.length;
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 hidden h-full w-64 flex-col justify-between border-r border-term-outline-variant/60 bg-term-surface-lowest p-4 shadow-2xl md:flex">
+    <>
+      {/* Scrim, mobile only. The rail is docked from md up and needs none. */}
+      <div
+        onClick={onClose}
+        aria-hidden="true"
+        className={cn(
+          'fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-200 md:hidden',
+          open ? 'opacity-100' : 'pointer-events-none opacity-0',
+        )}
+      />
+      {/* Below md this rail was `hidden`, which took the whole of NAV with it:
+          Geo Map, Temporal Trends, Pollutant Matrices, Incident Warnings and
+          the Ledger had no route on a phone at all. It is the same rail and
+          the same NAV - docked from md up, and a drawer under it, rather than
+          a second menu that would drift out of step with this one. */}
+      <aside
+        id="terminal-nav"
+        aria-label="Terminal sections"
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col justify-between overflow-y-auto border-r border-term-outline-variant/60 bg-term-surface-lowest p-4 shadow-2xl',
+          'transition-transform duration-200 ease-out motion-reduce:transition-none',
+          // visibility, not aria-hidden: this element is a drawer below md and
+          // a permanently visible rail above it, and one static aria-hidden
+          // cannot be right for both - it would have hidden the docked rail
+          // from screen readers on every desktop. `invisible` takes the closed
+          // drawer out of the tab order and the accessibility tree, and
+          // `md:visible` puts the rail back.
+          'md:visible md:translate-x-0',
+          open ? 'translate-x-0' : '-translate-x-full invisible',
+        )}
+      >
+        {/* Only the drawer needs dismissing; the docked rail has nowhere to go. */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close navigation"
+          className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-lg border border-term-outline bg-term-surface-high text-term-ink-variant transition-colors hover:border-term-primary/50 hover:text-term-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60 md:hidden"
+        >
+          <X className="size-4" />
+        </button>
       <div className="space-y-6">
         {/* Back to the landing track. Sits above the brand rather than beside
             it: the terminal is a destination reached from the intro, so the
@@ -183,11 +246,12 @@ function TerminalSidebar() {
           PUBLIC ACCESS TERMINAL • READ-ONLY
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }
 
-function TerminalHeader() {
+function TerminalHeader({ onOpenNav }: { onOpenNav: () => void }) {
   const options = useStationOptions();
   const select = useTerminalStore((st) => st.select);
   // The hub, not the stored id. They differ whenever the stored selection is
@@ -229,6 +293,19 @@ function TerminalHeader() {
           width; without it the search never gives ground and the row spills
           past the viewport instead. */}
       <div className="flex min-w-0 flex-1 items-center gap-4">
+        {/* Opens the rail below md, where it is a drawer. Without it the only
+            reachable sections on a phone were this Back link and the geo-map
+            shortcut further along the header. */}
+        <button
+          type="button"
+          onClick={onOpenNav}
+          aria-label="Open navigation"
+          aria-controls="terminal-nav"
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-term-outline bg-term-surface-high text-term-ink-variant transition-colors hover:border-term-primary/50 hover:text-term-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-primary/60 md:hidden"
+        >
+          <Menu className="size-4" />
+        </button>
+
         {/* The sidebar carrying the other Back control is hidden below md, so
             without this a phone has no way out of the terminal. */}
         <Link
