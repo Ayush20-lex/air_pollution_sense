@@ -464,3 +464,21 @@
 :root[data-perf='low'] .pulse-live {
   animation: none !important;
 }
+
+/* The map's flowing dashes, stopped where they cannot be afforded.
+   
+   Measured on the geo route at 375px: 68 wind streamlines and 4 transport
+   ribbons, every one of them animating stroke-dashoffset forever. A dash
+   offset is not a composited property - the browser re-rasterises each path
+   every frame - so this is 72 SVG repaints per frame for as long as the map
+   is open, on top of 98 pin markers. It is why the map, not the globe, was
+   the thing that actually stuttered.
+
+   The lines stay exactly where they are and keep their colour, weight and
+   dash pattern; they simply stop travelling. Direction is already carried by
+   the shape of each streamline and by the ribbon arrowheads, so what is lost
+   here is decoration rather than information. */
+:root[data-perf='low'] .term-stream,
+:root[data-perf='low'] .term-ribbon {
+  animation: none !important;
+}

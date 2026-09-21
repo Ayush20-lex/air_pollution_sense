@@ -602,8 +602,49 @@
   animation: none !important;
 }
 
-:root[data-perf='low'] .shiny-cta,
-:root[data-perf='low'] .shiny-cta::before,
-:root[data-perf='low'] .shiny-cta::after {
+/* The CTA keeps moving, but stops repainting to do it.
+
+   `shine-sweep` animates --shine-angle, which feeds a conic-gradient border.
+   Conic gradients are expensive to rasterise and a custom property driving one
+   cannot be composited, so every frame repaints the whole button. Killing it
+   outright was the first attempt and it was the wrong call - the sweep is the
+   one piece of motion on the page a reader actually looks at, and its absence
+   read as the page being broken rather than as the page being fast.
+
+   This replaces it with a sheen that only ever moves a layer: transform is
+   composited, so the button is rasterised once and then slid, which a weak GPU
+   can do without touching the main thread. */
+:root[data-perf='low'] .shiny-cta {
   animation: none !important;
+}
+
+:root[data-perf='low'] .shiny-cta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 38%,
+    rgb(var(--as-accent) / 0.45) 50%,
+    transparent 62%
+  );
+  animation: cheap-sheen 3s linear infinite;
+}
+
+@keyframes cheap-sheen {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(110%);
+  }
+}
+
+/* Someone who asked for less motion gets less motion, tier regardless. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-perf='low'] .shiny-cta::before {
+    animation: none;
+  }
 }
