@@ -3,19 +3,25 @@
 **Repo:** `yadavarpit9833-cpu/Data-Pipeline`
 **File to produce:** `exports/gfs_ncr_forecast.parquet`
 
-The committed extract has expired. Its cycle initialised **2026-09-16 00:00 UTC**
-and its whole 72-hour window is now in the past:
+**Current state, 21 September 2026:** the partner delivered cycle
+`20260921_00z` and it is installed. It validated clean against the contract
+below — 225 rows, schema unchanged, no imputed rows, `fhr=0` precipitation
+correctly null:
 
 ```
-cycle_init        2026-09-16T00:00Z
-cycle_age         84.1 h
-hours_remaining   -12.1
-status            expired
+cycle_init        2026-09-21T00:00Z
+cycle_age         16.2 h
+hours_remaining   55.8
+status            aging
 ```
 
-Nothing is broken — GFS is a read-only side channel and feeds no forecast, so the
-scored RMSE of 62.23 is unaffected. But `/api/v1/status` reports `"expired"`, and
-that is the first thing a judge opening the status page will see.
+`aging` is expected and fine to demo: NCEP issues a new cycle every 6 hours, so
+anything committed is `aging` within a day. Only `expired` is a problem.
+
+GFS is a read-only side channel and feeds no forecast, so the scored RMSE of
+62.23 is unaffected either way. What it does drive is the Meteorology Source
+panel and `/api/v1/status`, and `expired` there is the first thing a judge
+opening the status page sees.
 
 ---
 
@@ -102,6 +108,17 @@ issues a new cycle every 6. Any of those is fine to demo; `expired` is not.
 
 Then restart the backend so it drops its cached parse:
 
+The box deploys by pulling, not by copying, and its `origin` is the friend's
+repo while Ayush's is the `ayush` remote — so pushing to the wrong one deploys
+nothing:
+
 ```bash
-ssh -i ~/ssh-key-2026-09-18.key ubuntu@140.238.241.77 "sudo systemctl restart airsense"
+ssh -i /path/to/ssh-key-2026-09-20.key ubuntu@140.238.241.77   "cd /root/airsense && sudo git fetch ayush && sudo git merge --ff-only ayush/main && sudo systemctl restart airsense"
+```
+
+`ssh-key-2026-09-18.key` was rotated out on 20 September after being exposed and
+is rejected by the box; use the 09-20 key. Confirm afterwards with:
+
+```bash
+curl -s https://140.238.241.77/api/v1/met/gfs | grep -o '"status":"[a-z]*"'
 ```
