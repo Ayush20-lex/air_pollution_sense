@@ -195,12 +195,60 @@ with live_history._connect() as c:
     kept = c.execute("SELECT value, unit FROM reading").fetchall()
 check("the old schema gains a unit column", "unit" in cols)
 check("rows written before the column are preserved as ug/m3", kept == [(61.0, live_history.UGM3)])
-check("the legacy table is cleaned up after the move",
-      not list(live_history._connect().execute(
-          "SELECT name FROM sqlite_master WHERE name='reading_legacy'")))
+with live_history._connect() as c:
+    _legacy = list(c.execute("SELECT name FROM sqlite_master WHERE name='reading_legacy'"))
+check("the legacy table is cleaned up after the move", not _legacy)
 live_history.DB_PATH = _saved
 reset()
 live_history.record(mesh(new, [station(2, 20.0)]))
+
+
+# ── connections are closed ──────────────────────────────────────────────────
+#
+# The regression this file did not have. `_connect` used to return the handle
+# bare and every caller wrote `with _connect() as conn:`, which commits the
+# transaction and leaves the connection open. Nothing here noticed, because
+# every test asserts on rows and none of them counted handles.
+#
+# In production it took twenty-seven hours to bring the service down: the
+# recorder polls every five minutes, each /api/v1/stations read opens another,
+# and at 1024 descriptors the process was holding 503 copies of the database
+# and 503 of its WAL. It could no longer open a socket, so every CPCB and WAQI
+# fetch failed with "[Errno 24] Too many open files", while systemd still
+# called the unit active because the process was alive and listening.
+
+def _open_db_handles() -> int | None:
+    """How many descriptors this process holds on the history database.
+
+    Linux only - there is no /proc on Windows, where this file is also run.
+    Returns None there so the check can say it was skipped rather than pass
+    without having tested anything.
+    """
+    fd_dir = Path("/proc/self/fd")
+    if not fd_dir.is_dir():
+        return None
+    n = 0
+    for fd in fd_dir.iterdir():
+        try:
+            target = os.readlink(fd)
+        except OSError:
+            continue
+        if str(_tmp) in target:
+            n += 1
+    return n
+
+
+_before = _open_db_handles()
+if _before is None:
+    print("[SKIP] connections are closed after use (needs /proc; not on this platform)")
+else:
+    for _ in range(40):
+        live_history.history([1], "2026-09-20T10:00:00+00:00", hours=24)
+    _after = _open_db_handles()
+    check(
+        f"forty reads leak no handles ({_before} -> {_after})",
+        _after <= _before,
+    )
 
 
 # ── status ──────────────────────────────────────────────────────────────────

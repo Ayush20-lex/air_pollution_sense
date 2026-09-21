@@ -48,6 +48,8 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -122,16 +124,42 @@ def _migrate(conn: sqlite3.Connection) -> None:
     logger.info("live history migrated: %d reading(s) preserved", moved)
 
 
-def _connect() -> sqlite3.Connection:
+@contextmanager
+def _connect() -> Iterator[sqlite3.Connection]:
+    """A connection that is closed when the block ends.
+
+    This used to return the connection bare, and every call site opened it as
+    `with _connect() as conn:`. That reads like it closes and does not:
+    sqlite3's own context manager commits or rolls back the *transaction* and
+    leaves the connection open. Nothing ever closed them.
+
+    The cost was not visible for an hour or a day of development. In
+    production it took the service down after twenty-seven hours: the recorder
+    polls every five minutes and every /api/v1/stations request reads the
+    window, so the handles accumulated until the process hit its 1024-descriptor
+    limit holding 503 copies of the database and 503 of its WAL. At that point
+    it could not open a socket either - every CPCB and WAQI fetch failed with
+    "[Errno 24] Too many open files" and the API could no longer accept a
+    connection, while systemd still reported it active because the process was
+    alive and listening.
+
+    Wrapping sqlite3's context manager rather than replacing it keeps the
+    commit-on-success, roll-back-on-error semantics the callers were already
+    relying on, and `finally` closes the handle either way.
+    """
     conn = sqlite3.connect(DB_PATH, timeout=5.0)
-    # WAL so a read for a page request is never blocked by the recorder's
-    # write. Both happen in the same process but on different threads, and the
-    # default journal would serialise them.
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    _migrate(conn)
-    conn.execute(_SCHEMA)
-    return conn
+    try:
+        # WAL so a read for a page request is never blocked by the recorder's
+        # write. Both happen in the same process but on different threads, and
+        # the default journal would serialise them.
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        _migrate(conn)
+        conn.execute(_SCHEMA)
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 
 def _floor_hour(iso: str) -> str | None:
