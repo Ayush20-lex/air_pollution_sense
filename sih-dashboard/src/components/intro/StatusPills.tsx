@@ -11,12 +11,17 @@ import { useMesh } from '@/lib/terminal/useMesh';
  * right, west to the left. The probe card reads the nearest pill to the
  * cursor, so a pill in the wrong place would name the wrong sector.
  *
- * Each names a real reporting station and shows that station's own AQI, and
- * cycles through the stations in its sector. Before this the pill carried a
- * district's synthetic figure under a "DELHI-NCR-NORTH" label, which named a
- * region and measured nothing in it - there is no instrument at "NCR North".
- * Now every number on the landing page belongs to a station that can be
- * named, and over a minute the pill has shown most of its sector.
+ * Each names the worst-reading station in its sector and shows that station's
+ * own AQI. Before this the pill carried a district's synthetic figure under a
+ * "DELHI-NCR-NORTH" label, which named a region and measured nothing in it -
+ * there is no instrument at "NCR North".
+ *
+ * The worst rather than a rotation through the sector. A landing page is read
+ * for a few seconds, and in those seconds "how bad is the north" has one
+ * answer; cycling through fourteen stations made the same pill say 156 then
+ * 146 then 141 and left a reader with no figure to carry away. It still moves,
+ * but only when the mesh does - a new worst station takes the pill when it
+ * overtakes, which is the pill reporting rather than animating.
  *
  * Positions are hand-placed to frame the cloud rather than cover it, and are
  * bounded by the pill: each is about 295px wide, so `left` has to leave that
@@ -41,39 +46,29 @@ export function sectorForSlot(id: string): string | undefined {
   return SLOTS.find((s) => s.id === id)?.sector;
 }
 
-/** How long each station holds its pill. */
-const ROTATE_MS = 6000;
-
 export function StatusPills() {
   const { stations } = useMesh();
 
-  // One timer for all four, so they turn together rather than drifting into a
-  // flicker of four independent clocks.
-  const [tick, setTick] = React.useState(0);
-  React.useEffect(() => {
-    const id = window.setInterval(() => setTick((n) => n + 1), ROTATE_MS);
-    return () => window.clearInterval(id);
-  }, []);
-
-  // Grouped once per mesh update rather than per pill per render.
-  const bySector = React.useMemo(() => {
-    const out: Record<string, typeof stations> = {};
-    for (const s of stations) (out[s.zone] ??= []).push(s);
-    // Worst first, so a sector leads with the reading that matters and the
-    // rotation is a tour down from it rather than an arbitrary order.
-    for (const k of Object.keys(out)) out[k].sort((a, b) => b.aqi - a.aqi);
+  // The worst station per sector, recomputed only when the mesh changes. A
+  // single pass rather than a sort: only the maximum is wanted, and four
+  // sectors over eighty stations is not worth ordering all of.
+  const worstBySector = React.useMemo(() => {
+    const out: Record<string, (typeof stations)[number]> = {};
+    for (const s of stations) {
+      const held = out[s.zone];
+      if (!held || s.aqi > held.aqi) out[s.zone] = s;
+    }
     return out;
   }, [stations]);
 
   return (
     <>
       {SLOTS.map((slot) => {
-        const pool = bySector[slot.sector] ?? [];
+        const station = worstBySector[slot.sector];
         // A sector with nothing reporting renders nothing. The offline curated
         // mesh has no southern station at all, and a pill reading "South — ?"
         // would be worse than the gap it leaves.
-        if (!pool.length) return null;
-        const station = pool[tick % pool.length];
+        if (!station) return null;
         const color = aqiBandColor(station.aqi);
 
         return (
@@ -105,9 +100,9 @@ export function StatusPills() {
                 {station.name}
               </span>
 
-              {/* Keyed on the station so the figure cross-fades as the pill
-                  turns, instead of the number snapping under a name that
-                  changed at the same moment. */}
+              {/* Keyed on the station so the figure cross-fades when a new
+                  worst takes the pill, instead of the number snapping under a
+                  name that changed at the same moment. */}
               <motion.span
                 key={station.id}
                 initial={{ opacity: 0 }}
