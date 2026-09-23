@@ -103,7 +103,15 @@ const initialFrames = buildForecast(DEFAULT_INTERVENTIONS);
 export const useAppStore = create<AppState>((set, get) => ({
   screen: 'intro',
   scanTarget: null,
-  startScan: (target) => set({ screen: 'transition', scanTarget: target ?? null }),
+  // `typeof target === 'string'`, not `target ?? null`. ScanButton wires this
+  // straight to onClick, so the handler is called with a click event - and
+  // `(target?: string) => void` is assignable to the `() => void` the button
+  // declares, so nothing objected. The event became the scan's destination,
+  // `navigate(<SyntheticEvent>)` ran, and the intro handed off to a black
+  // screen. Guarding here rather than only at the call sites, because the next
+  // caller to wire it to a handler will make the same mistake.
+  startScan: (target) =>
+    set({ screen: 'transition', scanTarget: typeof target === 'string' ? target : null }),
   completeScan: () => set({ screen: 'dashboard' }),
   returnToIntro: () => set({ screen: 'intro', playing: false, scanTarget: null }),
 

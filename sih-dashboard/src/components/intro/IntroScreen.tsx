@@ -419,7 +419,7 @@ export function IntroScreen() {
           </p>
 
           <div className="pointer-events-auto flex shrink-0 flex-col items-start gap-2.5 sm:items-end">
-            <ScanButton onScan={startScan} scanning={handingOff} />
+            <ScanButton onScan={() => startScan()} scanning={handingOff} />
             <motion.span
               style={{ opacity: hintOpacity }}
               className="flex items-center gap-1.5 whitespace-nowrap font-mono text-2xs uppercase tracking-[0.2em] text-faint"
@@ -461,7 +461,7 @@ export function IntroScreen() {
             Each one opens the public terminal. Everything it shows is read-only.
           </p>
           <div className="mt-6">
-            <EntryGrid frame={frame} onScan={startScan} scanning={handingOff} />
+            <EntryGrid frame={frame} onScan={() => startScan()} scanning={handingOff} />
           </div>
         </section>
       </div>
