@@ -73,12 +73,48 @@ function BootSplash() {
  * "Scan NCR" plays the disperse animation behind the hand-off curtain, then
  * opens the public terminal.
  */
+/**
+ * True once the landing page has been mounted in this page load.
+ *
+ * Module-level rather than state, because the distinction it has to draw is
+ * exactly the one a module-level `let` draws for free: it survives client-side
+ * navigation and resets on a real page load. So walking from the landing page
+ * into the terminal keeps it true, and opening /terminal/geo-map cold - a
+ * bookmark, a shared link, a refresh - finds it false.
+ */
+let cameThroughLanding = false;
+
+/**
+ * Sends a cold deep link back to the landing page.
+ *
+ * The terminal is the second half of a single piece: the landing page is what
+ * says which city this is, where the numbers come from and how current they
+ * are, and the terminal assumes a reader who has been told. Someone handed
+ * /terminal/geo-map arrives at a map of unexplained colours instead.
+ *
+ * `replace` so the redirect leaves no history entry - otherwise Back from the
+ * landing page would return to the deep link and bounce again.
+ */
+function RequireLanding({ children }: { children: React.ReactNode }) {
+  if (!cameThroughLanding) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 function IntroRoute() {
   const navigate = useNavigate();
   const screen = useAppStore((s) => s.screen);
   const returnToIntro = useAppStore((s) => s.returnToIntro);
   const loadLiveForecast = useAppStore((s) => s.loadLiveForecast);
   const navigated = React.useRef(false);
+
+  // Seen the landing page; the terminal routes may now be entered. In an
+  // effect, not in the render body: React may render a component without
+  // committing it, and a flag set on a render that never mounted would open
+  // the terminal to a reader who was never shown the landing page. The effect
+  // runs before the one below that navigates, so the ordering holds.
+  React.useEffect(() => {
+    cameThroughLanding = true;
+  }, []);
 
   // Pull the backend forecast once on mount. It replaces the synthetic frames
   // if it arrives; if the backend is down the UI carries on with them, so there
@@ -146,7 +182,14 @@ export default function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<IntroRoute />} />
-              <Route path="/terminal" element={<TerminalLayout />}>
+              <Route
+                path="/terminal"
+                element={
+                  <RequireLanding>
+                    <TerminalLayout />
+                  </RequireLanding>
+                }
+              >
                 <Route index element={<TerminalOverview />} />
                 <Route path="geo-map" element={<TerminalGeoMap />} />
               </Route>

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { HeartPulse, Hospital, Radio, Share2, Thermometer, Wind } from 'lucide-react';
+import { Check, HeartPulse, Hospital, Radio, Share2, Thermometer, Wind } from 'lucide-react';
 import { Label, Meter, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { ADVISORY_TEXT, BIOMETRIC_IMPACTS, CPCB_SCALE, HUB } from '@/lib/terminal/content';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
@@ -271,9 +271,57 @@ function MicroStat({ label, value, valueClass }: { label: string; value: string;
 /** Public health guidance and the biometric impact meters. */
 function HealthAdvisory() {
   const icons = [HeartPulse, Hospital, Thermometer, Wind];
+  const [copied, setCopied] = React.useState<'idle' | 'ok' | 'fail'>('idle');
+
+  /**
+   * Puts the site's own address on the clipboard.
+   *
+   * The origin rather than `location.href`: every deep link redirects to the
+   * landing page, so a shared inner URL would send the reader somewhere they
+   * cannot stay. It is also the right thing to paste into a message - what is
+   * being broadcast is the terminal, not one scroll position in it.
+   *
+   * `navigator.clipboard` needs a secure context. That covers Vercel and
+   * localhost but not a plain-HTTP preview, so the old textarea route stands
+   * behind it - and if both fail the button says so instead of looking like it
+   * worked.
+   */
+  const copyLink = React.useCallback(async () => {
+    const url = window.location.origin;
+    const done = (state: 'ok' | 'fail') => {
+      setCopied(state);
+      window.setTimeout(() => setCopied('idle'), 2200);
+    };
+    try {
+      await navigator.clipboard.writeText(url);
+      done('ok');
+      return;
+    } catch {
+      /* fall through to the legacy path */
+    }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      done(ok ? 'ok' : 'fail');
+    } catch {
+      done('fail');
+    }
+  }, []);
 
   return (
-    <TelemetryCard className="space-y-4 p-6 lg:col-span-5">
+    /* A flex column, not `space-y-4`. The grid stretches both columns to the
+       taller one - the gauge beside this - and with the children stacked
+       normally the slack all landed under the buttons as dead space. As a
+       column the button row can take `mt-auto` and sit on the bottom edge,
+       which is where a card's actions belong anyway. */
+    <TelemetryCard className="flex flex-col gap-4 p-6 lg:col-span-5">
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-2 font-display text-lg font-bold tracking-tight text-term-ink">
           <Hospital className="size-5 text-term-secondary" />
@@ -315,13 +363,19 @@ function HealthAdvisory() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3 border-t border-term-outline-variant/40 pt-3">
+      <div className="mt-auto flex items-center justify-between gap-3 border-t border-term-outline-variant/40 pt-3">
         <button
           type="button"
+          onClick={() => void copyLink()}
+          aria-live="polite"
           className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-term-ink transition-colors hover:border-term-primary/50"
         >
-          <Share2 className="size-3.5 text-term-primary" />
-          Broadcast Advisory
+          {copied === 'ok' ? (
+            <Check className="size-3.5 text-term-primary" />
+          ) : (
+            <Share2 className="size-3.5 text-term-primary" />
+          )}
+          {copied === 'ok' ? 'Link copied' : copied === 'fail' ? 'Copy failed' : 'Broadcast Advisory'}
         </button>
         <button
           type="button"
