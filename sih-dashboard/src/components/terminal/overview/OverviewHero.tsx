@@ -316,12 +316,14 @@ function HealthAdvisory() {
   }, []);
 
   return (
-    /* A flex column, not `space-y-4`. The grid stretches both columns to the
-       taller one - the gauge beside this - and with the children stacked
-       normally the slack all landed under the buttons as dead space. As a
-       column the button row can take `mt-auto` and sit on the bottom edge,
-       which is where a card's actions belong anyway. */
-    <TelemetryCard className="flex flex-col gap-4 p-6 lg:col-span-5">
+    /* `self-start`, so the card ends where its content ends.
+       The grid stretches both columns to the taller one - the gauge beside
+       this - and that spare height has to go somewhere. Under the buttons it
+       was a void; pushed into the assessment tiles it became a hole in the
+       middle of each one. There is no arrangement of a stretched card that
+       does not show the stretch. Not stretching is the answer: the row keeps
+       its height, and this card simply stops. */
+    <TelemetryCard className="flex flex-col gap-4 self-start p-6 lg:col-span-5">
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-2 font-display text-lg font-bold tracking-tight text-term-ink">
           <Hospital className="size-5 text-term-secondary" />
@@ -337,22 +339,15 @@ function HealthAdvisory() {
         {ADVISORY_TEXT}
       </p>
 
-      {/* `flex-1` here, not `mt-auto` on the buttons.
-          Pushing the actions to the bottom moved the slack rather than
-          removing it: the void simply reappeared between these tiles and the
-          button row. The assessments are the part of this card that can carry
-          extra height without looking padded, so they take it - `auto-rows-fr`
-          keeps the two rows equal, and each tile spreads its own label and
-          meter instead of leaving the gap inside itself. */}
-      <div className="flex flex-1 flex-col gap-3 border-t border-term-outline-variant/40 pt-3">
+      <div className="flex flex-col gap-3 border-t border-term-outline-variant/40 pt-3">
         <Label>Biometric Impact Threat Assessments</Label>
-        <div className="grid flex-1 auto-rows-fr grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
           {BIOMETRIC_IMPACTS.map((b, i) => {
             const Icon = icons[i % icons.length];
             return (
               <div
                 key={b.label}
-                className="flex flex-col justify-between gap-1.5 rounded-xl border border-term-outline-variant/60 bg-term-surface-low p-2.5"
+                className="flex flex-col gap-2 rounded-xl border border-term-outline-variant/60 bg-term-surface-low p-2.5"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-term-ink-variant">
@@ -363,19 +358,19 @@ function HealthAdvisory() {
                     {b.level}
                   </span>
                 </div>
-                {/* The figure the bar was already drawing, in digits, sitting
-                    above the bar rather than beside it. Alongside, it stole
-                    width from the meter and pushed the fill short of the track
-                    it is read against. */}
+                {/* The figure above its bar, left-aligned and set large enough
+                    to be the thing the tile is read for.
+                    At 10px and right-aligned it was neither: too small to lead
+                    anything, and sitting in the corner it left the tile's
+                    middle empty - the stretch this card takes from the grid had
+                    nowhere to go but that hole. The number fills it. */}
                 <div className="space-y-1">
-                  <div className="text-right">
-                    <span
-                      className="font-mono text-[10px] font-bold tabular-nums"
-                      style={{ color: b.color }}
-                    >
-                      {b.pct}%
-                    </span>
-                  </div>
+                  <span
+                    className="block font-display text-xl font-extrabold leading-none tabular-nums"
+                    style={{ color: b.color }}
+                  >
+                    {b.pct}%
+                  </span>
                   <Meter pct={b.pct} color={b.color} />
                 </div>
               </div>
