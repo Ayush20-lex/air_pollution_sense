@@ -747,7 +747,11 @@ function SourceRibbons() {
   const wind = useMeasuredWind(0);
   const fire = useAppStore((st) => st.source?.fire);
   const sources = React.useMemo(
-    () => livePlumeSources(wind?.fromDeg ?? null, fire),
+    // A measured zero stays in the rail as "0%", where it is a finding. On the
+    // map it would be a transport path for smoke that is not there - a ribbon
+    // drawn at zero width still carries a label claiming a route into the
+    // basin - so it is not drawn at all.
+    () => livePlumeSources(wind?.fromDeg ?? null, fire).filter((s) => !(s.measured && s.share === 0)),
     [wind?.fromDeg, fire],
   );
 

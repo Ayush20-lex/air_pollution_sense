@@ -94,6 +94,39 @@ export function livePlumeSources(
   windFromDeg: number | null,
   fire: FireMeta | undefined,
 ): LivePlumeSource[] {
+  return closeTheBudget(rawPlumeSources(windFromDeg, fire));
+}
+
+/**
+ * Scale the editorial sectors so the apportionment still sums to 100%.
+ *
+ * The four static shares were written as a closed budget: 34 + 26 + 22 + 18.
+ * Once stubble is measured it no longer takes its 34, but the other three kept
+ * theirs - so a measured 0% left the rail reading 0 + 26 + 22 + 18 = 66%, and a
+ * measured 12% left it at 78%. A source apportionment that does not close
+ * invites exactly one question, and it is the wrong one.
+ *
+ * The estimates keep their relative weights and take whatever the measured
+ * share leaves. They stay marked as estimates: this makes them consistent with
+ * the measurement, not more precise than they were.
+ */
+function closeTheBudget(sources: LivePlumeSource[]): LivePlumeSource[] {
+  const measured = sources.filter((x) => x.measured);
+  if (!measured.length) return sources;
+  const taken = measured.reduce((a, x) => a + x.share, 0);
+  const estimates = sources.filter((x) => !x.measured);
+  const weight = estimates.reduce((a, x) => a + x.share, 0);
+  if (weight <= 0) return sources;
+  const room = Math.max(0, 100 - taken);
+  return sources.map((x) =>
+    x.measured ? x : { ...x, share: Math.round((x.share / weight) * room) },
+  );
+}
+
+function rawPlumeSources(
+  windFromDeg: number | null,
+  fire: FireMeta | undefined,
+): LivePlumeSource[] {
   const share = fire?.smoke_share_pct;
   const hasFires =
     typeof fire?.centroid_lat === 'number' && typeof fire?.centroid_lon === 'number';
@@ -101,7 +134,33 @@ export function livePlumeSources(
   // behind the share, and the ribbon would be a direction with no quantity.
   const canMeasure = windFromDeg != null && typeof share === 'number' && hasFires;
 
+  // A reported zero is a measurement, not an absence.
+  //
+  // With no fires there is no fire centroid, so `hasFires` is false - and this
+  // used to send the stubble ribbon down the editorial branch, which prints the
+  // hardcoded 34%. So on a day NASA FIRMS reported zero fires in the corridor,
+  // and the backend said in as many words "corridor quiet - a real zero, not a
+  // missing feed", the map labelled stubble burning the single largest source
+  // in the basin. The absence of a centroid was being read as the absence of
+  // data. It is the opposite: it is what a measured zero looks like.
+  //
+  // Wind is not required for this case. There is no smoke to transport, so
+  // there is no direction to measure it along.
+  const measuredZero =
+    typeof share === 'number' && share === 0 && (fire?.fires ?? 0) === 0;
+
   return PLUME_SOURCES.map((src): LivePlumeSource => {
+    if (src.id === 'stubble' && measuredZero) {
+      return {
+        ...src,
+        share: 0,
+        measured: true,
+        detail: fire?.season
+          ? `no active fires in the corridor · ${fire.season}`
+          : 'no active fires in the corridor',
+        note: 'measured',
+      };
+    }
     if (src.id !== 'stubble' || !canMeasure) {
       return {
         ...src,
