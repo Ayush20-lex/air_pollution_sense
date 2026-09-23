@@ -35,13 +35,13 @@ function useCityHistory(days = 30): CityHistory | null {
 export function OverviewAnalytics() {
   return (
     <>
-      {/* The forecast leads, because it is the only panel here whose numbers
-          come from the model. `TemporalTrend` charted twenty-four constants
-          under four timeframe buttons that all drew the same line; it is kept
-          below and labelled, not passed off as a record. */}
-      <ForecastPanel />
+      {/* `ForecastPanel` and `TemporalTrend` now live on their own page - see
+          TerminalForecast. They are the two panels about time rather than about
+          this hour, and reading them meant scrolling past everything else.
+          They are exported from here rather than moved, because `TemporalTrend`
+          and the exposure histogram below share `useCityHistory` and must not
+          end up fetching two different months. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <TemporalTrend />
         <StressorDonut />
       </div>
       <Correlator />
@@ -50,7 +50,7 @@ export function OverviewAnalytics() {
 }
 
 /** The backend's 72-hour forecast, at 12-hour marks. */
-function ForecastPanel() {
+export function ForecastPanel() {
   const liveFrames = useAppStore((st) => st.liveFrames);
   const source = useAppStore((st) => st.source);
   const load = useAppStore((st) => st.loadLiveForecast);
@@ -72,7 +72,7 @@ function ForecastPanel() {
 /** How many days of archive each timeframe asks for. */
 const RANGE_DAYS: Record<string, number> = { '24H': 7, '7D': 7, '30D': 30, '90D': 90 };
 
-function TemporalTrend() {
+export function TemporalTrend() {
   const [range, setRange] = React.useState<(typeof TIMEFRAMES)[number]>('30D');
 
   // The buttons used to redraw the same twenty-four constants whatever was
@@ -109,7 +109,7 @@ function TemporalTrend() {
 
   if (series.length < 2) {
     return (
-      <TelemetryCard className="flex h-64 items-center justify-center p-5 lg:col-span-8">
+      <TelemetryCard className="flex h-64 items-center justify-center p-5 lg:col-span-12">
         <span className="font-mono text-xs text-term-outline">
           {history ? 'Not enough archived days to draw a trend' : 'Reading the archive…'}
         </span>
@@ -118,7 +118,7 @@ function TemporalTrend() {
   }
 
   return (
-    <TelemetryCard className="space-y-3 p-5 lg:col-span-8">
+    <TelemetryCard className="space-y-3 p-5 lg:col-span-12">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">
@@ -251,7 +251,10 @@ function StressorDonut() {
   }
 
   return (
-    <TelemetryCard className="space-y-4 p-5 lg:col-span-4">
+    /* Spans the row now that the temporal trend has moved off this page. The
+       donut is a fixed size and already centred, so the extra width reads as
+       breathing room rather than a stretched chart. */
+    <TelemetryCard className="space-y-4 p-5 lg:col-span-12">
       <div>
         <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Dominant Stressor</h3>
         <Label>Share of reporting stations each pollutant leads</Label>

@@ -52,6 +52,10 @@ const TerminalOverview = dynamic(() => import('@/components/terminal/TerminalOve
 const TerminalGeoMap = dynamic(() => import('@/components/terminal/TerminalGeoMap').then((m) => m.default), {
   ssr: false,
 });
+const TerminalForecast = dynamic(
+  () => import('@/components/terminal/TerminalForecast').then((m) => m.default),
+  { ssr: false },
+);
 
 function BootSplash() {
   return (
@@ -192,6 +196,7 @@ export default function App() {
               >
                 <Route index element={<TerminalOverview />} />
                 <Route path="geo-map" element={<TerminalGeoMap />} />
+                <Route path="forecast" element={<TerminalForecast />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

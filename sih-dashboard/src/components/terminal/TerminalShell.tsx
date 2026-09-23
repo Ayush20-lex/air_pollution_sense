@@ -49,7 +49,9 @@ type NavItem = {
 const NAV: NavItem[] = [
   { href: '/terminal', label: 'Live Telemetry', icon: <Radio className="size-4" /> },
   { href: '/terminal/geo-map', label: 'Geo Map', icon: <MapIcon className="size-4" /> },
-  { href: '/terminal#analytics', label: 'Temporal Trends', icon: <LineChart className="size-4" /> },
+  // Was '/terminal#analytics', a hash into the middle of Live Telemetry. The
+  // forecast and the observed trend are a page now, so this points at it.
+  { href: '/terminal/forecast', label: 'AQI Trend & Forecast', icon: <LineChart className="size-4" /> },
   { href: '/terminal#matrices', label: 'Pollutant Matrices', icon: <ScatterChart className="size-4" /> },
   // No literal badge. "3 PENDING" said three whatever the air was doing, on
   // every page, including a day with nothing wrong. The count is now the number
@@ -115,7 +117,7 @@ function TerminalSidebar({ open, onClose }: { open: boolean; onClose: () => void
         )}
       />
       {/* Below md this rail was `hidden`, which took the whole of NAV with it:
-          Geo Map, Temporal Trends, Pollutant Matrices, Incident Warnings and
+          Geo Map, AQI Trend & Forecast, Pollutant Matrices, Incident Warnings and
           the Ledger had no route on a phone at all. It is the same rail and
           the same NAV - docked from md up, and a drawer under it, rather than
           a second menu that would drift out of step with this one. */}
