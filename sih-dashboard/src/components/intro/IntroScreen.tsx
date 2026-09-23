@@ -313,7 +313,7 @@ export function IntroScreen() {
       </motion.header>
 
       {/* --- floating zone pills ------------------------------------------ */}
-      <StatusPills frame={frame} />
+      <StatusPills />
       <ParticleProbe probe={probe} frame={frame} />
 
       {/* --- left telemetry rail ------------------------------------------ */}

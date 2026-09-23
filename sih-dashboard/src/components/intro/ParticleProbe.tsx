@@ -3,6 +3,7 @@ import { Crosshair } from 'lucide-react';
 import { ALERT_COLOR, bandForPm25, type AlertLevel } from '@/lib/aqi';
 import { AlertIcon } from '@/components/ui/alert-icon';
 import type { District, Frame } from '@/lib/data';
+import { sectorForSlot } from './StatusPills';
 
 export type Probe = {
   district: District;
@@ -66,8 +67,12 @@ function Card({ district, frame }: { district: District; frame: Frame }) {
         Probe
       </span>
 
+      {/* The sector, matching the pill this readout sits beside. It used to
+          print `district.zone` - "DELHI-NCR-NORTH" - while the pill two inches
+          away now says "North", and the whole point of mapping the cursor to
+          the nearest slot is that the two cannot disagree. */}
       <span className="font-mono text-2xs font-semibold uppercase tracking-[0.18em] text-ink">
-        {district.zone}
+        {sectorForSlot(district.id) ?? district.zone}
       </span>
 
       <span

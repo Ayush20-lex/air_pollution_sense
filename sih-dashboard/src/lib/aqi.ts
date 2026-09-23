@@ -37,6 +37,23 @@ export function aqiColor(pm: number): string {
   return bandForPm25(pm).color;
 }
 
+/**
+ * The band an *index* falls in, keyed on `aqiFrom`/`aqiTo`.
+ *
+ * `bandForPm25` reads the same table by its concentration columns, and the two
+ * are nowhere near interchangeable: an AQI of 188 is Moderate, but handed to
+ * `bandForPm25` it is read as 188 ug/m3 and comes back Very Poor. A caller
+ * with an index and no concentration has to come here.
+ */
+export function bandForAqi(aqi: number): AqiBand {
+  return AQI_BANDS.find((x) => aqi >= x.aqiFrom && aqi <= x.aqiTo) ?? AQI_BANDS[AQI_BANDS.length - 1];
+}
+
+/** Band colour for an index. See `bandForAqi` for why this is not `aqiColor`. */
+export function aqiBandColor(aqi: number): string {
+  return bandForAqi(aqi).color;
+}
+
 export type AlertLevel = 'NOMINAL' | 'ADVISORY' | 'WARNING' | 'EMERGENCY';
 
 export const ALERT_COLOR: Record<AlertLevel, string> = {
