@@ -337,15 +337,22 @@ function HealthAdvisory() {
         {ADVISORY_TEXT}
       </p>
 
-      <div className="space-y-3 border-t border-term-outline-variant/40 pt-3">
+      {/* `flex-1` here, not `mt-auto` on the buttons.
+          Pushing the actions to the bottom moved the slack rather than
+          removing it: the void simply reappeared between these tiles and the
+          button row. The assessments are the part of this card that can carry
+          extra height without looking padded, so they take it - `auto-rows-fr`
+          keeps the two rows equal, and each tile spreads its own label and
+          meter instead of leaving the gap inside itself. */}
+      <div className="flex flex-1 flex-col gap-3 border-t border-term-outline-variant/40 pt-3">
         <Label>Biometric Impact Threat Assessments</Label>
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <div className="grid flex-1 auto-rows-fr grid-cols-1 gap-2.5 sm:grid-cols-2">
           {BIOMETRIC_IMPACTS.map((b, i) => {
             const Icon = icons[i % icons.length];
             return (
               <div
                 key={b.label}
-                className="space-y-1.5 rounded-xl border border-term-outline-variant/60 bg-term-surface-low p-2.5"
+                className="flex flex-col justify-between gap-1.5 rounded-xl border border-term-outline-variant/60 bg-term-surface-low p-2.5"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-term-ink-variant">
@@ -363,7 +370,7 @@ function HealthAdvisory() {
         </div>
       </div>
 
-      <div className="mt-auto flex items-center justify-between gap-3 border-t border-term-outline-variant/40 pt-3">
+      <div className="flex items-center justify-between gap-3 border-t border-term-outline-variant/40 pt-3">
         <button
           type="button"
           onClick={() => void copyLink()}
