@@ -633,7 +633,11 @@ function HeatOverlay({ frame, field }: { frame: TerminalFrame; field: TerminalFi
       overlay.current.setUrl(url);
     } else {
       overlay.current = L.imageOverlay(url, bounds, {
-        opacity: 1,
+        // At full opacity the ramp stopped being a layer over the map and
+        // became the map: over central Delhi the roads, the river and the
+        // district edges a reader locates a station by were all gone under
+        // solid red.
+        opacity: 0.35,
         interactive: false,
         className: 'term-heat',
       }).addTo(map);
