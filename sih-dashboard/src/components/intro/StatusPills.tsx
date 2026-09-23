@@ -11,10 +11,9 @@ import { useMesh } from '@/lib/terminal/useMesh';
  * right, west to the left. The probe card reads the nearest pill to the
  * cursor, so a pill in the wrong place would name the wrong sector.
  *
- * Each names the worst-reading station in its sector and shows that station's
- * own AQI. Before this the pill carried a district's synthetic figure under a
- * "DELHI-NCR-NORTH" label, which named a region and measured nothing in it -
- * there is no instrument at "NCR North".
+ * Each shows the highest AQI reported in its sector. Before this the pill
+ * carried a district's synthetic figure; the number is now a real reading from
+ * a real instrument, and the worst one in that quarter of the mesh.
  *
  * The worst rather than a rotation through the sector. A landing page is read
  * for a few seconds, and in those seconds "how bad is the north" has one
@@ -22,6 +21,15 @@ import { useMesh } from '@/lib/terminal/useMesh';
  * 146 then 141 and left a reader with no figure to carry away. It still moves,
  * but only when the mesh does - a new worst station takes the pill when it
  * overtakes, which is the pill reporting rather than animating.
+ *
+ * The station's name is not on the pill. The label is the sector, so nothing
+ * on screen says which of that sector's instruments the figure came from -
+ * worth knowing, because "the worst in the north" is otherwise an unfalsifiable
+ * claim. It is on `title` for inspection and for assistive tech, but that is
+ * not a hover tooltip: these pills are `pointer-events-none` so the cursor can
+ * probe the cloud beneath them, and a browser shows no title on an element it
+ * cannot hit. Checked - `elementFromPoint` at a pill's centre returns the
+ * header behind it, not the pill.
  *
  * Positions are hand-placed to frame the cloud rather than cover it, and are
  * bounded by the pill: each is about 295px wide, so `left` has to leave that
@@ -41,9 +49,25 @@ export const SLOTS: {
   { id: 'gurgaon', sector: 'West', top: '30%', left: '12%', delay: 0.95 },
 ];
 
+/**
+ * How a sector is written on screen.
+ *
+ * One function so the pill and the probe readout cannot drift: the probe maps
+ * the cursor to the nearest slot precisely so the two always agree.
+ *
+ * Worth knowing what the wording claims. The mesh's sectors cover the NCR, not
+ * the municipal city - the northern quarter includes Loni and Ghaziabad, which
+ * are in Uttar Pradesh. "North Delhi" is the everyday name for that side of
+ * the region rather than an administrative one.
+ */
+export function sectorLabel(sector: string): string {
+  return `${sector} Delhi`;
+}
+
 /** The sector a slot speaks for, for anything that has to agree with a pill. */
 export function sectorForSlot(id: string): string | undefined {
-  return SLOTS.find((s) => s.id === id)?.sector;
+  const s = SLOTS.find((x) => x.id === id);
+  return s && sectorLabel(s.sector);
 }
 
 export function StatusPills() {
@@ -86,6 +110,7 @@ export function StatusPills() {
               transition={{ duration: 5 + slot.delay * 3, repeat: Infinity, ease: 'easeInOut' }}
               className="flex items-center gap-2 rounded-full border px-3 py-1.5 backdrop-blur-md"
               style={{ borderColor: `${color}55`, background: `${color}14` }}
+              title={`Highest in ${sectorLabel(slot.sector)}: ${station.name} — AQI ${station.aqi}`}
             >
               <span className="relative flex h-2 w-2">
                 <span
@@ -95,10 +120,9 @@ export function StatusPills() {
               </span>
 
               <span className="font-mono text-2xs font-semibold uppercase tracking-[0.18em] text-ink">
-                {slot.sector}
-                <span className="text-faint"> — </span>
-                {station.name}
+                {sectorLabel(slot.sector)}
               </span>
+              <span className="text-faint">—</span>
 
               {/* Keyed on the station so the figure cross-fades when a new
                   worst takes the pill, instead of the number snapping under a
