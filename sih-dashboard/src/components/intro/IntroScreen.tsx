@@ -13,7 +13,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { CommandPalette } from '@/components/ui/command-palette';
 import { Badge } from '@/components/ui/badge';
 import { ALERT_COLOR, aqiColor } from '@/lib/aqi';
-import { DISTRICTS, MODEL_META } from '@/lib/data';
+import { DISTRICTS } from '@/lib/data';
 import { SEVERITY } from '@/lib/tokens';
 import { useProvenance } from '@/lib/useProvenance';
 import { useAppStore } from '@/store/useAppStore';
@@ -304,12 +304,6 @@ export function IntroScreen() {
               {provenance.label}
             </Badge>
           </span>
-          {/* Was "00Z cycle", which is what an NWP run issues. This system
-              replays a scored archive window; calling that a 00Z cycle
-              borrowed the vocabulary of a model it does not run. */}
-          <Badge color={SEVERITY.good} dot className="hidden md:inline-flex">
-            {MODEL_META.cycle}
-          </Badge>
           <span className="hidden font-mono text-2xs tabular-nums text-muted sm:inline">
           {clock} IST
           </span>

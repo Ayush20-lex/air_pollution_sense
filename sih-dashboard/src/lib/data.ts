@@ -453,7 +453,5 @@ export const MODEL_META = {
   resolution: '1 km × 1 km (70 × 80 cells)',
   ic: 'CPCB/OpenAQ observations + CAMS reanalysis + archived ERA5 meteorology',
   emissions: 'NASA VIIRS active fire detections (Punjab/Haryana corridor)',
-  /** The archive window replayed, not an NWP cycle - see the note above. */
-  cycle: 'archive replay',
   validatedRmse: 62.23,
 };
