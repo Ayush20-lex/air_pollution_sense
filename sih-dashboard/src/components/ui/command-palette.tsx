@@ -12,7 +12,7 @@ import {
   Search,
   Sun,
 } from 'lucide-react';
-import { STATIONS } from '@/lib/terminal/stations';
+import { useMesh } from '@/lib/terminal/useMesh';
 import { aqiColor } from '@/lib/aqi';
 import { cn } from '@/lib/utils';
 
@@ -21,7 +21,9 @@ import { cn } from '@/lib/utils';
  *
  * Beyond the obvious job, it is how a phone navigates at all: the terminal's
  * rail is `hidden md:flex`, so below that width this and the header's search
- * button are the only routes to the geo map and the 26 stations.
+ * button are the only routes to the geo map and the stations. The list is the
+ * live mesh, so it is as long as whatever the backend is reporting - about 80
+ * - rather than the curated snapshot's 18.
  *
  * It also carried the only link to the engineering console, which had no
  * entry point anywhere else. That console has since been removed, so "Go to"
@@ -100,6 +102,9 @@ export function CommandPalette({ hideTrigger = false }: { hideTrigger?: boolean 
     setCursor(0);
   }, []);
 
+  // Same mesh the geo map draws, so a pick from here names a station it has.
+  const mesh = useMesh();
+
   const go = React.useCallback(
     (to: string) => {
       navigate(to);
@@ -142,15 +147,28 @@ export function CommandPalette({ hideTrigger = false }: { hideTrigger?: boolean 
       },
     ];
 
-    const stations: Cmd[] = STATIONS.map((s) => ({
+    // The mesh the map itself draws, not the curated fallback list.
+    //
+    // This used to map `STATIONS`, which is the 18-node offline snapshot, while
+    // the map renders the 80 the backend reports. Two thirds of the network was
+    // therefore unsearchable - and worse, not one id was shared between the two
+    // lists: the snapshot keys on slugs like `wazirpur` and the live mesh on
+    // `m900000`, so `?station=` matched nothing and picking a station from here
+    // opened the map and highlighted none of it.
+    //
+    // Reading the same source is what keeps the ids aligned, rather than a
+    // translation table that would go stale the next time either list moved.
+    // Offline `useMesh` hands back the curated list anyway, so the fallback is
+    // the one it always was.
+    const stations: Cmd[] = mesh.stations.map((s) => ({
       id: `station-${s.id}`,
       title: s.name,
       hint: `${s.zone} · ${s.agency} · AQI ${s.aqi}`,
       group: 'Stations',
       icon: <MapPin className="size-4" />,
       dot: aqiColor(s.aqi),
-      run: () => go(`/terminal/geo-map?station=${s.id}`),
-      keywords: `${s.zone} ${s.agency} ${s.dominant} ${s.source}`,
+      run: () => go(`/terminal/geo-map?station=${encodeURIComponent(s.id)}`),
+      keywords: `${s.zone} ${s.agency} ${s.dominant}`,
     }));
 
     const appearance: Cmd[] = [
@@ -169,7 +187,7 @@ export function CommandPalette({ hideTrigger = false }: { hideTrigger?: boolean 
     ];
 
     return [...routes, ...stations, ...appearance];
-  }, [go, resolvedTheme, setTheme, close]);
+  }, [go, resolvedTheme, setTheme, close, mesh.stations]);
 
   const results = React.useMemo(() => {
     const q = query.trim().toLowerCase();
