@@ -363,18 +363,20 @@ function HealthAdvisory() {
                     {b.level}
                   </span>
                 </div>
-                {/* The figure the bar was already drawing, in digits. The bar
-                    alone makes two tiles at 68 and 72 look the same. */}
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <Meter pct={b.pct} color={b.color} />
+                {/* The figure the bar was already drawing, in digits, sitting
+                    above the bar rather than beside it. Alongside, it stole
+                    width from the meter and pushed the fill short of the track
+                    it is read against. */}
+                <div className="space-y-1">
+                  <div className="text-right">
+                    <span
+                      className="font-mono text-[10px] font-bold tabular-nums"
+                      style={{ color: b.color }}
+                    >
+                      {b.pct}%
+                    </span>
                   </div>
-                  <span
-                    className="shrink-0 font-mono text-[10px] font-bold tabular-nums"
-                    style={{ color: b.color }}
-                  >
-                    {b.pct}%
-                  </span>
+                  <Meter pct={b.pct} color={b.color} />
                 </div>
               </div>
             );
