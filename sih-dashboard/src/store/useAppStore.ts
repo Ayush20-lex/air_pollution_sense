@@ -22,7 +22,21 @@ export type PlaybackSpeed = 0.5 | 1 | 2;
 type AppState = {
   /* --- navigation --- */
   screen: Screen;
-  startScan: () => void;
+  /**
+   * Where the scan hands off to, if not the terminal's own front page.
+   *
+   * "Scan NCR" always meant /terminal, so the route was written into the
+   * landing page's own effect. Picking a station from the palette has to
+   * arrive somewhere else - the map, with that station selected - and it should
+   * get there the same way rather than cutting straight across, which skipped
+   * the disperse animation and made the same journey look like two different
+   * products.
+   *
+   * Null is the ordinary scan. Cleared on the way back to the intro so a
+   * second scan does not inherit the first one's destination.
+   */
+  scanTarget: string | null;
+  startScan: (target?: string) => void;
   completeScan: () => void;
   returnToIntro: () => void;
 
@@ -88,9 +102,10 @@ const initialFrames = buildForecast(DEFAULT_INTERVENTIONS);
 
 export const useAppStore = create<AppState>((set, get) => ({
   screen: 'intro',
-  startScan: () => set({ screen: 'transition' }),
+  scanTarget: null,
+  startScan: (target) => set({ screen: 'transition', scanTarget: target ?? null }),
   completeScan: () => set({ screen: 'dashboard' }),
-  returnToIntro: () => set({ screen: 'intro', playing: false }),
+  returnToIntro: () => set({ screen: 'intro', playing: false, scanTarget: null }),
 
   interventions: DEFAULT_INTERVENTIONS,
   frames: initialFrames,

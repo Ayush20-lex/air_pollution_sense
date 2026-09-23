@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import {
   ArrowRight,
@@ -13,6 +13,7 @@ import {
   Sun,
 } from 'lucide-react';
 import { useMesh } from '@/lib/terminal/useMesh';
+import { useAppStore } from '@/store/useAppStore';
 import { aqiColor } from '@/lib/aqi';
 import { cn } from '@/lib/utils';
 
@@ -104,13 +105,32 @@ export function CommandPalette({ hideTrigger = false }: { hideTrigger?: boolean 
 
   // Same mesh the geo map draws, so a pick from here names a station it has.
   const mesh = useMesh();
+  const onLanding = useLocation().pathname === '/';
+  const startScan = useAppStore((st) => st.startScan);
 
+  /**
+   * Leaves for `to`, through the scan when we are still on the landing page.
+   *
+   * A pick from here used to navigate straight across, so the same journey the
+   * "Scan NCR" button makes with the disperse animation happened instantly and
+   * without it - the two routes into the terminal looked like two different
+   * products. `startScan(to)` plays the hand-off and the landing route
+   * navigates when it ends.
+   *
+   * Only from the landing page. Inside the terminal there is no globe to
+   * disperse and nothing to wait for.
+   */
   const go = React.useCallback(
     (to: string) => {
+      if (onLanding) {
+        startScan(to);
+        close();
+        return;
+      }
       navigate(to);
       close();
     },
-    [navigate, close],
+    [navigate, close, onLanding, startScan],
   );
 
   // Built once per navigate/theme identity rather than per render — the

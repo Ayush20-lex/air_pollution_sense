@@ -142,7 +142,11 @@ function IntroRoute() {
   React.useEffect(() => {
     if (screen !== 'dashboard' || navigated.current) return;
     navigated.current = true;
-    navigate('/terminal');
+    // The scan's destination, when it was started with one - a station picked
+    // from the palette hands off to the map with that station selected. Read
+    // from the store rather than passed down, because the palette that sets it
+    // is mounted beside this route, not inside it.
+    navigate(useAppStore.getState().scanTarget ?? '/terminal');
   }, [screen, navigate]);
 
   // Reset the screen machine on the way out, not during the navigation.
