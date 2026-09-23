@@ -22,14 +22,17 @@ import { useMesh } from '@/lib/terminal/useMesh';
  * but only when the mesh does - a new worst station takes the pill when it
  * overtakes, which is the pill reporting rather than animating.
  *
- * The station's name is not on the pill. The label is the sector, so nothing
- * on screen says which of that sector's instruments the figure came from -
- * worth knowing, because "the worst in the north" is otherwise an unfalsifiable
- * claim. It is on `title` for inspection and for assistive tech, but that is
- * not a hover tooltip: these pills are `pointer-events-none` so the cursor can
- * probe the cloud beneath them, and a browser shows no title on an element it
- * cannot hit. Checked - `elementFromPoint` at a pill's centre returns the
- * header behind it, not the pill.
+ * The station is named on the face of the pill, not just in `title`. The
+ * sector alone left "the worst in the north" unfalsifiable - nothing on
+ * screen said which of that sector's instruments the figure came from - and
+ * `title` cannot fill that gap here: the pills are `pointer-events-none` so
+ * the cursor can probe the cloud beneath them, and a browser shows no title on
+ * an element it cannot hit. `elementFromPoint` at a pill's centre returns the
+ * header behind it.
+ *
+ * The name changes with the number, because it is the same fact: whichever
+ * station is reporting worst holds the pill, so a new leader brings its own
+ * name with it.
  *
  * Positions are hand-placed to frame the cloud rather than cover it, and are
  * bounded by the pill: each is about 295px wide, so `left` has to leave that
@@ -121,6 +124,17 @@ export function StatusPills() {
 
               <span className="font-mono text-2xs font-semibold uppercase tracking-[0.18em] text-ink">
                 {sectorLabel(slot.sector)}
+                <span className="text-faint"> · </span>
+                {/* Capped, because the name is whichever station is worst and
+                    that changes hourly. "Loni" is four characters; "Dr. Karni
+                    Singh Shooting Range" is thirty, and at full width that pill
+                    runs to about 440px against the ~295px these positions are
+                    placed for - on a 1024px window the eastern one would have
+                    left the frame. Truncating costs the tail of a rare long
+                    name; not truncating costs the pill. */}
+                <span className="inline-block max-w-[150px] truncate align-bottom">
+                  {station.name}
+                </span>
               </span>
               <span className="text-faint">—</span>
 
