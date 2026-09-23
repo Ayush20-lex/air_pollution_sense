@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { AlertTriangle, ShieldAlert } from 'lucide-react';
-import { ALERT_COLOR, type AlertLevel } from '@/lib/aqi';
+import { ALERT_COLOR, aqiColor, type AlertLevel } from '@/lib/aqi';
 import type { Frame } from '@/lib/data';
 import { DISTRICTS } from '@/lib/data';
 
@@ -86,8 +86,18 @@ export function StatusPills({ frame }: { frame: Frame }) {
                 )}
                 {level}
               </span>
-              <span className="font-mono text-2xs tabular-nums text-muted">
-                {s.pm25.toFixed(0)} µg/m³
+              {/* AQI leads, in its own band's colour rather than the pill's
+                  alert colour - those are two different scales and a pill
+                  reading ADVISORY in amber over an AQI of 91 should not paint
+                  the 91 amber too. The concentration stays behind it, dimmed:
+                  it is the measurement, AQI is what is derived from it, and
+                  dropping it would leave the pill with no measured quantity
+                  on it at all. */}
+              <span className="flex items-baseline gap-1.5 font-mono text-2xs tabular-nums">
+                <strong className="font-bold" style={{ color: aqiColor(s.aqi) }}>
+                  AQI {s.aqi}
+                </strong>
+                <span className="text-muted">{s.pm25.toFixed(0)} µg/m³</span>
               </span>
             </motion.div>
           </motion.div>
