@@ -1,10 +1,32 @@
 import * as React from 'react';
+import { ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
 /**
  * Shared atoms for the public terminal. Every panel on this surface is one of
  * these, so the glass treatment and the label voice stay in one place.
  */
+
+/**
+ * The way out of a preview.
+ *
+ * Live Telemetry shows the first few of several sections and each has a page
+ * of its own. Without this the preview is a dead end that looks like the whole
+ * thing - a reader counting four pollutant cards has no way to know there are
+ * eight.
+ */
+export function SeeAll({ to, children }: { to: string; children: React.ReactNode }) {
+  return (
+    <Link
+      to={to}
+      className="inline-flex items-center gap-1.5 font-mono text-xs font-bold uppercase tracking-wider text-term-primary transition-colors hover:text-term-ink"
+    >
+      {children}
+      <ArrowRight className="size-3.5" />
+    </Link>
+  );
+}
 
 /** Frosted panel — the core surface of the terminal. */
 export function TelemetryCard({

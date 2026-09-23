@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowRight, CheckCircle2, CircleAlert, Info } from 'lucide-react';
-import { Delta, Label, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
+import { Delta, Label, SectionHead, SeeAll, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { GrapPanel } from './GrapPanel';
 import { InversionPanel } from './InversionPanel';
 import { MetSourcePanel } from './MetSourcePanel';
@@ -18,8 +18,10 @@ export function OverviewMesh() {
   return (
     <>
       <StationMesh />
-      <IncidentBanners />
-      <SpectrometryLedger />
+      {/* Previews. Each of these has a page now; Live Telemetry shows enough to
+          say whether it is worth opening. */}
+      <IncidentBanners limit={2} />
+      <SpectrometryLedger limit={4} />
     </>
   );
 }
@@ -112,28 +114,47 @@ const LEVEL_STYLE = {
   ADVISORY: { border: 'border-l-term-secondary', color: TERM.secondary, icon: Info, pill: 'bg-term-secondary/20 text-term-secondary border-term-secondary/40' },
 } as const;
 
-function IncidentBanners() {
-  const { items, loading } = useAdvisories();
+/**
+ * Warnings, whole or as a preview.
+ *
+ * `limit` shows only the first few. The panels above the list - GRAP, the
+ * inversion scoring, the meteorology source - are dropped entirely in a
+ * preview rather than truncated: each is a single indivisible statement, and
+ * half of one is worse than a link to it.
+ */
+export function IncidentBanners({ limit }: { limit?: number } = {}) {
+  const { items: all, loading } = useAdvisories();
+  const items = limit ? all.slice(0, limit) : all;
   return (
     <div id="alerts" className="space-y-3">
-      <GrapPanel />
+      {!limit && (
+        <>
+          <GrapPanel />
 
-      {/* The mechanism behind the stage above it: GRAP says what to do, this
-          says why the air is about to do what it does. */}
-      <InversionPanel />
+          {/* The mechanism behind the stage above it: GRAP says what to do,
+              this says why the air is about to do what it does. */}
+          <InversionPanel />
 
-      {/* The meteorology the project reads but does not forecast from, and
-          whether that file is still current. It is expired as this ships, which
-          is precisely why it belongs on screen. */}
-      <MetSourcePanel />
+          {/* The meteorology the project reads but does not forecast from, and
+              whether that file is still current. It is expired as this ships,
+              which is precisely why it belongs on screen. */}
+          <MetSourcePanel />
+        </>
+      )}
 
       <SectionHead
         title="Incident &amp; Anomaly Warnings"
         sub="Derived from the inversion scoring, the GRAP stage and the mesh's own health"
         right={
-          <span className="font-mono text-xs uppercase tracking-wider text-term-ink-variant">
-            {items.length === 0 ? 'nothing active' : `${items.length} active`}
-          </span>
+          limit ? (
+            <SeeAll to="/terminal/warnings">
+              {all.length === 0 ? 'Open warnings' : `All ${all.length} active`}
+            </SeeAll>
+          ) : (
+            <span className="font-mono text-xs uppercase tracking-wider text-term-ink-variant">
+              {all.length === 0 ? 'nothing active' : `${all.length} active`}
+            </span>
+          )
         }
       />
       {items.length === 0 ? (
@@ -196,12 +217,19 @@ function IncidentBanners() {
   );
 }
 
-function SpectrometryLedger() {
+/** The ledger, whole or as a preview of its first rows. */
+export function SpectrometryLedger({ limit }: { limit?: number } = {}) {
+  const rows = limit ? POLLUTANTS.slice(0, limit) : POLLUTANTS;
   return (
     <div id="ledger" className="space-y-3">
       <SectionHead
         title="Pollutant Master Spectrometry Ledger"
         sub="The eight channels the CPCB National AQI indexes"
+        right={
+          limit ? (
+            <SeeAll to="/terminal/ledger">All {POLLUTANTS.length} channels</SeeAll>
+          ) : undefined
+        }
       />
       <TelemetryCard className="overflow-hidden">
         {/* Nine columns need 900px and a phone gives the table 334, so 566px
@@ -241,7 +269,7 @@ function SpectrometryLedger() {
               </tr>
             </thead>
             <tbody>
-              {POLLUTANTS.map((p) => (
+              {rows.map((p) => (
                 <tr key={p.id} className="border-b border-term-outline-variant/40 transition-colors hover:bg-term-surface-c/60">
                   {/* Opaque fill of its own: the card behind is translucent
                       and the scrolling columns would read straight through. */}

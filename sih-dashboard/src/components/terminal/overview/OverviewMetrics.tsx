@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Delta, Label, Meter, SectionHead, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
+import { Delta, Label, Meter, SectionHead, SeeAll, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { POLLUTANTS } from '@/lib/terminal/content';
 import { useKpiCards } from '@/lib/terminal/kpi';
 import { livePollutants, type LivePollutant } from '@/lib/terminal/livePollutants';
@@ -11,8 +11,6 @@ import { PollutantDetail } from './PollutantDetail';
 
 /** Six KPI micro-cards + the eight-channel chemical grid. */
 export function OverviewMetrics() {
-  const { station, live } = useHubStation();
-  const { asOf } = useMesh();
   const kpis = useKpiCards();
   // These two blocks report the same named quantity at two different scopes,
   // and until now neither said so. The row is the mean across the mesh; the
@@ -23,18 +21,6 @@ export function OverviewMetrics() {
   // itself rather than as two honest figures. Naming the scope is the whole
   // fix; the numbers were never wrong.
   const meshCount = useFreshStations().filter(isLive).length;
-  // Measured cards when the archive answered for this node, the static grid
-  // when it did not. Either way every card goes through the same component.
-  const readings: LivePollutant[] = isLive(station)
-    ? livePollutants(station)
-    : POLLUTANTS.map((p) => ({
-        ...p,
-        measured: false,
-        series: [] as (number | null)[],
-        caption: null,
-        windowNote: '',
-      }));
-  const measuredCount = readings.filter((r) => r.measured).length;
 
   return (
     <>
@@ -71,30 +57,64 @@ export function OverviewMetrics() {
         ))}
       </div>
 
-      <div id="matrices" className="space-y-3">
-        <SectionHead
-          title="8-Pollutant Chemical Telemetry Grid"
-          sub={
-            isLive(station)
-              ? `${station.name} only • hover any card for its 24-hour trajectory, sampled every 2 hours`
-              : 'Continuous spectrometry • Hover any card for its 24-hour trajectory, sampled every 2 hours'
-          }
-          right={
+      {/* Preview. The grid has a page of its own now; four cards are enough to
+          say whether it is worth opening. */}
+      <PollutantMatrix limit={4} />
+    </>
+  );
+}
+
+/**
+ * The 8-pollutant grid, whole or as a preview.
+ *
+ * `limit` cuts the cards shown and turns the header's right slot into a way
+ * through to the full page. Measured cards sort ahead of unreported ones in
+ * `livePollutants`, so a preview shows the channels that have something to say
+ * rather than the first four alphabetically.
+ */
+export function PollutantMatrix({ limit }: { limit?: number }) {
+  const { station, live } = useHubStation();
+  const { asOf } = useMesh();
+  const all: LivePollutant[] = isLive(station)
+    ? livePollutants(station)
+    : POLLUTANTS.map((p) => ({
+        ...p,
+        measured: false,
+        series: [] as (number | null)[],
+        caption: null,
+        windowNote: '',
+      }));
+  const measuredCount = all.filter((r) => r.measured).length;
+  const readings = limit ? all.slice(0, limit) : all;
+
+  return (
+    <div id="matrices" className="space-y-3">
+      <SectionHead
+        title="8-Pollutant Chemical Telemetry Grid"
+        sub={
+          isLive(station)
+            ? `${station.name} only • hover any card for its 24-hour trajectory, sampled every 2 hours`
+            : 'Continuous spectrometry • Hover any card for its 24-hour trajectory, sampled every 2 hours'
+        }
+        right={
+          limit ? (
+            <SeeAll to="/terminal/matrices">All {all.length} channels</SeeAll>
+          ) : (
             <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-term-ink-variant">
               <span className={cn('size-2 rounded-full', live ? 'bg-term-primary' : 'bg-amber-400')} />
               {live
-                ? `CPCB National AQI · ${measuredCount} of ${readings.length} measured`
+                ? `CPCB National AQI · ${measuredCount} of ${all.length} measured`
                 : 'CPCB National AQI · demo values'}
             </span>
-          }
-        />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {readings.map((p) => (
-            <PollutantCard key={p.id} reading={p} stationName={station.name} asOf={asOf} />
-          ))}
-        </div>
+          )
+        }
+      />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {readings.map((p) => (
+          <PollutantCard key={p.id} reading={p} stationName={station.name} asOf={asOf} />
+        ))}
       </div>
-    </>
+    </div>
   );
 }
 

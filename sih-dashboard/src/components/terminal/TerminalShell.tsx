@@ -52,12 +52,12 @@ const NAV: NavItem[] = [
   // Was '/terminal#analytics', a hash into the middle of Live Telemetry. The
   // forecast and the observed trend are a page now, so this points at it.
   { href: '/terminal/forecast', label: 'AQI Trend & Forecast', icon: <LineChart className="size-4" /> },
-  { href: '/terminal#matrices', label: 'Pollutant Matrices', icon: <ScatterChart className="size-4" /> },
+  { href: '/terminal/matrices', label: 'Pollutant Matrices', icon: <ScatterChart className="size-4" /> },
   // No literal badge. "3 PENDING" said three whatever the air was doing, on
   // every page, including a day with nothing wrong. The count is now the number
   // of advisories that are actually active - see lib/terminal/advisories.
-  { href: '/terminal#alerts', label: 'Incident Warnings', icon: <AlertTriangle className="size-4 text-amber-400" /> },
-  { href: '/terminal#ledger', label: 'Spectrometry Ledger', icon: <Table2 className="size-4" /> },
+  { href: '/terminal/warnings', label: 'Incident Warnings', icon: <AlertTriangle className="size-4 text-amber-400" /> },
+  { href: '/terminal/ledger', label: 'Spectrometry Ledger', icon: <Table2 className="size-4" /> },
 ];
 
 export function TerminalShell({ children }: { children: React.ReactNode }) {
