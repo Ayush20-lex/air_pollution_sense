@@ -11,9 +11,9 @@
  * and clamped to 8 where it exists; `hardwareConcurrency` counts cores without
  * saying how fast they are. So the defaults are deliberately optimistic - a
  * device that reports nothing lands on 'mobile' or 'desktop' by width, never
- * on 'low'. A wrong guess therefore renders a slightly plainer page on a
- * capable device, which is the cheaper mistake than a phone that cannot hold
- * a frame.
+ * on 'low' - and a wide viewport is never demoted on a memory reading alone,
+ * because a browser that clamps that reading to 4 would otherwise hand every
+ * desktop the phone's map.
  *
  * Read once at startup. These values do not change during a session, and
  * re-reading them on resize would rebuild the scene to chase a constant.
@@ -25,8 +25,21 @@ export function deviceTier(): DeviceTier {
   const nav = navigator as Navigator & { deviceMemory?: number };
   const cores = nav.hardwareConcurrency ?? 8;
   const memory = nav.deviceMemory ?? 8;
-  if (cores <= 4 || memory <= 4) return 'low';
-  return window.innerWidth < 768 ? 'mobile' : 'desktop';
+  const narrow = window.innerWidth < 768;
+
+  // `cores <= 4 || memory <= 4` demoted desktops. `deviceMemory` is reported
+  // in a coarse ladder and clamped for fingerprinting reasons, so 4 is a
+  // routine answer from a machine with far more than 4GB - and either signal
+  // alone was enough to send a 24-core desktop down the low path, where the
+  // station mesh becomes canvas blobs, only the worst nodes keep a label and
+  // the wind drops to six streamlines. That is the mobile map, on a desktop.
+  //
+  // So the two signals now have to agree, and only where a stripped view is
+  // plausible in the first place: a narrow viewport. The one exception is a
+  // core count so low that nothing will hold a frame at any width.
+  if (cores <= 2) return 'low';
+  if (narrow && (cores <= 4 || memory <= 4)) return 'low';
+  return narrow ? 'mobile' : 'desktop';
 }
 
 /**
