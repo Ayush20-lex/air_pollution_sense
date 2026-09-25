@@ -85,30 +85,96 @@ function BootSplash() {
  * "Scan NCR" plays the disperse animation behind the hand-off curtain, then
  * opens the public terminal.
  */
-/**
- * True once the landing page has been mounted in this page load.
- *
- * Module-level rather than state, because the distinction it has to draw is
- * exactly the one a module-level `let` draws for free: it survives client-side
- * navigation and resets on a real page load. So walking from the landing page
- * into the terminal keeps it true, and opening /terminal/geo-map cold - a
- * bookmark, a shared link, a refresh - finds it false.
- */
+/** True once the landing page has been mounted in this page load. */
 let cameThroughLanding = false;
 
 /**
- * Sends a cold deep link back to the landing page.
+ * How long a reader stays "already here" across a reload.
  *
- * The terminal is the second half of a single piece: the landing page is what
- * says which city this is, where the numbers come from and how current they
- * are, and the terminal assumes a reader who has been told. Someone handed
+ * Thirty minutes is a guess at the gap between refreshing and returning, and
+ * nothing depends on the exact figure: too short only means an extra trip
+ * through the landing page, which is the fallback anyway.
+ */
+const RETURN_WINDOW_MS = 30 * 60 * 1000;
+const LAST_SEEN_KEY = 'airsense:terminal-last-seen';
+
+/**
+ * When this browser was last on the terminal.
+ *
+ * `localStorage` rather than `sessionStorage`: a tab left open overnight keeps
+ * its session, so sessionStorage would call that reader "still here" the next
+ * morning - which is precisely the case that should get the landing page back.
+ * A timestamp answers both questions with one value.
+ *
+ * Every read and write is guarded. Private windows and blocked site data throw
+ * on access, and the failure has to fall to "not recently here" - sending a
+ * reader through the landing page is the harmless mistake; letting a cold
+ * visitor into the terminal is the one this guard exists to prevent.
+ */
+function wasRecentlyHere(): boolean {
+  try {
+    const raw = window.localStorage.getItem(LAST_SEEN_KEY);
+    if (!raw) return false;
+    const at = Number(raw);
+    return Number.isFinite(at) && Date.now() - at < RETURN_WINDOW_MS;
+  } catch {
+    return false;
+  }
+}
+
+function markHere() {
+  try {
+    window.localStorage.setItem(LAST_SEEN_KEY, String(Date.now()));
+  } catch {
+    /* nothing to do: the reader takes the landing page next reload */
+  }
+}
+
+/**
+ * Sends a cold visitor to the landing page, and lets a returning one straight
+ * back in.
+ *
+ * The terminal is the second half of a single piece: the landing page says
+ * which city this is, where the numbers come from and how current they are,
+ * and the terminal assumes a reader who has been told. Someone handed
  * /terminal/geo-map arrives at a map of unexplained colours instead.
+ *
+ * But a refresh is not a cold visit, and the first version of this treated it
+ * as one - the module flag resets on any page load, so reloading the map threw
+ * the reader back to the globe and made them scan in again to return to where
+ * they already were. Three cases, one rule:
+ *
+ *   walked in from the landing page   the flag, true for this page load
+ *   refreshed, or back within 30 min  the stamp, written while on the terminal
+ *   new, or back after a long gap     neither, so the landing page
  *
  * `replace` so the redirect leaves no history entry - otherwise Back from the
  * landing page would return to the deep link and bounce again.
  */
 function RequireLanding({ children }: { children: React.ReactNode }) {
-  if (!cameThroughLanding) return <Navigate to="/" replace />;
+  // Read once on mount. Re-reading per render would let the stamp this very
+  // component writes decide whether it should have rendered.
+  const [allowed] = React.useState(() => cameThroughLanding || wasRecentlyHere());
+
+  // Stamped while the terminal is open, so the window is measured from when
+  // the reader left rather than from when they arrived. The interval covers a
+  // tab left open and reloaded hours later; `visibilitychange` covers the more
+  // common close, because there is no reliable unload on mobile.
+  React.useEffect(() => {
+    if (!allowed) return;
+    markHere();
+    const id = window.setInterval(markHere, 60_000);
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') markHere();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onHide);
+    };
+  }, [allowed]);
+
+  if (!allowed) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
