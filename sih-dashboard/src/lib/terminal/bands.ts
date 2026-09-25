@@ -64,8 +64,14 @@ export function pm25Color(pm: number): string {
 }
 
 /** Fields the map can paint. */
-export type TerminalField = 'PM2.5' | 'PM10' | 'O3' | 'NOx' | 'PBL' | 'WIND';
-export const TERMINAL_FIELDS: TerminalField[] = ['PM2.5', 'PM10', 'O3', 'NOx', 'PBL', 'WIND'];
+/**
+ * `MODEL` is the odd one out: the other five are drawn by interpolating live
+ * station readings, while MODEL is the forecast tensor's own 70x80 PM2.5
+ * field. It is a forecast rather than an observation, so the panel names its
+ * run origin - see terminal/gridApi.
+ */
+export type TerminalField = 'PM2.5' | 'PM10' | 'O3' | 'NOx' | 'PBL' | 'WIND' | 'MODEL';
+export const TERMINAL_FIELDS: TerminalField[] = ['PM2.5', 'PM10', 'O3', 'NOx', 'PBL', 'WIND', 'MODEL'];
 
 /**
  * Colour ramp for a value of the selected field. PBL inverts — a deep mixing
@@ -127,6 +133,11 @@ export function fieldIntensity(
 ): number {
   const clamp = (v: number) => Math.min(1, Math.max(0, v));
   switch (field) {
+    // Never reached for MODEL: that field is painted cell by cell from the
+    // forecast grid and never goes through a station sample. Listed so the
+    // switch stays exhaustive if someone adds a case above.
+    case 'MODEL':
+      return clamp(sample.pm25 / 120);
     case 'PM10':
       return clamp((sample.pm25 * 1.74) / 210);
     case 'O3':
