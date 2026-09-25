@@ -233,6 +233,18 @@ async def _warm_then_record() -> None:
     escapes, because a dead task raises nowhere.
     """
     log = _logging.getLogger("api_server")
+    # The archive first. Every cold endpoint needs it - the forecast, the mesh
+    # origin, /status - and building it here, once, means the first visitors
+    # queue behind one load instead of each starting their own.
+    try:
+        cfg = get_settings()
+        origin = await asyncio.to_thread(_mesh_origin)
+        await asyncio.to_thread(station_registry.build, cfg.baseline_season, origin)
+        log.info("archive warm (mesh origin %s)", origin)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - a cold first request, nothing worse
+        log.warning("could not warm the archive (%s)", exc)
     try:
         warm = await asyncio.to_thread(_live_mesh)
         if warm:

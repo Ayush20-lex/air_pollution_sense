@@ -36,6 +36,7 @@ integer - 11 of the 68 do.
 """
 from __future__ import annotations
 
+import threading
 import json
 import logging
 import math
@@ -248,8 +249,20 @@ def _window(wide: pd.DataFrame, station: int, end: pd.Timestamp) -> list[float |
     return [None if pd.isna(v) else float(v) for v in col]
 
 
-@lru_cache(maxsize=4)
+#: lru_cache memoises but does not single-flight: concurrent misses all compute,
+#: and each of these is a full archive load. One build at a time; the waiters
+#: then hit the cache.
+_build_lock = threading.Lock()
+
+
 def build(season: int = 2025, as_of: str | None = None) -> dict[str, Any]:
+    """The registry for one season and hour. See `_build`."""
+    with _build_lock:
+        return _build(season, as_of)
+
+
+@lru_cache(maxsize=4)
+def _build(season: int = 2025, as_of: str | None = None) -> dict[str, Any]:
     """The whole mesh at one instant, ready to serve.
 
     Cached per (season, as_of). In archive replay the instant is fixed, so this

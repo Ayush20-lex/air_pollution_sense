@@ -57,6 +57,7 @@ callers should say so.
 """
 from __future__ import annotations
 
+import threading
 import json
 import logging
 from collections.abc import Callable
@@ -650,10 +651,20 @@ class BlendBaselineForecaster:
 
 _singleton: BlendBaselineForecaster | None = None
 
+#: Guards construction. Check-then-create without it let every concurrent first
+#: caller build its own instance: after a restart on 25 September /status,
+#: /stations and GRAP each loaded and QC'd the full archive at once, six passes
+#: in parallel on a 1GB box, and the first requests ran to nginx's 504.
+_singleton_lock = threading.Lock()
+
 
 def get_forecaster(season: int = 2025) -> BlendBaselineForecaster:
-    """Process-wide instance — loading the archive takes a moment."""
+    """Process-wide instance — loading the archive takes a moment, so exactly once."""
     global _singleton
-    if _singleton is None or _singleton.season != season:
-        _singleton = BlendBaselineForecaster(season=season)
-    return _singleton
+    inst = _singleton
+    if inst is not None and inst.season == season:
+        return inst
+    with _singleton_lock:
+        if _singleton is None or _singleton.season != season:
+            _singleton = BlendBaselineForecaster(season=season)
+        return _singleton
