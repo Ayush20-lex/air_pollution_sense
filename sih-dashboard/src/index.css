@@ -72,6 +72,8 @@
     --as-glass: 255 255 255 / 0.8;
     --as-grid: 15 23 42 / 0.05;
     --as-map-tiles: 1;
+    /* Peak of the CTA's travelling shine. See --as-shine-peak in .dark. */
+    --as-shine-peak: 255 255 255;
     color-scheme: light;
   }
 
@@ -87,6 +89,13 @@
     --as-accent: 34 211 238;       /* cyan-400 */
     --as-glass: 18 24 38 / 0.7;
     --as-grid: 130 190 255 / 0.06;
+    /* The bright point of the CTA's sweep, which used to be spelled
+       `--as-ink` directly. That held while ink was the lightest thing on the
+       page; under the light theme ink is near-black, so the highlight swept a
+       black smear round the button's border on hover. The sweep wants the
+       light end of the ramp in both themes, so it gets its own token. This
+       value is the dark theme's ink, which keeps dark exactly as it was. */
+    --as-shine-peak: 226 236 250;
     color-scheme: dark;
   }
 
@@ -191,7 +200,7 @@
   .shiny-cta:is(:hover, :focus-visible) {
     --shine-spread: 20%;
     --shine-offset: 95deg;
-    --shine-tint: rgb(var(--as-ink));
+    --shine-tint: rgb(var(--as-shine-peak));
   }
   .shiny-cta:is(:hover, :focus-visible)::after {
     animation-play-state: running;
