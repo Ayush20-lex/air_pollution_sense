@@ -1,6 +1,7 @@
 import * as React from 'react';
 import L from 'leaflet';
 import { deviceTier } from '@/lib/device-tier';
+import type { Pm25Basis } from '@/lib/terminal/pm25Basis';
 import 'leaflet/dist/leaflet.css';
 import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip as LTooltip, useMap } from 'react-leaflet';
 import {
@@ -150,6 +151,25 @@ function cheapRadius(selected: boolean): number {
   return selected ? 9 : 6;
 }
 
+/**
+ * The tooltip's PM2.5 line, worded by where the figure came from.
+ *
+ * Three sources look identical as a bare "µg/m³" and are not: a published
+ * concentration, one inverted from CPCB's published PM2.5 index, and a station
+ * that publishes no PM2.5 at all. The last used to show a number anyway.
+ */
+function pm25Line(n: { pm25: number; pm25Basis: Pm25Basis; pm25SubIndex: number | null }): string {
+  if (n.pm25Basis === 'none') return 'PM2.5 not reported by this station';
+  const band = bandForPm25(n.pm25).label;
+  if (n.pm25Basis === 'estimate') {
+    return `PM2.5 ≈${n.pm25.toFixed(1)} µg/m³ · ${band} · estimated from AQI (offline mesh)`;
+  }
+  if (n.pm25Basis === 'index') {
+    return `PM2.5 ≈${n.pm25.toFixed(1)} µg/m³ · ${band} · from CPCB index ${n.pm25SubIndex}`;
+  }
+  return `PM2.5 ${n.pm25.toFixed(1)} µg/m³ · ${band}`;
+}
+
 function StationPins({
   frame,
   selectedId,
@@ -227,7 +247,7 @@ function StationPins({
                   <div>
                     AQI {n.aqi} · {bandForAqi(n.aqi).label}
                   </div>
-                  <div>PM2.5 {n.pm25.toFixed(1)} µg/m³ · {bandForPm25(n.pm25).label}</div>
+                  <div>{pm25Line(n)}</div>
                   <div>
                     PBL {n.pbl} m · {n.windSpeed.toFixed(1)} m/s
                   </div>
@@ -258,7 +278,7 @@ function StationPins({
                   <div>
                     AQI {n.aqi} · {bandForAqi(n.aqi).label}
                   </div>
-                  <div>PM2.5 {n.pm25.toFixed(1)} µg/m³ · {bandForPm25(n.pm25).label}</div>
+                  <div>{pm25Line(n)}</div>
                   <div>
                     PBL {n.pbl} m · {n.windSpeed.toFixed(1)} m/s
                   </div>

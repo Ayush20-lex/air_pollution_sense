@@ -135,8 +135,24 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
         ? { value: pm10sub.sub_index, unit: 'sub-index', pct: (pm10sub.sub_index / 200) * 100 }
         : null;
 
+  // Same three sources as the map tooltip. A station that publishes no PM2.5
+  // gets no PM2.5 row rather than the placeholder the frame carries for it,
+  // and one converted from CPCB's published index is labelled as converted.
+  const pm25Row =
+    sample.pm25Basis === 'none'
+      ? []
+      : [{
+          label:
+            sample.pm25Basis === 'index' ? 'PM2.5 (from CPCB index)'
+            : sample.pm25Basis === 'estimate' ? 'PM2.5 (est. from AQI)'
+            : 'PM2.5',
+          value: sample.pm25,
+          unit: 'µg/m³',
+          pct: (sample.pm25 / 120) * 100,
+        }];
+
   const channels = [
-    { label: 'PM2.5', value: sample.pm25, unit: 'µg/m³', pct: (sample.pm25 / 120) * 100 },
+    ...pm25Row,
     ...(pm10 ? [{ label: 'PM10', ...pm10 }] : []),
     { label: 'O₃', value: sample.o3, unit: 'µg/m³', pct: (sample.o3 / 120) * 100 },
     { label: 'NOx', value: sample.nox, unit: 'ppb', pct: (sample.nox / 140) * 100 },

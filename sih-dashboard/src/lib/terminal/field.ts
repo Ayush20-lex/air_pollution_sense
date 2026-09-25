@@ -13,6 +13,7 @@
 import { alertForAqi, type TerminalAlert } from './bands';
 import type { GridPoint, ScalarGrid } from './contours';
 import { NCR_BOUNDS, STATIONS, type Station } from './stations';
+import { stationPm25, type Pm25Basis } from './pm25Basis';
 import { TERM_SEVERITY } from '@/lib/terminal/palette';
 
 /** Cells per side of the nested grid. */
@@ -29,7 +30,17 @@ export const HORIZON_HOURS = 72;
 export const FRAME_COUNT = HORIZON_HOURS + 1;
 
 export type NodeSample = {
+  /**
+   * µg/m³. Always a number so the pin and the ramp have something to draw, but
+   * only a reading when `pm25Basis` is 'measured' or 'index' - see pm25Basis.ts.
+   * On 'none' it is a styling placeholder and must not be displayed or
+   * interpolated.
+   */
   pm25: number;
+  /** How `pm25` was obtained: published concentration, inverted CPCB PM2.5 index, or nothing. */
+  pm25Basis: Pm25Basis;
+  /** The published CPCB PM2.5 sub-index behind an 'index' reading. */
+  pm25SubIndex: number | null;
   aqi: number;
   pbl: number;
   windSpeed: number;
@@ -107,11 +118,22 @@ export function buildFrames(
       const jitter0 = 1 + 0.06 * Math.sin(idx * 1.3);
       const shape = (dial / dial0) * (jitter / jitter0);
       const aqi = st.aqi * shape;
-      // A live station carries its own measured PM2.5; only fall back to the
-      // 0.48 ratio when there is nothing measured to use.
-      const pm0 = (st as Station & { pm25?: number | null }).pm25 ?? st.aqi * 0.48;
+      // The station's own PM2.5: a published concentration, else its published
+      // CPCB PM2.5 sub-index inverted exactly. This used to fall back to the
+      // *composite* AQI × 0.48, which for 74 of 80 live stations meant a PM2.5
+      // figure derived from whichever pollutant was worst - often PM10.
+      const own = stationPm25(st as Station & Parameters<typeof stationPm25>[0]);
+      // A feed station always carries `subIndices`, even empty; the curated
+      // fallback list never does. Only the fallback falls back to the ratio.
+      const fromFeed = 'subIndices' in st;
+      const basis: Pm25Basis = own.value != null ? own.basis : fromFeed ? 'none' : 'estimate';
+      // On 'none' this is a placeholder for styling only: `sampled` keeps the
+      // node out of the field and the tooltip says nothing was published.
+      const pm0 = own.value ?? st.aqi * 0.48;
       nodes[st.id] = {
         pm25: pm0 * shape,
+        pm25Basis: basis,
+        pm25SubIndex: own.subIndex,
         aqi: Math.round(aqi),
         pbl: Math.round(pblBase * (0.85 + 0.3 * ((idx % 5) / 5))),
         windSpeed: 1.1 + 3.4 * Math.max(0, Math.sin(((localHour - 8) / 14) * Math.PI)) + (idx % 3) * 0.25,
@@ -153,7 +175,9 @@ function sampled(frame: TerminalFrame, stations: Station[]): { st: Station; pm25
   const out: { st: Station; pm25: number }[] = [];
   for (const st of stations) {
     const n = frame.nodes[st.id];
-    if (n) out.push({ st, pm25: n.pm25 });
+    // A station that publishes no PM2.5 has nothing to contribute to a PM2.5
+    // field - its placeholder would be interpolated as if it were a reading.
+    if (n && n.pm25Basis !== 'none') out.push({ st, pm25: n.pm25 });
   }
   return out;
 }

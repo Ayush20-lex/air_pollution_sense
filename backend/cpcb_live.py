@@ -353,11 +353,13 @@ def mesh(force: bool = False) -> dict[str, Any] | None:
         "window_hours": 24,
         "index": "CPCB National AQI (2014)",
         "note": (
-            "CPCB's own hourly bulletin via data.gov.in. These are the "
-            "concentrations CPCB indexes from, over the windows the standard "
-            "requires, so every pollutant it measures is used - including NO2 "
-            "and SO2, which the WAQI path has to drop over a window mismatch. "
-            "Nothing is inverted or reconstructed."
+            "CPCB's own hourly bulletin via data.gov.in. The resource publishes "
+            "each pollutant's CPCB sub-index, computed by CPCB over the windows "
+            "the standard requires - not the concentration behind it - so "
+            "sub_indices carry the published index and concentration is null. "
+            "Every pollutant it measures is used, including NO2 and SO2, which "
+            "the WAQI path has to drop over a window mismatch. Nothing is "
+            "inverted or reconstructed here."
         ),
         "pollutants_indexed": sorted(set(POLLUTANT.values())),
         "pollutants_excluded": EXCLUDED,
