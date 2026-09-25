@@ -17,6 +17,7 @@ import { DISTRICTS } from '@/lib/data';
 import { SEVERITY } from '@/lib/tokens';
 import { useProvenance } from '@/lib/useProvenance';
 import { useAppStore } from '@/store/useAppStore';
+import { useNowFrame } from '@/lib/useNowFrame';
 import { formatLST } from '@/lib/utils';
 
 const ParticleField = dynamic(
@@ -68,7 +69,9 @@ export function IntroScreen() {
   const completeScan = useAppStore((s) => s.completeScan);
   const frames = useAppStore((s) => s.frames);
   const interventions = useAppStore((s) => s.interventions);
-  const frame = frames[0];
+  // The hour the clock is actually in, not the run's origin hour. See
+  // useNowFrame: `frames[0]` pinned the rail to whenever the run was issued.
+  const { frame, index: nowIndex, covers: runCoversNow } = useNowFrame();
 
   const scanning = screen === 'transition';
   // Stays true through the route push so the curtain never lifts early.
@@ -216,13 +219,22 @@ export function IntroScreen() {
 
   const series = frames.map((f) => f.avgPm25);
 
-  // Six-hour tendencies, read off the forecast rather than decorated on.
-  const ahead = frames[Math.min(6, frames.length - 1)];
-  const pmTrend = ((ahead.avgPm25 - frame.avgPm25) / frame.avgPm25) * 100;
-  const pblTrend = ahead.avgPbl - frame.avgPbl;
-  const invTrend = ahead.inversionIndex - frame.inversionIndex;
-  const signed = (v: number, dp = 0, unit = '%') =>
-    `${v >= 0 ? '+' : ''}${v.toFixed(dp)}${unit} / 6h`;
+  // Six-hour tendencies, read off the forecast rather than decorated on, and
+  // measured from the current hour rather than from the run's first one.
+  //
+  // Undefined at the end of the run, where there is no hour six ahead to read.
+  // Clamping the index instead compared the last frame with itself and printed
+  // "+0% / 6h" - an absence rendered as a measurement of no change, which is
+  // the same mistake as a dead sensor publishing clean air. Sitting under a
+  // rail that already says the horizon has passed, it would be the one line
+  // there contradicting it.
+  const aheadIdx = nowIndex + 6;
+  const ahead = aheadIdx <= frames.length - 1 ? frames[aheadIdx] : null;
+  const pmTrend = ahead && ((ahead.avgPm25 - frame.avgPm25) / frame.avgPm25) * 100;
+  const pblTrend = ahead && ahead.avgPbl - frame.avgPbl;
+  const invTrend = ahead && ahead.inversionIndex - frame.inversionIndex;
+  const signed = (v: number | null, dp = 0, unit = '%') =>
+    v == null ? undefined : `${v >= 0 ? '+' : ''}${v.toFixed(dp)}${unit} / 6h`;
 
   return (
     <motion.section
@@ -318,6 +330,15 @@ export function IntroScreen() {
 
       {/* --- left telemetry rail ------------------------------------------ */}
       <div className="absolute left-5 top-1/2 z-20 hidden -translate-y-1/2 flex-col gap-4 sm:left-8 lg:flex">
+        {/* Said once, above the three, rather than on each: it is one fact
+            about the run they all come from. Only when the run's horizon has
+            been overtaken — a current run needs no caveat, and a caveat that
+            is always there stops being read. */}
+        {!runCoversNow && (
+          <div className="hud-label text-amber-700 dark:text-amber-400">
+            Last completed run &middot; horizon passed
+          </div>
+        )}
         <TelemetryStat
           label="PM2.5 AVG"
           value={frame.avgPm25.toFixed(0)}

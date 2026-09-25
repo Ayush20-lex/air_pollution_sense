@@ -55,6 +55,17 @@ export type Provenance = {
  */
 export const STALE_AFTER_MS = 5 * 60_000;
 
+/**
+ * How old the forecast run itself may be before the badge stops calling it
+ * live. Separate from STALE_AFTER_MS, which times our last *fetch*.
+ *
+ * Four hours: the run is hourly-resolved and its frames stay a fair
+ * description of the air for a few hours past origin, so a threshold much
+ * tighter would cry stale over a run that is merely not brand new. Much
+ * looser and a run that no longer covers the current hour still reads clean.
+ */
+export const RUN_STALE_AFTER_MS = 4 * 60 * 60_000;
+
 /** How often the badge re-reads the clock. Age is not state; see below. */
 const TICK_MS = 30_000;
 
@@ -144,27 +155,61 @@ export function useProvenance(): Provenance {
   const base = describe(source);
   if (base.tone !== 'good') return base;
 
-  // Clamped at zero, which also covers the moment a fetch lands: the clock was
-  // last sampled up to TICK_MS ago, so `now` briefly trails `lastFetchedAt` and
-  // a plain subtraction would go negative. Zero is the right reading there -
-  // the forecast did just arrive - and the next tick catches the clock up.
-  const ageMs = lastFetchedAt == null ? null : Math.max(now - lastFetchedAt, 0);
-  const unconfirmed = liveStatus === 'offline';
-  const aged = ageMs != null && ageMs >= STALE_AFTER_MS;
-  if (!unconfirmed && !aged) return base;
+  // Two ages, and they answer different questions.
+  //
+  // `fetchAgeMs` is how long since we last spoke to the backend. It catches a
+  // console left open against a backend that went away.
+  //
+  // `runAgeMs` is how old the forecast itself is, measured from the run's own
+  // origin. It catches the case this badge used to miss entirely: a backend
+  // answering instantly and cheerfully with a run from last week. Aged only on
+  // the fetch clock, a six-day-old run fetched two seconds ago read as "Live
+  // telemetry", and the three figures on the landing rail sat there stale and
+  // unchallenged. The origin was in the payload the whole time.
+  //
+  // Both are clamped at zero, which also covers the moment a fetch lands: the
+  // clock was last sampled up to TICK_MS ago, so `now` briefly trails
+  // `lastFetchedAt` and a plain subtraction would go negative. Zero is the
+  // right reading there - the forecast did just arrive - and the next tick
+  // catches the clock up.
+  const fetchAgeMs = lastFetchedAt == null ? null : Math.max(now - lastFetchedAt, 0);
+  const originMs = source.origin ? Date.parse(source.origin) : NaN;
+  const runAgeMs = Number.isFinite(originMs) ? Math.max(now - originMs, 0) : null;
 
-  const age = ageMs == null ? null : formatAge(ageMs);
+  const unconfirmed = liveStatus === 'offline';
+  const aged = fetchAgeMs != null && fetchAgeMs >= STALE_AFTER_MS;
+  const runStale = runAgeMs != null && runAgeMs >= RUN_STALE_AFTER_MS;
+  if (!unconfirmed && !aged && !runStale) return base;
+
+  const fetchAge = fetchAgeMs == null ? null : formatAge(fetchAgeMs);
+  const runAge = runAgeMs == null ? null : formatAge(runAgeMs);
+
+  // The run's own age leads when it is the thing that is wrong. "Issued 6d
+  // ago" is what a reader needs; that we re-fetched it a moment ago is true
+  // and beside the point.
+  if (runStale && !unconfirmed) {
+    return {
+      ...base,
+      label: `${base.short} · issued ${runAge} ago`,
+      detail:
+        base.detail +
+        ` — but this run was issued ${runAge} ago, so these figures describe ` +
+        'that hour rather than the present one.',
+      tone: 'stale',
+    };
+  }
+
   return {
     ...base,
     label: unconfirmed
       ? `${base.short} · backend down`
-      : `${base.short} · ${age} old`,
+      : `${base.short} · ${fetchAge} old`,
     detail:
       base.detail +
       (unconfirmed
         ? ' — the backend stopped answering, so these are the last figures it sent'
         : ' — not confirmed with the backend recently') +
-      (age ? `. Last fetched ${age} ago.` : '.'),
+      (fetchAge ? `. Last fetched ${fetchAge} ago.` : '.'),
     tone: 'stale',
   };
 }
