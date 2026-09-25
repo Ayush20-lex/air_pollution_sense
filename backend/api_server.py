@@ -588,7 +588,11 @@ async def health():
 
 
 @app.get("/api/v1/status")
-async def model_status():
+# A plain `def`, not `async def`, on purpose: this handler does blocking work
+# and never awaits, and FastAPI runs a sync handler in its thread pool. Declared
+# async it ran on the event loop, so its cold first call stalled every other
+# request on the server - see the 25 September restart in the commit log.
+def model_status():
     """
     Returns truthful model and data pipeline status.
     The frontend should display this to the user so they know
@@ -1153,7 +1157,11 @@ async def stations(response: Response):
 
     archive = None
     try:
-        archive = station_registry.build(cfg.baseline_season, _mesh_origin())
+        # Off the event loop, like the live fetch above: a cold archive build
+        # takes tens of seconds on this box and would stall every request.
+        archive = await asyncio.to_thread(
+            station_registry.build, cfg.baseline_season, _mesh_origin()
+        )
     except Exception as exc:  # noqa: BLE001 - live alone is still a mesh
         _log.warning("archive mesh unavailable (%s)", exc)
 
@@ -1176,7 +1184,11 @@ async def stations(response: Response):
 
 
 @app.get("/api/v1/history/city")
-async def history_city(days: int = Query(default=30, ge=1, le=365)):
+# A plain `def`, not `async def`, on purpose: this handler does blocking work
+# and never awaits, and FastAPI runs a sync handler in its thread pool. Declared
+# async it ran on the event loop, so its cold first call stalled every other
+# request on the server - see the 25 September restart in the commit log.
+def history_city(days: int = Query(default=30, ge=1, le=365)):
     """Daily city PM2.5 and AQI from the archive, oldest first.
 
     The dashboard carried two literals that both wanted this: a 30-day exposure
@@ -1280,7 +1292,11 @@ async def history_city(days: int = Query(default=30, ge=1, le=365)):
 
 
 @app.get("/api/v1/met/gfs")
-async def met_gfs(response: Response):
+# A plain `def`, not `async def`, on purpose: this handler does blocking work
+# and never awaits, and FastAPI runs a sync handler in its thread pool. Declared
+# async it ran on the event loop, so its cold first call stalled every other
+# request on the server - see the 25 September restart in the commit log.
+def met_gfs(response: Response):
     """
     NOAA GFS over the nine 0.25-degree cells inside the NCR domain.
 
