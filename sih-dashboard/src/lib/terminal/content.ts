@@ -175,14 +175,14 @@ export const COVERAGE_KPIS = [
 ] as const;
 
 /**
- * Footer strip. This deliberately no longer claims EN 16450 / EPA CFR 40
- * conformance: those are real instrument standards, and the readings on this
- * surface are shaped demo values, not output from an accredited analyser.
- * Claiming an accreditation the project has not been granted is a
- * credibility risk in front of anyone who knows the standard.
+ * Footer strip. It claims no conformance, and that is deliberate: EN 16450 and
+ * EPA CFR 40 are real instrument standards, and nothing here is the output of
+ * an accredited analyser - the readings are CPCB's own published bulletin,
+ * re-indexed and re-drawn. Claiming an accreditation the project does not hold
+ * is a credibility risk in front of anyone who knows the standard, so the
+ * safest thing this strip can do is name the sources and stop there.
  */
 export const CERTIFICATIONS = [
-  'DEMO DATA · NOT AN ACCREDITED FEED',
   'STATION LIST: CPCB / DPCC / HSPCB / UPPCB',
   'SIH ID26082 · NCMRWF',
 ] as const;

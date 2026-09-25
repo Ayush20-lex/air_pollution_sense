@@ -64,10 +64,6 @@ const TerminalWarnings = dynamic(
   () => import('@/components/terminal/TerminalWarnings').then((m) => m.default),
   { ssr: false },
 );
-const TerminalLedger = dynamic(
-  () => import('@/components/terminal/TerminalLedger').then((m) => m.default),
-  { ssr: false },
-);
 
 function BootSplash() {
   return (
@@ -215,7 +211,6 @@ export default function App() {
                 <Route path="forecast" element={<TerminalForecast />} />
                 <Route path="matrices" element={<TerminalMatrices />} />
                 <Route path="warnings" element={<TerminalWarnings />} />
-                <Route path="ledger" element={<TerminalLedger />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

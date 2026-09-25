@@ -1,19 +1,18 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, CheckCircle2, CircleAlert, Info } from 'lucide-react';
-import { Delta, Label, SectionHead, SeeAll, Spark, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
+import { AlertTriangle, CheckCircle2, CircleAlert, Info } from 'lucide-react';
+import { Delta, Label, SectionHead, SeeAll, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { GrapPanel } from './GrapPanel';
 import { InversionPanel } from './InversionPanel';
 import { MetSourcePanel } from './MetSourcePanel';
 import { useAdvisories } from '@/lib/terminal/advisories';
-import { POLLUTANTS } from '@/lib/terminal/content';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { bySeverity } from '@/lib/terminal/stations';
 import { useMesh } from '@/lib/terminal/useMesh';
 import { cn } from '@/lib/utils';
 import { TERM, TERM_SEVERITY } from '@/lib/terminal/palette';
 
-/** Regional station cards, incident banners and the spectrometry ledger. */
+/** Regional station cards and the incident banners. */
 export function OverviewMesh() {
   return (
     <>
@@ -21,7 +20,6 @@ export function OverviewMesh() {
       {/* Previews. Each of these has a page now; Live Telemetry shows enough to
           say whether it is worth opening. */}
       <IncidentBanners limit={2} />
-      <SpectrometryLedger limit={4} />
     </>
   );
 }
@@ -213,108 +211,6 @@ export function IncidentBanners({ limit }: { limit?: number } = {}) {
         })}
       </div>
       )}
-    </div>
-  );
-}
-
-/** The ledger, whole or as a preview of its first rows. */
-export function SpectrometryLedger({ limit }: { limit?: number } = {}) {
-  const rows = limit ? POLLUTANTS.slice(0, limit) : POLLUTANTS;
-  return (
-    <div id="ledger" className="space-y-3">
-      <SectionHead
-        title="Pollutant Master Spectrometry Ledger"
-        sub="The eight channels the CPCB National AQI indexes"
-        right={
-          limit ? (
-            <SeeAll to="/terminal/ledger">All {POLLUTANTS.length} channels</SeeAll>
-          ) : undefined
-        }
-      />
-      <TelemetryCard className="overflow-hidden">
-        {/* Nine columns need 900px and a phone gives the table 334, so 566px
-            of it - status, delta, trajectory, calibration - sat behind a
-            horizontal scroll with nothing to announce it. Readers who never
-            guessed to swipe saw a three-column ledger and no sign the rest
-            existed. The same readings are stacked as cards further up this
-            page, so this stays a table and says outright that it scrolls. */}
-        <div className="flex items-center justify-between gap-2 border-b border-term-outline-variant/40 px-4 py-2 md:hidden">
-          <span className="font-mono text-[10px] uppercase tracking-wider text-term-ink-variant">
-            Swipe for status, trend and calibration
-          </span>
-          <ArrowRight className="size-3 shrink-0 text-term-ink-variant" aria-hidden="true" />
-        </div>
-        <div className="relative">
-          {/* Marks the cut rather than letting a column end mid-glyph. */}
-          <div
-            className="pointer-events-none absolute inset-y-0 right-0 z-[3] w-8 bg-gradient-to-l from-term-surface-lowest to-transparent md:hidden"
-            aria-hidden="true"
-          />
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] border-collapse text-left">
-            <thead className="bg-term-surface-high">
-              <tr className="font-mono text-[10px] uppercase tracking-wider text-term-ink-variant">
-                {['Channel', 'Formula', 'Reading', 'Threshold', 'Status', 'Δ24h', 'Trajectory', 'Calibration', ''].map((h, i) => (
-                  <th
-                    key={h}
-                    scope="col"
-                    className={cn(
-                      'px-4 py-3 font-semibold',
-                      i === 0 && 'sticky left-0 z-[2] bg-[var(--t-surface-high)]',
-                    )}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p) => (
-                <tr key={p.id} className="border-b border-term-outline-variant/40 transition-colors hover:bg-term-surface-c/60">
-                  {/* Opaque fill of its own: the card behind is translucent
-                      and the scrolling columns would read straight through. */}
-                  <td className="sticky left-0 z-[2] bg-[var(--t-surface-lowest)] px-4 py-2.5 text-xs font-semibold text-term-ink">
-                    {p.name}
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-xs" style={{ color: p.color }}>
-                    {p.symbol}
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-sm font-bold text-term-ink">
-                    {p.value} <span className="text-[10px] font-normal text-term-ink-variant">{p.unit}</span>
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-term-ink-variant">{p.reference}</td>
-                  <td className="px-4 py-2.5">
-                    <span
-                      className="rounded border px-2 py-0.5 font-mono text-[10px] font-bold"
-                      style={{ color: p.color, borderColor: `${p.color}66`, background: `${p.color}1f` }}
-                    >
-                      {p.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-xs">
-                    <Delta value={p.delta} />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <Spark values={p.trend} color={p.color} width={72} height={22} className="h-5 w-20" />
-                  </td>
-                  {/* Was "VERIFIED" on every row — a calibration state this
-                      project cannot attest to for readings it did not measure. */}
-                  <td className="px-4 py-2.5 font-mono text-xs text-term-ink-variant">SYNTHETIC</td>
-                  <td className="px-4 py-2.5">
-                    <button
-                      type="button"
-                      className="rounded border border-term-outline-variant/60 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-term-ink-variant transition-colors hover:border-term-primary hover:text-term-ink"
-                    >
-                      Inspect
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </TelemetryCard>
     </div>
   );
 }

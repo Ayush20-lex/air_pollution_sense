@@ -18,7 +18,6 @@ import {
   Search,
   SlidersHorizontal,
   X,
-  Table2,
 } from 'lucide-react';
 import { CERTIFICATIONS, HUB, LOCATIONS } from '@/lib/terminal/content';
 import { STATIONS } from '@/lib/terminal/stations';
@@ -57,7 +56,6 @@ const NAV: NavItem[] = [
   // every page, including a day with nothing wrong. The count is now the number
   // of advisories that are actually active - see lib/terminal/advisories.
   { href: '/terminal/warnings', label: 'Incident Warnings', icon: <AlertTriangle className="size-4 text-amber-400" /> },
-  { href: '/terminal/ledger', label: 'Spectrometry Ledger', icon: <Table2 className="size-4" /> },
 ];
 
 export function TerminalShell({ children }: { children: React.ReactNode }) {
