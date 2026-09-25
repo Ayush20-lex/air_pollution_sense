@@ -7,11 +7,24 @@ import { ALERT_COLOR, aqiColor } from '@/lib/aqi';
 import { DISTRICTS, autoAnalysis, type Frame, type Interventions } from '@/lib/data';
 import { SERIES } from '@/lib/tokens';
 
-/** Shared rise-from-below entrance, staggered across the row. */
+/**
+ * Shared rise-from-below entrance, staggered across the row.
+ *
+ * `once: true`, and that is the whole point. With `once: false` the panels
+ * animated out again every time they left the viewport and back in on the way
+ * past, so scrolling up the page - or stopping with a card half off the bottom
+ * edge, which at `amount` 0.35 is below the trigger - left cards sitting at
+ * their `initial` opacity of zero. Three of them were measured at 0.05, 0.53
+ * and 0.59 while off screen. An entrance is something a panel does once; after
+ * that the reader is just trying to read it.
+ *
+ * `amount` is lower to match, so a card entering from the bottom commits
+ * earlier rather than waiting to be a third on screen.
+ */
 const rise = (i: number) => ({
   initial: { opacity: 0, y: 56 },
   whileInView: { opacity: 1, y: 0 },
-  viewport: { once: false, amount: 0.35, margin: '0px 0px -12% 0px' },
+  viewport: { once: true, amount: 0.15, margin: '0px 0px -8% 0px' },
   transition: { duration: 0.65, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] as const },
 });
 
@@ -164,7 +177,7 @@ export function ScrollSectionHead({ frame }: { frame: Frame }) {
       <motion.h2
         initial={{ opacity: 0, x: -28 }}
         whileInView={{ opacity: 1, x: 0 }}
-        viewport={{ once: false, amount: 0.6 }}
+        viewport={{ once: true, amount: 0.4 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         className="font-mono text-xl font-bold uppercase tracking-[0.14em] text-ink sm:text-2xl"
       >
@@ -173,7 +186,7 @@ export function ScrollSectionHead({ frame }: { frame: Frame }) {
       <motion.div
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
-        viewport={{ once: false, amount: 0.6 }}
+        viewport={{ once: true, amount: 0.4 }}
         transition={{ duration: 0.6, delay: 0.15 }}
         className="flex items-center gap-4 font-mono text-2xs uppercase tracking-[0.18em] text-faint"
       >

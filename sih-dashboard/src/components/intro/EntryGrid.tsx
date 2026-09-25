@@ -39,10 +39,11 @@ function worstColor(items: { level: string }[]): string {
   return ALERT_COLOR.ADVISORY;
 }
 
+/** See ScrollPanels' `rise`: revealed once, and low enough to commit early. */
 const rise = (i: number) => ({
   initial: { opacity: 0, y: 40 },
   whileInView: { opacity: 1, y: 0 },
-  viewport: { once: false, amount: 0.3, margin: '0px 0px -10% 0px' },
+  viewport: { once: true, amount: 0.15, margin: '0px 0px -8% 0px' },
   transition: { duration: 0.6, delay: i * 0.07, ease: [0.22, 1, 0.36, 1] as const },
 });
 
