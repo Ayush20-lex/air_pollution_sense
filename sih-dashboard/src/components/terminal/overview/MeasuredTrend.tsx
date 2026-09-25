@@ -59,6 +59,22 @@ function hourStamps(endsAt: string | null, count: number): string[] {
   );
 }
 
+/**
+ * Fallback plot width, used only until the element has been measured.
+ *
+ * The svg used to carry a fixed `viewBox="0 0 240 h"` with a fixed height, and
+ * `preserveAspectRatio` defaults to `xMidYMid meet`: the height pinned the
+ * scale at 1, so a 240-unit chart sat centred in however wide the card was,
+ * with dead space either side. In a 536px card the line occupied the middle
+ * 240px and the crosshair missed the cursor by up to 148px at the ends.
+ *
+ * `preserveAspectRatio="none"` would stretch it, and distort every dot into an
+ * ellipse and every stroke with it. Measuring instead keeps the scale at 1:1,
+ * so nothing is deformed and a pixel in the box is a pixel on screen.
+ */
+const W_FALLBACK = 240;
+const PAD = 8;
+
 export function MeasuredTrend({
   values,
   color,
@@ -95,19 +111,45 @@ export function MeasuredTrend({
 }) {
   const id = React.useId();
   const [hover, setHover] = React.useState<number | null>(null);
+  const boxRef = React.useRef<HTMLDivElement>(null);
+  const [plotW, setPlotW] = React.useState(W_FALLBACK);
+  React.useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const next = Math.round(entry.contentRect.width);
+      if (next > 0) setPlotW(next);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Nearest reported point to the pointer.
   //
-  // Mapped from the element's own width rather than the viewBox: the svg is
-  // `w-full` over a fixed 240-unit box, so the two only agree by accident.
+  // Converted through the svg's own matrix, and then past `PAD`.
+  //
+  // The old mapping spread the pointer across the container's full width while
+  // the series is inset by PAD at each end and the viewBox was a fixed 240
+  // inside an element that was not - `xMidYMid meet` letterboxed the
+  // difference rather than stretching. On a 262.4px card that put the first
+  // point 19.2px in with the run spanning 224px, so the crosshair led the
+  // cursor by up to a fifth of the track, worst at the ends.
+  //
+  // The viewBox now tracks the measured width, so the letterbox is gone and
+  // the matrix is 1:1 - but going through it anyway costs nothing and stays
+  // right under a page zoom or any transform on an ancestor, neither of which
+  // a bounding-box subtraction survives.
+  //
   // Nulls are skipped, so hovering a gap snaps to the nearest hour that
   // actually reported instead of reading out a hole.
+  const svgRef = React.useRef<SVGSVGElement>(null);
   const onMove = React.useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      const box = e.currentTarget.getBoundingClientRect();
-      if (!box.width) return;
-      const frac = (e.clientX - box.left) / box.width;
-      const target = frac * (values.length - 1);
+      const svg = svgRef.current;
+      const ctm = svg?.getScreenCTM();
+      if (!ctm) return;
+      const at = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+      const target = ((at.x - PAD) / (plotW - PAD * 2)) * (values.length - 1);
       let best = -1;
       let bestD = Infinity;
       values.forEach((v, i) => {
@@ -120,12 +162,12 @@ export function MeasuredTrend({
       });
       setHover(best >= 0 ? best : null);
     },
-    [values],
+    [values, plotW],
   );
 
-  const w = 240;
+  const w = plotW;
   const h = height;
-  const pad = 8;
+  const pad = PAD;
 
   const present = values.filter((v): v is number => v != null);
   if (values.length === 0 || present.length === 0) {
@@ -174,12 +216,14 @@ export function MeasuredTrend({
 
   return (
     <div
+      ref={boxRef}
       className="relative w-full"
       onPointerMove={onMove}
       onPointerDown={onMove}
       onPointerLeave={() => setHover(null)}
     >
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${w} ${h}`}
         className="w-full overflow-visible"
         style={{ height: h }}
@@ -264,14 +308,19 @@ export function MeasuredTrend({
         ) : null}
       </svg>
 
-      {/* Readout. Clamped to the track so a point at either end does not push
-          the card wider; `translateX(-50%)` centres it on the crosshair and the
-          clamp takes over within half a width of each edge. */}
+      {/* Readout, inside the plot rather than above it.
+          `-translate-y-full` put it over the chart's top edge, and the card
+          around it is `overflow-hidden` - measured at 320 against a card
+          starting at 327, so the first seven pixels were sliced off. Sitting
+          it at the top of the track keeps it inside every ancestor that clips.
+
+          Horizontally it follows the crosshair, clamped to 12-88% so a point
+          at either end does not hang past the track. */}
       {hover != null && hoverV != null ? (
         <div
-          className="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-term-outline-variant/70 bg-term-surface-lowest/95 px-2 py-1 font-mono text-[10px] shadow-lg backdrop-blur-sm"
+          className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-term-outline-variant/70 bg-term-surface-lowest/95 px-2 py-1 font-mono text-[10px] shadow-lg backdrop-blur-sm"
           style={{
-            left: `${Math.min(88, Math.max(12, (hover / Math.max(1, values.length - 1)) * 100))}%`,
+            left: `${Math.min(88, Math.max(12, ((PAD + (hover / Math.max(1, values.length - 1)) * (plotW - PAD * 2)) / plotW) * 100))}%`,
           }}
         >
           <div className="text-term-ink-variant">{stamps[hover] ?? `hour ${hover + 1}`}</div>
