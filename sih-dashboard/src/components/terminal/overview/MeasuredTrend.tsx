@@ -34,6 +34,31 @@ function hourLabels(endsAt: string | null, count: number): string[] {
   });
 }
 
+/**
+ * The same instants as `hourLabels`, written out for the tooltip.
+ *
+ * The axis carries clock times only, because four of them across 240px is all
+ * that fits. A reader hovering a point is asking which hour it is, and on a
+ * 72-hour window the hour alone is ambiguous three times over - the date has
+ * to be there.
+ */
+function hourStamps(endsAt: string | null, count: number): string[] {
+  if (!endsAt || count === 0) return [];
+  const end = new Date(endsAt);
+  if (Number.isNaN(end.getTime())) return [];
+  const fmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return Array.from({ length: count }, (_, i) =>
+    fmt.format(new Date(end.getTime() - (count - 1 - i) * 3_600_000)),
+  );
+}
+
 export function MeasuredTrend({
   values,
   color,
@@ -42,6 +67,7 @@ export function MeasuredTrend({
   endsAt = null,
   emptyNote,
   caption = null,
+  valueLabel,
 }: {
   values: (number | null)[];
   color: string;
@@ -60,8 +86,43 @@ export function MeasuredTrend({
   emptyNote?: string;
   /** Printed under the line when the series is not hourly readings. */
   caption?: string | null;
+  /**
+   * What one value is, for the hover readout - "CPCB sub-index" or a unit.
+   * The series is whichever of the two the feed gave, and only the caller
+   * knows which, so a bare number in the tooltip would be unlabelled.
+   */
+  valueLabel?: string;
 }) {
   const id = React.useId();
+  const [hover, setHover] = React.useState<number | null>(null);
+
+  // Nearest reported point to the pointer.
+  //
+  // Mapped from the element's own width rather than the viewBox: the svg is
+  // `w-full` over a fixed 240-unit box, so the two only agree by accident.
+  // Nulls are skipped, so hovering a gap snaps to the nearest hour that
+  // actually reported instead of reading out a hole.
+  const onMove = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const box = e.currentTarget.getBoundingClientRect();
+      if (!box.width) return;
+      const frac = (e.clientX - box.left) / box.width;
+      const target = frac * (values.length - 1);
+      let best = -1;
+      let bestD = Infinity;
+      values.forEach((v, i) => {
+        if (v == null) return;
+        const d = Math.abs(i - target);
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      });
+      setHover(best >= 0 ? best : null);
+    },
+    [values],
+  );
+
   const w = 240;
   const h = height;
   const pad = 8;
@@ -99,6 +160,8 @@ export function MeasuredTrend({
 
   const lastIdx = values.reduce((acc, v, i) => (v != null ? i : acc), -1);
 
+  const stamps = hourStamps(endsAt, values.length);
+
   const labels = hourLabels(endsAt, values.length);
   const TICKS = 4;
   const ticks = labels.length
@@ -107,8 +170,15 @@ export function MeasuredTrend({
       )
     : [];
 
+  const hoverV = hover != null ? values[hover] : null;
+
   return (
-    <div className="w-full">
+    <div
+      className="relative w-full"
+      onPointerMove={onMove}
+      onPointerDown={onMove}
+      onPointerLeave={() => setHover(null)}
+    >
       <svg
         viewBox={`0 0 ${w} ${h}`}
         className="w-full overflow-visible"
@@ -174,7 +244,43 @@ export function MeasuredTrend({
             />
           ),
         )}
+
+        {/* The hovered hour. `pointer-events: none` on the whole overlay - the
+            move handler is on the container, and a shape under the cursor that
+            captured events would make the readout flicker as it chased itself. */}
+        {hover != null && hoverV != null ? (
+          <g pointerEvents="none">
+            <line
+              x1={x(hover)}
+              x2={x(hover)}
+              y1={pad / 2}
+              y2={h - pad / 2}
+              stroke={TERM.outline}
+              strokeWidth="1"
+              strokeDasharray="2 3"
+            />
+            <circle cx={x(hover)} cy={y(hoverV)} r="4" fill={color} stroke={TERM.ink} strokeWidth="1.5" />
+          </g>
+        ) : null}
       </svg>
+
+      {/* Readout. Clamped to the track so a point at either end does not push
+          the card wider; `translateX(-50%)` centres it on the crosshair and the
+          clamp takes over within half a width of each edge. */}
+      {hover != null && hoverV != null ? (
+        <div
+          className="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-term-outline-variant/70 bg-term-surface-lowest/95 px-2 py-1 font-mono text-[10px] shadow-lg backdrop-blur-sm"
+          style={{
+            left: `${Math.min(88, Math.max(12, (hover / Math.max(1, values.length - 1)) * 100))}%`,
+          }}
+        >
+          <div className="text-term-ink-variant">{stamps[hover] ?? `hour ${hover + 1}`}</div>
+          <div className="font-bold" style={{ color }}>
+            {Number.isInteger(hoverV) ? hoverV : hoverV.toFixed(1)}
+            {valueLabel ? <span className="ml-1 font-normal text-term-outline">{valueLabel}</span> : null}
+          </div>
+        </div>
+      ) : null}
 
       {caption ? (
         <div className="mt-0.5 font-mono text-[10px] text-term-outline">{caption}</div>

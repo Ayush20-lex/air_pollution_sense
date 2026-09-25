@@ -163,6 +163,7 @@ export function PollutantDetail({
                   endsAt={asOf}
                   emptyNote={p.emptyNote}
                   caption={p.caption}
+                  valueLabel={p.value != null ? p.unit : 'CPCB sub-index'}
                 />
 
                 <dl className="space-y-1.5 font-mono text-[11px]">

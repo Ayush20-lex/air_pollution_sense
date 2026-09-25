@@ -248,7 +248,8 @@ function PollutantCard({
 
         {p.measured ? (
           <MeasuredTrend values={p.series} color={p.color} height={68} endsAt={asOf}
-            emptyNote={p.emptyNote} caption={p.caption} />
+            emptyNote={p.emptyNote} caption={p.caption}
+            valueLabel={p.value != null ? p.unit : 'CPCB sub-index'} />
         ) : (
           <TrendChart values={p.trend} color={p.color} />
         )}
