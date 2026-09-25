@@ -50,6 +50,7 @@ import numpy as np
 import pandas as pd
 
 import aqi_cpcb
+import archive_cache
 import observation_qc
 
 logger = logging.getLogger("station_registry")
@@ -204,6 +205,24 @@ def _observations(
     decides whether a station has enough hours to be indexed at all.
     """
     root = DATA / "raw" / "observations" / f"season={season}"
+
+    # Read back from disk when the inputs are unchanged - see archive_cache.
+    inputs = [f for pol in pollutants for f in root.glob(f"{pol}_*.parquet")]
+    k = archive_cache.key(inputs, code=("station_registry", "observation_qc"),
+                          season=season, pollutants=pollutants,
+                          end=None if end is None else end.isoformat())
+    name = f"registry_obs_{season}"
+    cached = archive_cache.load(name, k)
+    if cached is not None:
+        return cached
+    frames = _observations_uncached(root, season, pollutants, end)
+    archive_cache.save(name, k, frames)
+    return frames
+
+
+def _observations_uncached(
+    root: Path, season: int, pollutants: tuple[str, ...], end: pd.Timestamp | None
+) -> dict[str, pd.DataFrame]:
     frames: dict[str, pd.DataFrame] = {}
     for pol in pollutants:
         files = sorted(root.glob(f"{pol}_*.parquet"))

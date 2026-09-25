@@ -156,3 +156,6 @@ ml_pipeline/data/raw/gfs/*
 
 # FIRMS fire pixels are cached per origin date; refetchable from NASA with a key.
 ml_pipeline/data/cache/
+
+# Derived archive state, rebuilt from ml_pipeline/data - see backend/archive_cache.py
+.cache/

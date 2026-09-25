@@ -68,6 +68,7 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
+import archive_cache
 import observation_qc
 
 logger = logging.getLogger("baseline_forecaster")
@@ -191,8 +192,29 @@ class BlendBaselineForecaster:
         # Built on first use: only the fire path needs it, and the corridor is
         # quiet for most of the year.
         self._fusion = None
+
+        # Everything _load and _precompute_idw build depends only on the files
+        # below and this module's code, so a restart reads it back instead of
+        # re-reading and re-QCing the archive - which was the whole 41-58 s of a
+        # cold start on the Oracle box. See archive_cache for why this is safe.
+        root = self.data / "raw"
+        inputs = [
+            root / "stations" / "catalog.json",
+            root / "forecast" / f"forecast_{self.season}.parquet",
+            *sorted((root / "observations" / f"season={self.season}").glob("pm25_*.parquet")),
+        ]
+        k = archive_cache.key(inputs, code=("baseline_forecaster", "observation_qc"),
+                              season=self.season)
+        cached = archive_cache.load(f"forecaster_{self.season}", k)
+        if cached is not None:
+            self.__dict__.update(cached)
+            self._fusion = None
+            return
+
         self._load()
         self._precompute_idw()
+        state = {n: v for n, v in self.__dict__.items() if n not in ("_fusion", "data")}
+        archive_cache.save(f"forecaster_{self.season}", k, state)
 
     # ── loading ───────────────────────────────────────────────────────────────
 
@@ -275,12 +297,17 @@ class BlendBaselineForecaster:
             return (w.ffill().bfill() if fill else w).to_numpy(dtype=np.float32)
 
         # Observations only. CAMS is a model field and has no faulty sensor.
-        self.obs_pm25 = pivot(obs.rename(columns={"value": "pm25"}), "pm25", qc=True)
-        # Before the gaps were closed. `obs_pm25` is forward-filled so the IDW
-        # weights stay constant, which makes it useless for asking how recently
-        # a station reported - every hour looks covered.
+        #
+        # `_obs_raw` is the QC'd grid before the gaps were closed. `obs_pm25` is
+        # forward-filled so the IDW weights stay constant, which makes it useless
+        # for asking how recently a station reported - every hour looks covered.
+        # The QC runs once and both are derived from it: this used to call
+        # pivot(qc=True) twice on identical input, which is why the log showed
+        # the same despike and stuck-sensor pass twice on every start.
         self._obs_raw = pivot(obs.rename(columns={"value": "pm25"}), "pm25",
                               qc=True, fill=False)
+        self.obs_pm25 = (pd.DataFrame(self._obs_raw).ffill().bfill()
+                         .to_numpy(dtype=np.float32))
         self.fields = {ch: pivot(fc, col) for ch, col in CHANNEL_SOURCE.items()
                        if col in fc.columns}
 
