@@ -10,7 +10,7 @@ import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { bySeverity } from '@/lib/terminal/stations';
 import { useMesh } from '@/lib/terminal/useMesh';
 import { cn } from '@/lib/utils';
-import { TERM, TERM_SEVERITY } from '@/lib/terminal/palette';
+import { TERM, TERM_SEVERITY, useTermPalette, useSeverityInk } from '@/lib/terminal/palette';
 
 /** Regional station cards and the incident banners. */
 export function OverviewMesh() {
@@ -26,6 +26,9 @@ export function OverviewMesh() {
 
 /** The six worst nodes, as telemetry cards. */
 function StationMesh() {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
   const top = bySeverity(useMesh().stations).slice(0, 6);
 
   return (
@@ -65,10 +68,10 @@ function StationMesh() {
                   </Label>
                 </div>
                 <div className="text-right">
-                  <span className="font-display text-2xl font-extrabold" style={{ color }}>
+                  <span className="font-display text-2xl font-extrabold" style={{ color: ink(color) }}>
                     {s.aqi}
                   </span>
-                  <div className="font-mono text-[10px] font-bold uppercase" style={{ color }}>
+                  <div className="font-mono text-[10px] font-bold uppercase" style={{ color: ink(color) }}>
                     {band.label}
                   </div>
                 </div>
@@ -107,9 +110,9 @@ function StationMesh() {
 }
 
 const LEVEL_STYLE = {
-  CRITICAL: { border: 'border-l-red-500', color: TERM_SEVERITY.severe, icon: CircleAlert, pill: 'bg-red-500/20 text-red-300 border-red-500/40' },
-  WARNING: { border: 'border-l-amber-500', color: TERM_SEVERITY.elevated, icon: AlertTriangle, pill: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
-  ADVISORY: { border: 'border-l-term-secondary', color: TERM.secondary, icon: Info, pill: 'bg-term-secondary/20 text-term-secondary border-term-secondary/40' },
+  CRITICAL: { border: 'border-l-red-500', color: TERM_SEVERITY.severe, icon: CircleAlert, pill: 'bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/40' },
+  WARNING: { border: 'border-l-amber-500', color: TERM_SEVERITY.elevated, icon: AlertTriangle, pill: 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40' },
+  ADVISORY: { border: 'border-l-term-secondary', get color() { return TERM.secondary; }, icon: Info, pill: 'bg-term-secondary/20 text-term-secondary border-term-secondary/40' },
 } as const;
 
 /**
@@ -121,6 +124,12 @@ const LEVEL_STYLE = {
  * half of one is worse than a link to it.
  */
 export function IncidentBanners({ limit }: { limit?: number } = {}) {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   const { items: all, loading } = useAdvisories();
   const items = limit ? all.slice(0, limit) : all;
   return (
@@ -182,7 +191,7 @@ export function IncidentBanners({ limit }: { limit?: number } = {}) {
               className="flex flex-col justify-between gap-3 rounded-xl p-4 sm:flex-row sm:items-center"
             >
               <div className="flex items-start gap-3">
-                <Icon className="mt-0.5 size-5 shrink-0" style={{ color: style.color }} />
+                <Icon className="mt-0.5 size-5 shrink-0" style={{ color: ink(style.color) }} />
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={cn('rounded border px-2 py-0.5 font-mono text-[10px] font-bold', style.pill)}>

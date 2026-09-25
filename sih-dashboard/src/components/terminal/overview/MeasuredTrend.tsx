@@ -10,7 +10,7 @@
  * So the line breaks at gaps and the missing hours are marked underneath.
  */
 import * as React from 'react';
-import { TERM } from '@/lib/terminal/palette';
+import { TERM, useTermPalette, useSeverityInk } from '@/lib/terminal/palette';
 
 /**
  * Hour labels in IST.
@@ -109,6 +109,12 @@ export function MeasuredTrend({
    */
   valueLabel?: string;
 }) {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   const id = React.useId();
   const [hover, setHover] = React.useState<number | null>(null);
   const boxRef = React.useRef<HTMLDivElement>(null);
@@ -324,7 +330,7 @@ export function MeasuredTrend({
           }}
         >
           <div className="text-term-ink-variant">{stamps[hover] ?? `hour ${hover + 1}`}</div>
-          <div className="font-bold" style={{ color }}>
+          <div className="font-bold" style={{ color: ink(color) }}>
             {Number.isInteger(hoverV) ? hoverV : hoverV.toFixed(1)}
             {valueLabel ? <span className="ml-1 font-normal text-term-outline">{valueLabel}</span> : null}
           </div>
@@ -365,7 +371,7 @@ export function MeasuredTrend({
       ) : labels.length ? (
         <div className="mt-0.5 flex justify-between font-mono text-[10px] text-term-ink-variant">
           <span>{labels[0]}</span>
-          <span className="font-bold" style={{ color }}>
+          <span className="font-bold" style={{ color: ink(color) }}>
             {labels[labels.length - 1]}
           </span>
         </div>

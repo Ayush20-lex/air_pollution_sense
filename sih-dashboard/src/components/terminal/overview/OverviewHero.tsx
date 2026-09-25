@@ -7,7 +7,7 @@ import { useHubStation, useMeshRange } from '@/lib/terminal/useMesh';
 import { isLive, isStale } from '@/lib/terminal/useMesh';
 import { stationHour } from '@/lib/terminal/meshApi';
 import { cn } from '@/lib/utils';
-import { TERM } from '@/lib/terminal/palette';
+import { TERM, useTermPalette, useSeverityInk } from '@/lib/terminal/palette';
 
 /** Status banner + hero gauge + public health advisory. */
 export function OverviewHero() {
@@ -37,11 +37,11 @@ function StatusBanner() {
           <h1 className="font-display text-2xl font-extrabold tracking-tight text-term-ink lg:text-3xl">
             AIR Quality Overview
           </h1>
-          <span className="rounded border border-orange-500/40 bg-orange-500/15 px-2.5 py-0.5 font-mono text-xs font-bold text-orange-400">
+          <span className="rounded border border-orange-500/40 bg-orange-500/15 px-2.5 py-0.5 font-mono text-xs font-bold text-orange-700 dark:text-orange-400">
             {live ? `${station.name} • ${station.zone} zone • ${station.agency}` : HUB.station}
           </span>
           {stale && (
-            <span className="rounded border border-amber-500/50 bg-amber-500/10 px-2.5 py-0.5 font-mono text-xs font-bold text-amber-400">
+            <span className="rounded border border-amber-500/50 bg-amber-500/10 px-2.5 py-0.5 font-mono text-xs font-bold text-amber-700 dark:text-amber-400">
               ARCHIVED · {stationHour(station)}
             </span>
           )}
@@ -62,7 +62,7 @@ function StatusBanner() {
           icon={<Thermometer className="size-4 text-term-secondary" />}
           label="Readings"
           value={live ? 'Measured' : 'Demo values'}
-          valueClass={stale ? 'text-amber-400' : 'text-term-primary'}
+          valueClass={stale ? 'text-amber-700 dark:text-amber-400' : 'text-term-primary'}
         />
       </div>
     </div>
@@ -92,6 +92,12 @@ function StatPill({
 
 /** Radial composite-index gauge with the CPCB category scale beside it. */
 function AqiGauge() {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   const { station, live } = useHubStation();
   const range = useMeshRange();
 
@@ -126,7 +132,7 @@ function AqiGauge() {
             {live ? station.name : HUB.sector}
           </div>
           {stale && (
-            <div className="mt-0.5 font-mono text-[11px] font-bold text-amber-400">
+            <div className="mt-0.5 font-mono text-[11px] font-bold text-amber-700 dark:text-amber-400">
               Replayed from the archive · {stationHour(station)}
             </div>
           )}
@@ -136,7 +142,7 @@ function AqiGauge() {
             {/* Sign follows the measurement. The old copy said "Increased"
                 unconditionally, over a delta that can be and today is negative. */}
             {deltaKnown ? (
-              <span className={cn('font-bold', delta >= 0 ? 'text-orange-400' : 'text-term-primary')}>
+              <span className={cn('font-bold', delta >= 0 ? 'text-orange-700 dark:text-orange-400' : 'text-term-primary')}>
                 {delta >= 0 ? '↑' : '↓'} {Math.abs(delta).toFixed(1)}% {delta >= 0 ? 'Increased' : 'Decreased'}
               </span>
             ) : (
@@ -144,7 +150,7 @@ function AqiGauge() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 rounded-full border border-orange-500/50 bg-orange-500/20 px-3.5 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-orange-300 shadow-[0_0_15px_rgba(249,115,22,0.3)]">
+        <div className="flex items-center gap-2 rounded-full border border-orange-500/50 bg-orange-500/20 px-3.5 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 shadow-[0_0_15px_rgba(249,115,22,0.3)]">
           <span className="size-2.5 animate-pulse rounded-full bg-orange-500" />
           {band.label} air quality
         </div>
@@ -184,7 +190,7 @@ function AqiGauge() {
               <span className="font-display text-6xl font-extrabold leading-none text-term-ink">
                 {aqi}
               </span>
-              <span className="mt-1 font-mono text-xs font-bold" style={{ color }}>
+              <span className="mt-1 font-mono text-xs font-bold" style={{ color: ink(color) }}>
                 {band.label}
               </span>
               <span className="font-mono text-[10px] text-term-ink-variant">
@@ -247,7 +253,7 @@ function AqiGauge() {
                 ? station.dominant
                 : HUB.dominant
           }
-          valueClass="text-orange-400"
+          valueClass="text-orange-700 dark:text-orange-400"
         />
         <MicroStat
           label={live ? 'Window Coverage' : 'Sensor Confidence'}
@@ -270,6 +276,9 @@ function MicroStat({ label, value, valueClass }: { label: string; value: string;
 
 /** Public health guidance and the biometric impact meters. */
 function HealthAdvisory() {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
   const icons = [HeartPulse, Hospital, Thermometer, Wind];
   const [copied, setCopied] = React.useState<'idle' | 'ok' | 'fail'>('idle');
 
@@ -329,7 +338,7 @@ function HealthAdvisory() {
           <Hospital className="size-5 text-term-secondary" />
           Air Quality Advisory
         </h2>
-        <span className="rounded border border-amber-500/40 bg-amber-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-300">
+        <span className="rounded border border-amber-500/40 bg-amber-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300">
           Level 3 Caution
         </span>
       </div>
@@ -351,10 +360,10 @@ function HealthAdvisory() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-term-ink-variant">
-                    <Icon className="size-3.5" style={{ color: b.color }} />
+                    <Icon className="size-3.5" style={{ color: ink(b.color) }} />
                     {b.label}
                   </span>
-                  <span className="font-mono text-[10px] font-bold" style={{ color: b.color }}>
+                  <span className="font-mono text-[10px] font-bold" style={{ color: ink(b.color) }}>
                     {b.level}
                   </span>
                 </div>
@@ -367,7 +376,7 @@ function HealthAdvisory() {
                 <div className="space-y-1">
                   <span
                     className="block font-display text-xl font-extrabold leading-none tabular-nums"
-                    style={{ color: b.color }}
+                    style={{ color: ink(b.color) }}
                   >
                     {b.pct}%
                   </span>

@@ -12,7 +12,7 @@ import { useMesh } from '@/lib/terminal/useMesh';
 import { cn } from '@/lib/utils';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { useAppStore } from '@/store/useAppStore';
-import { TERM, TERM_SEVERITY } from '@/lib/terminal/palette';
+import { TERM, TERM_SEVERITY, useTermPalette, useSeverityInk } from '@/lib/terminal/palette';
 
 /** Everything below the map on the geo page. */
 export function GeoSections({ frame }: { frame: TerminalFrame }) {
@@ -31,6 +31,9 @@ export function GeoSections({ frame }: { frame: TerminalFrame }) {
 }
 
 function ZoneStrip() {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
   const { stations } = useMesh();
   const zones = zoneSummary(stations);
 
@@ -53,10 +56,10 @@ function ZoneStrip() {
             <TelemetryCard key={z.zone} className="relative space-y-2 overflow-hidden rounded-xl p-4">
               <Label className="block">{z.zone} zone</Label>
               <div className="flex items-baseline gap-2">
-                <span className="font-display text-3xl font-extrabold" style={{ color }}>
+                <span className="font-display text-3xl font-extrabold" style={{ color: ink(color) }}>
                   {z.mean}
                 </span>
-                <span className="font-mono text-[10px] font-bold uppercase" style={{ color }}>
+                <span className="font-mono text-[10px] font-bold uppercase" style={{ color: ink(color) }}>
                   {band.label}
                 </span>
               </div>
@@ -80,6 +83,9 @@ function ZoneStrip() {
 
 /** Worst-to-best node list. Clicking a row selects it on the map. */
 function MeshRanking({ frame }: { frame: TerminalFrame }) {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
   const ranked = bySeverity(useMesh().stations);
 
   const selectedId = useTerminalStore((s) => s.selectedId);
@@ -163,7 +169,7 @@ function MeshRanking({ frame }: { frame: TerminalFrame }) {
                   <span className="hidden h-4 w-12 shrink-0 sm:block" />
                 );
               })()}
-              <span className="w-10 shrink-0 text-right font-mono text-sm font-bold" style={{ color }}>
+              <span className="w-10 shrink-0 text-right font-mono text-sm font-bold" style={{ color: ink(color) }}>
                 <AnimatedNumber value={sample.aqi} duration={rollMs} />
               </span>
               <span className="w-14 shrink-0 text-right text-[10px]">
@@ -188,6 +194,9 @@ function MeshRanking({ frame }: { frame: TerminalFrame }) {
  * caps vertical mixing.
  */
 function TrappingProfile() {
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   // The layer depth at the hour on the timeline, not a constant. The prose used
   // to say 412 m while the panel below reported 50.
   const live = useAppStore((st) => st.liveFrames)?.[0];
@@ -265,7 +274,7 @@ function TrappingProfile() {
               label that means a height in metres. The index belongs here and
               the depth belongs beside it, which is now how they sit. */}
           <Label className="block">Inversion index</Label>
-          <span className="font-mono text-sm font-bold text-orange-400">
+          <span className="font-mono text-sm font-bold text-orange-700 dark:text-orange-400">
             {inv == null ? '—' : inv.toFixed(2)}
           </span>
         </div>
@@ -282,7 +291,7 @@ function TrappingProfile() {
 
 const STATUS_PILL: Record<string, string> = {
   ONLINE: 'border-term-primary/40 bg-term-primary/15 text-term-primary',
-  DEGRADED: 'border-amber-500/40 bg-amber-500/20 text-amber-300',
+  DEGRADED: 'border-amber-500/40 bg-amber-500/20 text-amber-700 dark:text-amber-300',
   CALIBRATING: 'border-term-secondary/40 bg-term-secondary/20 text-term-secondary',
 };
 
@@ -298,6 +307,9 @@ function hourLabel(iso: string | null): string {
 }
 
 function NodeLedger({ frame }: { frame: TerminalFrame }) {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
   const mesh = useMesh();
   const ranked = bySeverity(mesh.stations);
 
@@ -381,7 +393,7 @@ function NodeLedger({ frame }: { frame: TerminalFrame }) {
                     <td className="px-4 py-2.5 font-mono text-[10px] text-term-ink-variant">{s.agency}</td>
                     <td className="px-4 py-2.5 font-mono text-[11px] text-term-secondary">{s.lat.toFixed(4)}°N</td>
                     <td className="px-4 py-2.5 font-mono text-[11px] text-term-secondary">{s.lng.toFixed(4)}°E</td>
-                    <td className="px-4 py-2.5 font-mono text-sm font-bold" style={{ color }}>
+                    <td className="px-4 py-2.5 font-mono text-sm font-bold" style={{ color: ink(color) }}>
                       <AnimatedNumber value={sample.aqi} duration={rollMs} />
                     </td>
                     <td className="px-4 py-2.5">
@@ -431,12 +443,18 @@ function NodeLedger({ frame }: { frame: TerminalFrame }) {
 }
 
 const ALERT_STYLE = {
-  CRITICAL: { border: 'border-l-red-500', color: TERM_SEVERITY.severe, Icon: CircleAlert, pill: 'border-red-500/40 bg-red-500/20 text-red-300' },
-  WARNING: { border: 'border-l-amber-500', color: TERM_SEVERITY.elevated, Icon: AlertTriangle, pill: 'border-amber-500/40 bg-amber-500/20 text-amber-300' },
-  ADVISORY: { border: 'border-l-term-secondary', color: TERM.secondary, Icon: Info, pill: 'border-term-secondary/40 bg-term-secondary/20 text-term-secondary' },
+  CRITICAL: { border: 'border-l-red-500', color: TERM_SEVERITY.severe, Icon: CircleAlert, pill: 'border-red-500/40 bg-red-500/20 text-red-700 dark:text-red-300' },
+  WARNING: { border: 'border-l-amber-500', color: TERM_SEVERITY.elevated, Icon: AlertTriangle, pill: 'border-amber-500/40 bg-amber-500/20 text-amber-700 dark:text-amber-300' },
+  ADVISORY: { border: 'border-l-term-secondary', get color() { return TERM.secondary; }, Icon: Info, pill: 'border-term-secondary/40 bg-term-secondary/20 text-term-secondary' },
 } as const;
 
 function SpatialAlerts() {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   const { items } = useAdvisories();
 
   return (
@@ -466,7 +484,7 @@ function SpatialAlerts() {
               className="flex flex-col justify-between gap-3 rounded-xl p-4 sm:flex-row sm:items-center"
             >
               <div className="flex items-start gap-3">
-                <style.Icon className="mt-0.5 size-5 shrink-0" style={{ color: style.color }} />
+                <style.Icon className="mt-0.5 size-5 shrink-0" style={{ color: ink(style.color) }} />
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={cn('rounded border px-2 py-0.5 font-mono text-[10px] font-bold', style.pill)}>

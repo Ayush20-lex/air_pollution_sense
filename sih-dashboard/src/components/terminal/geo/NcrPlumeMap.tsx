@@ -33,7 +33,7 @@ import { stationHour } from '@/lib/terminal/meshApi';
 import { useMesh, useFreshStations, isStale } from '@/lib/terminal/useMesh';
 import { livePlumeSources, shareLabel, useMeasuredWind } from '@/lib/terminal/plumes';
 import { useTerminalStore } from '@/store/useTerminalStore';
-import { TERM } from '@/lib/terminal/palette';
+import { TERM, useTermPalette, useSeverityInk } from '@/lib/terminal/palette';
 
 /**
  * Delhi NCR plume map.
@@ -341,6 +341,9 @@ function StationPins({
  * come from their own list for exactly that reason.
  */
 function UnindexedPins() {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
   const { unindexed } = useMesh();
   const meshCanvas = useMeshCanvas();
 
@@ -361,7 +364,7 @@ function UnindexedPins() {
             <LTooltip direction="top" offset={[0, -10]} opacity={1} className="as-tip">
               <div style={{ minWidth: 180 }}>
                 <div style={{ fontWeight: 700, marginBottom: 4, color: '#fff' }}>{s.name}</div>
-                <div style={{ color: '#f0b429' }}>No CPCB index this hour</div>
+                <div style={{ color: ink('#f0b429') }}>No CPCB index this hour</div>
                 <div style={{ opacity: 0.85, marginTop: 2 }}>{s.reason}</div>
               </div>
             </LTooltip>
@@ -371,7 +374,7 @@ function UnindexedPins() {
           <LTooltip direction="top" offset={[0, -10]} opacity={1} className="as-tip">
             <div style={{ minWidth: 180 }}>
               <div style={{ fontWeight: 700, marginBottom: 4, color: '#fff' }}>{s.name}</div>
-              <div style={{ color: '#f0b429' }}>No CPCB index this hour</div>
+              <div style={{ color: ink('#f0b429') }}>No CPCB index this hour</div>
               <div style={{ opacity: 0.85, marginTop: 2 }}>{s.reason}</div>
 
               {/* What it is measuring. "No index" and "no data" are different
@@ -895,6 +898,9 @@ const STREAM_PHASES = ['a', 'b', 'c'] as const;
  * motion` drops it to solid lines.
  */
 function WindStreamlines({ frame }: { frame: TerminalFrame }) {
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   const stations = useFreshStations();
   const renderer = React.useMemo(() => L.svg({ padding: 0.4 }), []);
   // The measured direction. The map's own frames are built client-side from

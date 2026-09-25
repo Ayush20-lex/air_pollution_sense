@@ -440,8 +440,11 @@
   font-size: 14px;
   font-weight: 700;
   line-height: 1;
-  color: var(--pin);
+  color: color-mix(in srgb, var(--pin) 53%, #160d00);
   font-variant-numeric: tabular-nums;
+}
+.dark .as-pin-aqi {
+  color: var(--pin);
 }
 .as-pin-name {
   font-family: var(--font-mono), monospace;

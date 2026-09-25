@@ -25,7 +25,7 @@
 import * as React from 'react';
 import { SEVERITY } from '@/lib/tokens';
 import { useAppStore } from '@/store/useAppStore';
-import { TERM } from './palette';
+import { useTermPalette } from './palette';
 import { isLive, useFreshStations } from './useMesh';
 import { compassName } from './wind';
 
@@ -98,6 +98,10 @@ export function useKpiCards(): KpiCard[] {
   // cannot affect these six cards.
   const fresh = useFreshStations();
   const frames = useAppStore((st) => st.liveFrames);
+  // A memo dependency, not just a re-render trigger: the two met cards below
+  // bake a hex into the card object, which is drawn as an SVG stroke. A theme
+  // flip that left the memo intact kept the other theme's blue on the sparkline.
+  const term = useTermPalette();
 
   return React.useMemo(() => {
     // ── measured: the station mesh ────────────────────────────────────────
@@ -195,11 +199,11 @@ export function useKpiCards(): KpiCard[] {
       // one, so PM10 has no delta to show rather than borrowing PM2.5's.
       particulateCard('PM10', pm10Now, cityHourly('pm10'), SEVERITY.moderate, null),
       met('Ambient Temp', '°C', SEVERITY.fair, (f) => f.avgTemp, (v) => v.toFixed(1)),
-      met('Humidity', '%', TERM.secondary, (f) => f.avgRh ?? NaN, (v) => v.toFixed(0)),
-      met('Wind', `km/h ${windDirName}`.trim(), TERM.secondary,
+      met('Humidity', '%', term.secondary, (f) => f.avgRh ?? NaN, (v) => v.toFixed(0)),
+      met('Wind', `km/h ${windDirName}`.trim(), term.secondary,
           (f) => f.avgWind * 3.6, (v) => v.toFixed(1)),
       // Replaces the invented optical visibility. See the module note.
       met('Boundary Layer', 'm', SEVERITY.bad, (f) => f.avgPbl, (v) => v.toFixed(0)),
     ];
-  }, [fresh, frames]);
+  }, [fresh, frames, term]);
 }

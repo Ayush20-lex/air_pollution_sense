@@ -175,7 +175,7 @@ function FieldChip({
       className={cn(
         'rounded-full border px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors',
         active
-          ? 'border-orange-500/50 bg-orange-500/20 text-orange-300'
+          ? 'border-orange-500/50 bg-orange-500/20 text-orange-700 dark:text-orange-300'
           : 'border-term-outline-variant/60 bg-term-surface-c/80 text-term-ink-variant hover:text-term-ink',
       )}
     >

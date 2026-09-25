@@ -18,6 +18,7 @@
  * is no news at all.
  */
 import * as React from 'react';
+import { useSeverityInk } from '@/lib/terminal/palette';
 import { Layers, Wind } from 'lucide-react';
 import { Label, SectionHead, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { fetchInversion, INVERSION_TIER, whenLabel, type InversionZone } from '@/lib/inversionApi';
@@ -29,6 +30,9 @@ const REFRESH_MS = 120_000;
 const SHOWN = 6;
 
 export function InversionPanel() {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
   const [zones, setZones] = React.useState<InversionZone[] | null>(null);
   const [status, setStatus] = React.useState<'loading' | 'live' | 'offline'>('loading');
 
@@ -108,12 +112,12 @@ export function InversionPanel() {
                 className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex items-start gap-3">
-                  <Layers className="mt-0.5 size-5 shrink-0" style={{ color: tier.color }} />
+                  <Layers className="mt-0.5 size-5 shrink-0" style={{ color: ink(tier.color) }} />
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span
                         className="rounded border px-2 py-0.5 font-mono text-[10px] font-bold"
-                        style={{ color: tier.color, borderColor: `${tier.color}66` }}
+                        style={{ color: ink(tier.color), borderColor: `${tier.color}66` }}
                       >
                         {z.severity}
                       </span>
@@ -131,7 +135,7 @@ export function InversionPanel() {
                 <div className="flex gap-5">
                   <div>
                     <Label>Layer depth</Label>
-                    <div className="font-mono text-lg font-bold" style={{ color: tier.color }}>
+                    <div className="font-mono text-lg font-bold" style={{ color: ink(tier.color) }}>
                       {z.pbl_min.toFixed(0)}<span className="text-[10px]"> m</span>
                     </div>
                   </div>
@@ -160,7 +164,7 @@ export function InversionPanel() {
               made every zone read SEVERE forever. */}
           Layer depth and PM2.5 are read at each zone's worst hour · ISI 0.65 moderate, 0.75 severe
         </Label>
-        <Label className={status === 'offline' ? 'text-amber-400' : undefined}>
+        <Label className={status === 'offline' ? 'text-amber-700 dark:text-amber-400' : undefined}>
           {status === 'offline'
             ? 'Inversion service unreachable — showing the last scoring received'
             : worst

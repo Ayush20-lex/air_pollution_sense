@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useSeverityInk } from '@/lib/terminal/palette';
 import { Flag, RotateCw, Square } from 'lucide-react';
 import { Label } from '@/components/terminal/TerminalPrimitives';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
@@ -57,6 +58,9 @@ function meanAqi(frame: TerminalFrame): number {
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
 export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
   const frameIndex = useTerminalStore((s) => s.frameIndex);
   const setFrameIndex = useTerminalStore((s) => s.setFrameIndex);
   const playing = useTerminalStore((s) => s.playing);
@@ -140,9 +144,9 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
               : 'border-term-outline-variant/60 bg-term-surface-high text-term-ink-variant hover:text-term-ink',
           )}
         >
-          <Flag className="size-3" style={{ color: peakBand.color }} />
+          <Flag className="size-3" style={{ color: ink(peakBand.color) }} />
           <span className="tabular-nums">PEAK {peakHour}</span>
-          <span className="tabular-nums" style={{ color: peakBand.color }}>
+          <span className="tabular-nums" style={{ color: ink(peakBand.color) }}>
             {series[peakIndex]}
           </span>
         </button>
@@ -285,7 +289,7 @@ export function TimelineTrack({ frames }: { frames: TerminalFrame[] }) {
           <span className="text-term-outline">·</span>
           <span className="tabular-nums text-term-ink-variant">mesh mean {shownAqi}</span>
           <span className="text-term-outline">·</span>
-          <span style={{ color: shownBand.color }}>{shownBand.label}</span>
+          <span style={{ color: ink(shownBand.color) }}>{shownBand.label}</span>
           {hover !== null && <span className="text-term-outline">(hover)</span>}
         </span>
         <span>+{HORIZON_HOURS}h</span>

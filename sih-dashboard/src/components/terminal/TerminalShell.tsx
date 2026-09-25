@@ -55,7 +55,7 @@ const NAV: NavItem[] = [
   // No literal badge. "3 PENDING" said three whatever the air was doing, on
   // every page, including a day with nothing wrong. The count is now the number
   // of advisories that are actually active - see lib/terminal/advisories.
-  { href: '/terminal/warnings', label: 'Incident Warnings', icon: <AlertTriangle className="size-4 text-amber-400" /> },
+  { href: '/terminal/warnings', label: 'Incident Warnings', icon: <AlertTriangle className="size-4 text-amber-700 dark:text-amber-400" /> },
 ];
 
 export function TerminalShell({ children }: { children: React.ReactNode }) {
@@ -198,11 +198,11 @@ function TerminalSidebar({ open, onClose }: { open: boolean; onClose: () => void
                 {item.icon}
                 <span className="flex-1">{item.label}</span>
                 {item.href.endsWith('#alerts') && advisories > 0 ? (
-                  <span className="rounded border border-amber-500/40 bg-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">
+                  <span className="rounded border border-amber-500/40 bg-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300">
                     {advisories}
                   </span>
                 ) : item.badge ? (
-                  <span className="rounded border border-amber-500/40 bg-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">
+                  <span className="rounded border border-amber-500/40 bg-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300">
                     {item.badge}
                   </span>
                 ) : null}

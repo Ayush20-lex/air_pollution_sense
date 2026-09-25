@@ -16,6 +16,7 @@
  * would invalidate that number.
  */
 import * as React from 'react';
+import { useSeverityInk } from '@/lib/terminal/palette';
 import { CloudOff, CloudSun } from 'lucide-react';
 import { Label, SectionHead, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { fetchGfs, GFS_STATUS, type GfsPayload } from '@/lib/gfsApi';
@@ -38,6 +39,9 @@ function istDay(iso: string | null): string {
 }
 
 export function MetSourcePanel() {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
   const [data, setData] = React.useState<GfsPayload | null>(null);
   const [tried, setTried] = React.useState(false);
 
@@ -89,9 +93,9 @@ export function MetSourcePanel() {
       <TelemetryCard className="p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-3">
-            <Icon className="mt-0.5 size-6 shrink-0" style={{ color: tone.color }} />
+            <Icon className="mt-0.5 size-6 shrink-0" style={{ color: ink(tone.color) }} />
             <div>
-              <div className="font-display text-lg font-bold uppercase" style={{ color: tone.color }}>
+              <div className="font-display text-lg font-bold uppercase" style={{ color: ink(tone.color) }}>
                 {f.status}
               </div>
               <div className="mt-0.5 font-mono text-xs text-term-ink-variant">{tone.means}</div>
@@ -115,7 +119,7 @@ export function MetSourcePanel() {
               <Label>Window left</Label>
               <div
                 className="font-mono text-2xl font-bold"
-                style={{ color: f.expired ? tone.color : undefined }}
+                style={{ color: ink(f.expired ? tone.color : undefined) }}
               >
                 {f.hours_remaining == null ? '—' : `${f.hours_remaining.toFixed(0)}h`}
               </div>

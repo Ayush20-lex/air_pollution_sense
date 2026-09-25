@@ -7,7 +7,7 @@ import { POLLUTANTS } from '@/lib/terminal/content';
 import { cn } from '@/lib/utils';
 import { ForecastTrack, type ForecastPoint } from './ForecastTrack';
 import { useAppStore } from '@/store/useAppStore';
-import { TERM, TERM_SEVERITY } from '@/lib/terminal/palette';
+import { TERM, TERM_SEVERITY, useTermPalette, useSeverityInk } from '@/lib/terminal/palette';
 
 const TIMEFRAMES = ['24H', '7D', '30D', '90D'] as const;
 
@@ -73,6 +73,9 @@ export function ForecastPanel() {
 const RANGE_DAYS: Record<string, number> = { '24H': 7, '7D': 7, '30D': 30, '90D': 90 };
 
 export function TemporalTrend() {
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   const [range, setRange] = React.useState<(typeof TIMEFRAMES)[number]>('30D');
 
   // The buttons used to redraw the same twenty-four constants whatever was
@@ -140,7 +143,7 @@ export function TemporalTrend() {
               className={cn(
                 'rounded-full border px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors',
                 range === t
-                  ? 'border-orange-500/50 bg-orange-500/20 text-orange-300'
+                  ? 'border-orange-500/50 bg-orange-500/20 text-orange-700 dark:text-orange-300'
                   : 'border-term-outline-variant/60 bg-term-surface-c/80 text-term-ink-variant hover:text-term-ink',
               )}
             >
@@ -186,7 +189,7 @@ export function TemporalTrend() {
         {axisDates.map((d, i) => (
           <span
             key={`${d}-${i}`}
-            className={cn(i === axisDates.length - 1 && 'font-bold text-orange-400')}
+            className={cn(i === axisDates.length - 1 && 'font-bold text-orange-700 dark:text-orange-400')}
           >
             {d}
           </span>
@@ -210,6 +213,10 @@ export function TemporalTrend() {
  * a percentage "of the composite index" was never a quantity that existed.
  */
 function useStressors(): { label: string; share: number; color: string; count: number }[] {
+  // The palette is a dependency of the memo, not just a re-render trigger:
+  // these colours are computed once and handed to SVG strokes, so a flip that
+  // does not invalidate the memo leaves the donut in the other theme's hues.
+  const term = useTermPalette();
   const stations = useFreshStations();
   return React.useMemo(() => {
     const live = stations.filter(isLive);
@@ -219,9 +226,9 @@ function useStressors(): { label: string; share: number; color: string; count: n
     const palette: Record<string, string> = {
       'PM2.5': TERM_SEVERITY.high,
       PM10: TERM_SEVERITY.caution,
-      O3: TERM.secondary,
-      NO2: TERM.tertiary,
-      SO2: TERM.outline,
+      O3: term.secondary,
+      NO2: term.tertiary,
+      SO2: term.outline,
     };
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -229,12 +236,18 @@ function useStressors(): { label: string; share: number; color: string; count: n
         label,
         count,
         share: (count / live.length) * 100,
-        color: palette[label] ?? TERM.outline,
+        color: palette[label] ?? term.outline,
       }));
-  }, [stations]);
+  }, [stations, term]);
 }
 
 function StressorDonut() {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   const stressors = useStressors();
   const total = stressors.reduce((sum, s) => sum + s.share, 0) || 1;
   const r = 62;
@@ -303,7 +316,7 @@ function StressorDonut() {
               <span className="size-2.5 rounded-full" style={{ background: s.color }} />
               {s.label}
             </span>
-            <span className="font-bold tabular-nums" style={{ color: s.color }}>
+            <span className="font-bold tabular-nums" style={{ color: ink(s.color) }}>
               {s.count} · {s.share.toFixed(0)}%
             </span>
           </li>
@@ -319,6 +332,12 @@ function StressorDonut() {
  * than mutating SVG nodes.
  */
 function Correlator() {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   const [active, setActive] = React.useState<Record<string, boolean>>(() =>
     Object.fromEntries(POLLUTANTS.map((p, i) => [p.id, i < 4])),
   );
@@ -436,7 +455,7 @@ function Correlator() {
                     <span className="size-2.5 rounded-full" style={{ background: e.color }} />
                     {e.label}
                   </span>
-                  <span className="font-bold tabular-nums" style={{ color: e.color }}>
+                  <span className="font-bold tabular-nums" style={{ color: ink(e.color) }}>
                     {e.days}d
                   </span>
                 </div>

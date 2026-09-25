@@ -23,7 +23,7 @@ import * as React from 'react';
 import { Label, SectionHead, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { AQI_RAMP } from '@/lib/terminal/bands';
 import type { ForecastSource } from '@/lib/forecastApi';
-import { TERM } from '@/lib/terminal/palette';
+import { TERM, useTermPalette } from '@/lib/terminal/palette';
 import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 
 /** Hours between x-axis marks. Every hour is unreadable; every 24 hides the
@@ -60,6 +60,9 @@ export function ForecastTrack({
   points: ForecastPoint[];
   source: ForecastSource | null;
 }) {
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   const reduced = usePrefersReducedMotion();
   const w = 760;
   const h = 260;

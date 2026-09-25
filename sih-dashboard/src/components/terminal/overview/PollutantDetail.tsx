@@ -11,6 +11,7 @@
  * child of that is positioned against the card rather than the viewport.
  */
 import * as React from 'react';
+import { useSeverityInk } from '@/lib/terminal/palette';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
@@ -32,6 +33,9 @@ export function PollutantDetail({
   open: boolean;
   onClose: () => void;
 }) {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
   React.useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -122,7 +126,7 @@ export function PollutantDetail({
                 <div className="flex items-center gap-2">
                   <span
                     className="font-mono text-sm font-bold"
-                    style={{ color: p.measured ? p.color : undefined }}
+                    style={{ color: ink(p.measured ? p.color : undefined) }}
                   >
                     {p.symbol}
                   </span>
@@ -219,10 +223,13 @@ export function PollutantDetail({
 }
 
 function Row({ label, value, color }: { label: string; value: string; color?: string }) {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
   return (
     <div className="flex items-center justify-between">
       <dt className="text-term-ink-variant">{label}</dt>
-      <dd className="font-bold" style={{ color: color ?? 'var(--t-ink)' }}>
+      <dd className="font-bold" style={{ color: ink(color ?? 'var(--t-ink)') }}>
         {value}
       </dd>
     </div>

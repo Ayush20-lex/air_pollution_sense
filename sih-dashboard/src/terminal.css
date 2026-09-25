@@ -25,12 +25,17 @@
   --t-ink: #0f172a;
   --t-ink-variant: #475569;
   --t-muted: #64748b;
-  --t-outline: #94a3b8;
+  /* These three carry small text as well as borders and accents, so they are
+     set by the text: at #94a3b8, #059669 and #0284c7 the muted captions, the
+     LIVE pill and the link-blue measured 2.3-3.4:1 on this surface. A step
+     down the same ramp clears 4.5 and leaves the borders, which were never
+     the constraint, imperceptibly darker. */
+  --t-outline: #64748b;
   --t-outline-variant: #cbd5e1;
-  --t-primary: #059669;
+  --t-primary: #047857;
   --t-primary-container: #10b981;
   --t-on-primary: #003824;
-  --t-secondary: #0284c7;
+  --t-secondary: #0369a1;
   --t-secondary-container: #00a6e0;
   --t-tertiary: #7c3aed;
   --t-error: #dc2626;
@@ -70,6 +75,11 @@
   --t-glass-inset: 0 1px 0 0 rgb(255 255 255 / 0.05);
   --t-map-bg: #04101d;
   color-scheme: dark;
+}
+
+.dark .term-contour-label,
+.dark .term-ribbon-label {
+  color: var(--c);
 }
 
 .terminal-root {
@@ -148,9 +158,16 @@
   background: var(--t-map-bg) !important;
   font-family: var(--font-body), sans-serif;
 }
-/* Light: desaturated natural tiles */
+/* Light: desaturated natural tiles.
+ *
+ * Quiet, because the plume and the pins are the subject and the basemap is
+ * there to say where. But saturate(0.35) with the contrast pulled below 1 took
+ * it past quiet: roads and place names washed out to nearly the panel colour,
+ * and the map read as an empty box with markers floating on it. Half the
+ * desaturation and contrast left at neutral keeps the basemap subordinate and
+ * still legible underneath. */
 .term-map .leaflet-tile-pane {
-  filter: saturate(0.35) brightness(1.02) contrast(0.92);
+  filter: saturate(0.62) brightness(1) contrast(1);
 }
 /* Dark: inverted dark cartography */
 .dark .term-map .leaflet-tile-pane {
@@ -174,6 +191,24 @@
   pointer-events: none;
 }
 
+
+/* Light-mode ink for the map's ramp-coloured labels.
+ *
+ * All three take their colour from a variable that is also the pin body, the
+ * contour border and the ribbon tint — a fill, where the band hue has to stay
+ * exactly what CPCB publishes. As *text* on the near-white chip those same
+ * hues measured 1.45:1 for Moderate yellow and 2.1:1 for Poor orange, so an
+ * AQI figure was the least readable thing on the map.
+ *
+ * Mixing toward near-black keeps the hue and buys the weight, and only the
+ * `color` is mixed, so every fill beside it is untouched. Dark mode keeps the
+ * neat `var(--c)` — the ramp was designed against that ground.
+ *
+ * 53% is set by the brightest hue, not chosen by eye: a single mix has to
+ * clear 4.5:1 for all of them, and Moderate yellow needs 53% where Severe red
+ * would have cleared at 89%. So the reds land darker than they strictly need
+ * to be, which is the cost of one rule instead of a per-band table. */
+
 /* Iso-contour labels */
 .term-contour-label {
   display: inline-block;
@@ -181,7 +216,7 @@
   border-radius: 4px;
   background: var(--t-glass-bg);
   border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
-  color: var(--c);
+  color: color-mix(in srgb, var(--c) 53%, #160d00);
   font-family: var(--font-mono), monospace;
   font-size: 9px;
   font-weight: 700;
@@ -229,7 +264,7 @@
   border-radius: 999px;
   background: var(--t-glass-bg);
   border: 1px solid color-mix(in srgb, var(--c) 50%, transparent);
-  color: var(--c);
+  color: color-mix(in srgb, var(--c) 53%, #160d00);
   font-family: var(--font-mono), monospace;
   font-size: 8.5px;
   font-weight: 700;

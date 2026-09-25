@@ -4,7 +4,7 @@ import { POLLUTANTS } from '@/lib/terminal/content';
 import { useKpiCards } from '@/lib/terminal/kpi';
 import { livePollutants, type LivePollutant } from '@/lib/terminal/livePollutants';
 import { isLive, useFreshStations, useHubStation, useMesh } from '@/lib/terminal/useMesh';
-import { TERM } from '@/lib/terminal/palette';
+import { TERM, useTermPalette, useSeverityInk } from '@/lib/terminal/palette';
 import { cn } from '@/lib/utils';
 import { MeasuredTrend } from './MeasuredTrend';
 import { PollutantDetail } from './PollutantDetail';
@@ -132,6 +132,12 @@ function PollutantCard({
   stationName: string;
   asOf: string | null;
 }) {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   const [open, setOpen] = React.useState(false);
 
   return (
@@ -161,7 +167,7 @@ function PollutantCard({
       <div className="space-y-3">
         <div className="flex items-start justify-between">
           <div>
-            <div className="font-mono text-xs font-bold" style={{ color: p.color }}>
+            <div className="font-mono text-xs font-bold" style={{ color: ink(p.color) }}>
               {p.symbol}
             </div>
             <div className="text-sm font-semibold text-term-ink">{p.name}</div>
@@ -170,7 +176,7 @@ function PollutantCard({
             className="rounded border px-2 py-0.5 font-mono text-[10px] font-bold"
             style={
               p.measured
-                ? { color: p.color, borderColor: `${p.color}66`, background: `${p.color}1f` }
+                ? { color: ink(p.color), borderColor: `${p.color}66`, background: `${p.color}1f` }
                 : { color: TERM.inkVariant, borderColor: `${TERM.outlineVariant}99` }
             }
           >
@@ -208,7 +214,7 @@ function PollutantCard({
               the backend never said. The sub-index is what it did say. */}
           {p.measured ? (
             <span className="text-term-ink-variant">
-              Sub-index <strong style={{ color: p.color }}>{p.subIndex}</strong>
+              Sub-index <strong style={{ color: ink(p.color) }}>{p.subIndex}</strong>
             </span>
           ) : p.delta !== 0 ? (
             // Offline the whole grid is the demo set and its deltas belong to
@@ -228,7 +234,7 @@ function PollutantCard({
           <div className="flex items-center gap-1.5">
             <span
               className="font-mono text-xs font-bold"
-              style={{ color: p.measured ? p.color : TERM.inkVariant }}
+              style={{ color: ink(p.measured ? p.color : TERM.inkVariant) }}
             >
               {p.symbol}
             </span>
@@ -236,7 +242,7 @@ function PollutantCard({
           </div>
           <span
             className="font-mono text-xs font-bold"
-            style={{ color: p.measured ? p.color : TERM.inkVariant }}
+            style={{ color: ink(p.measured ? p.color : TERM.inkVariant) }}
           >
             {!p.measured
               ? `${p.trend[p.trend.length - 1]} ${p.unit}`
@@ -258,7 +264,7 @@ function PollutantCard({
           {p.measured ? (
             <>
               <span>{p.windowNote}</span>
-              <span className="font-bold" style={{ color: p.color }}>
+              <span className="font-bold" style={{ color: ink(p.color) }}>
                 Click for CPCB detail
               </span>
             </>
@@ -266,7 +272,7 @@ function PollutantCard({
             <>
               <span>T-22h</span>
               <span>T-12h</span>
-              <span className="font-bold" style={{ color: p.color }}>
+              <span className="font-bold" style={{ color: ink(p.color) }}>
                 Now
               </span>
             </>
@@ -287,6 +293,9 @@ function PollutantCard({
 
 /** Area + line + point markers, matching the drawer in the source design. */
 function TrendChart({ values, color }: { values: number[]; color: string }) {
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   const id = React.useId();
   const w = 220;
   const h = 60;

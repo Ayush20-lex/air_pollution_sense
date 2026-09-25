@@ -87,7 +87,7 @@ export function Delta({ value, className }: { value: number; className?: string 
     <span
       className={cn(
         'font-mono font-bold tabular-nums',
-        up ? 'text-orange-400' : 'text-term-primary',
+        up ? 'text-orange-700 dark:text-orange-400' : 'text-term-primary',
         className,
       )}
     >

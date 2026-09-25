@@ -11,7 +11,7 @@ import { useMesh } from '@/lib/terminal/useMesh';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { compassName } from '@/lib/terminal/wind';
 import { useAppStore } from '@/store/useAppStore';
-import { TERM } from '@/lib/terminal/palette';
+import { TERM, useTermPalette, useSeverityInk } from '@/lib/terminal/palette';
 
 /** The three-card rail beside the map. */
 export function GeoRail({ frame }: { frame: TerminalFrame }) {
@@ -25,6 +25,9 @@ export function GeoRail({ frame }: { frame: TerminalFrame }) {
 }
 
 function SourceAttribution({ frame }: { frame: TerminalFrame }) {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
   const wind = useMeasuredWind(0);
   const fire = useAppStore((st) => st.source?.fire);
   const sources = React.useMemo(
@@ -50,7 +53,7 @@ function SourceAttribution({ frame }: { frame: TerminalFrame }) {
                     said the same word twice. The map label has no room for the
                     suffix and keeps its own mark instead. */}
               </span>
-              <span className="font-mono font-bold" style={{ color: s.color }}>
+              <span className="font-mono font-bold" style={{ color: ink(s.color) }}>
                 {shareLabel(s)}
               </span>
             </div>
@@ -74,6 +77,12 @@ function SourceAttribution({ frame }: { frame: TerminalFrame }) {
 
 /** Detail for whichever node is selected on the map or in the ranking. */
 function SelectedNode({ frame }: { frame: TerminalFrame }) {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   const selectedId = useTerminalStore((s) => s.selectedId);
   const rollMs = useRollDuration();
   const station = findById(useMesh().stations, selectedId);
@@ -194,7 +203,7 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
               className="font-display text-3xl font-extrabold leading-none text-term-ink"
               aria-label={`AQI ${sample.aqi}`}
             />
-            <span className="font-mono text-[9px] font-bold uppercase tracking-wider" style={{ color }}>
+            <span className="font-mono text-[9px] font-bold uppercase tracking-wider" style={{ color: ink(color) }}>
               {band.label}
             </span>
           </div>
@@ -291,6 +300,9 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
  * emission disperses or sits on the city.
  */
 function TrappingDispersion({ frame }: { frame: TerminalFrame }) {
+  // Re-render when the theme flips; TERM values below are baked into SVG
+  // attributes at render time and will not restyle themselves.
+  useTermPalette();
   const measured = useMeasuredWind(frame.offset);
   const live = useAppStore((st) => st.liveFrames)?.[frame.offset];
 
@@ -317,12 +329,12 @@ function TrappingDispersion({ frame }: { frame: TerminalFrame }) {
     {
       label: 'Ventilation idx',
       value: ventilation == null ? '—' : `${ventilation.toFixed(0)} m²/s ${ventLabel}`,
-      cls: 'text-orange-400',
+      cls: 'text-orange-700 dark:text-orange-400',
     },
     {
       label: 'Inversion risk',
       value: inv == null ? '—' : `${invLabel} (${inv.toFixed(2)})`,
-      cls: 'text-amber-400',
+      cls: 'text-amber-700 dark:text-amber-400',
     },
   ];
 

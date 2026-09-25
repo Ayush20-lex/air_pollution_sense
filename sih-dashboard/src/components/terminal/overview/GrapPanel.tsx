@@ -22,6 +22,7 @@
  * tells a reader the air is fine on no evidence at all.
  */
 import * as React from 'react';
+import { useSeverityInk } from '@/lib/terminal/palette';
 import { ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Label, SectionHead, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { fetchGrap, GRAP_STAGE, type GrapPayload } from '@/lib/grapApi';
@@ -52,6 +53,9 @@ function stageLabel(stage: number): string {
 }
 
 export function GrapPanel() {
+  // Severity hues are chosen to be read as fills; as ink on the light
+  // surface they fail contrast badly. See useSeverityInk.
+  const ink = useSeverityInk();
   const [data, setData] = React.useState<GrapPayload | null>(null);
   const [status, setStatus] = React.useState<'loading' | 'live' | 'offline'>('loading');
 
@@ -116,9 +120,9 @@ export function GrapPanel() {
       <TelemetryCard className="p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-3">
-            <Icon className="mt-0.5 size-6 shrink-0" style={{ color: stage.color }} />
+            <Icon className="mt-0.5 size-6 shrink-0" style={{ color: ink(stage.color) }} />
             <div>
-              <div className="font-display text-xl font-bold" style={{ color: stage.color }}>
+              <div className="font-display text-xl font-bold" style={{ color: ink(stage.color) }}>
                 {stage.name}
               </div>
               <div className="mt-0.5 font-mono text-xs text-term-ink-variant">{stage.means}</div>
@@ -174,7 +178,7 @@ export function GrapPanel() {
                 {' '}({nextStep.ugm3} µg/m³ as a 24-hour mean). The forecast peaks at{' '}
                 <span className="font-bold text-term-ink">{data.city_aqi}</span>
                 {', '}
-                <span className="font-bold" style={{ color: stage.color }}>
+                <span className="font-bold" style={{ color: ink(stage.color) }}>
                   {nextStep.aqi - data.city_aqi} below
                 </span>
                 {' '}the threshold.
@@ -199,7 +203,7 @@ export function GrapPanel() {
                 trustworthy. */}
             Basis: {data.basis === 'stations' ? 'station 24-hour means' : `grid percentile (${data.basis})`}
           </Label>
-          <Label className={cn(status === 'offline' && 'text-amber-400')}>
+          <Label className={cn(status === 'offline' && 'text-amber-700 dark:text-amber-400')}>
             {status === 'offline' ? 'Policy engine unreachable — showing the last stage received' : 'Live from the policy engine'}
           </Label>
         </div>
