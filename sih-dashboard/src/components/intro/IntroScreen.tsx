@@ -18,6 +18,7 @@ import { SEVERITY } from '@/lib/tokens';
 import { useProvenance } from '@/lib/useProvenance';
 import { useAppStore } from '@/store/useAppStore';
 import { useNowFrame } from '@/lib/useNowFrame';
+import { useLiveNow } from '@/lib/useLiveNow';
 import { formatLST } from '@/lib/utils';
 
 const ParticleField = dynamic(
@@ -72,6 +73,12 @@ export function IntroScreen() {
   // The hour the clock is actually in, not the run's origin hour. See
   // useNowFrame: `frames[0]` pinned the rail to whenever the run was issued.
   const { frame, index: nowIndex, covers: runCoversNow } = useNowFrame();
+  // And for the quantities that are observed rather than modelled, the station
+  // mesh rather than the run at all. Picking the right hour of a run whose
+  // archive ends 2026-09-19 still yields six-day-old PM2.5; only the mesh is
+  // current. PBL and the inversion index stay with the model - nothing
+  // measures them - and say "forecast" on their labels.
+  const now = useLiveNow();
 
   const scanning = screen === 'transition';
   // Stays true through the route push so the curtain never lifts early.
@@ -340,22 +347,22 @@ export function IntroScreen() {
           </div>
         )}
         <TelemetryStat
-          label="PM2.5 AVG"
-          value={frame.avgPm25.toFixed(0)}
+          label={now.live ? `PM2.5 · ${now.stations} STATIONS` : 'PM2.5 AVG'}
+          value={(now.pm25 ?? frame.avgPm25).toFixed(0)}
           unit="µg/m³"
-          accent={aqiColor(frame.avgPm25)}
-          delta={signed(pmTrend)}
+          accent={aqiColor(now.pm25 ?? frame.avgPm25)}
+          delta={now.live ? undefined : signed(pmTrend)}
           delay={0.15}
         />
         <TelemetryStat
-          label="PBL Height"
+          label="PBL Height · forecast"
           value={String(frame.avgPbl)}
           unit="m"
           delta={signed(pblTrend, 0, ' m')}
           delay={0.25}
         />
         <TelemetryStat
-          label="Inversion Index"
+          label="Inversion Index · forecast"
           value={frame.inversionIndex.toFixed(2)}
           accent={frame.inversionIndex > 0.75 ? SEVERITY.bad : SEVERITY.moderate}
           delta={signed(invTrend, 2, '')}
@@ -388,9 +395,9 @@ export function IntroScreen() {
             the CTA do; these cards carry .glass-hover and never got it, so
             their hover treatment could not fire at any width below lg. */}
         <div className="pointer-events-auto flex w-full items-center justify-between gap-2 lg:hidden">
-          <MiniStat icon={<Gauge className="size-3" />} label="PM2.5" value={`${frame.avgPm25.toFixed(0)}`} color={aqiColor(frame.avgPm25)} />
-          <MiniStat icon={<Wind className="size-3" />} label="PBL" value={`${frame.avgPbl}m`} />
-          <MiniStat icon={<Cpu className="size-3" />} label="INV" value={frame.inversionIndex.toFixed(2)} color={SEVERITY.moderate} />
+          <MiniStat icon={<Gauge className="size-3" />} label="PM2.5" value={`${(now.pm25 ?? frame.avgPm25).toFixed(0)}`} color={aqiColor(now.pm25 ?? frame.avgPm25)} />
+          <MiniStat icon={<Wind className="size-3" />} label="PBL ·fc" value={`${frame.avgPbl}m`} />
+          <MiniStat icon={<Cpu className="size-3" />} label="INV ·fc" value={frame.inversionIndex.toFixed(2)} color={SEVERITY.moderate} />
         </div>
 
         {/* The zone pills float over the particle field from md up, and below
@@ -401,25 +408,41 @@ export function IntroScreen() {
             set in flow instead of over the map. The level is carried by colour, so it is
             also written into the label for anyone who cannot use colour. */}
         <div className="pointer-events-auto grid w-full grid-cols-4 gap-1.5 md:hidden">
-          {SLOTS.map((slot) => {
-            const d = DISTRICTS.find((x) => x.id === slot.id)!;
-            const s = frame.districts[d.id];
-            const color = ALERT_COLOR[s.alert];
+          {(now.live ? now.sectors : SLOTS).map((entry) => {
+            // Live: the zone's own mean AQI across the stations reporting in
+            // it. Offline: the forecast district, as before.
+            const isLiveSector = 'zone' in entry;
+            const slot = isLiveSector ? null : (entry as typeof SLOTS[number]);
+            const d = slot ? DISTRICTS.find((x) => x.id === slot.id)! : null;
+            const s = d ? frame.districts[d.id] : null;
+            const color = isLiveSector
+              ? (entry as { color: string }).color
+              : ALERT_COLOR[s!.alert];
+            const key = isLiveSector ? (entry as { zone: string }).zone : slot!.id;
+            const label = isLiveSector
+              ? (entry as { zone: string }).zone.toUpperCase()
+              : d!.zone.replace('DELHI-NCR-', '');
+            const value = isLiveSector
+              ? String((entry as { aqi: number }).aqi)
+              : s!.pm25.toFixed(0);
+            const aria = isLiveSector
+              ? `${label} sector, AQI ${value} across ${(entry as { count: number }).count} stations`
+              : `${d!.zone}, ${s!.alert}, ${s!.pm25.toFixed(0)} micrograms per cubic metre`;
             return (
               <div
-                key={slot.id}
+                key={key}
                 className="flex flex-col gap-0.5 rounded-lg border px-2 py-1.5"
                 style={{ borderColor: `${color}55`, background: `${color}14` }}
-                aria-label={`${d.zone}, ${s.alert}, ${s.pm25.toFixed(0)} micrograms per cubic metre`}
+                aria-label={aria}
               >
                 <span className="flex items-center gap-1.5">
                   <span className="size-1.5 shrink-0 rounded-full" style={{ background: color }} />
                   <span className="truncate font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
-                    {d.zone.replace('DELHI-NCR-', '')}
+                    {label}
                   </span>
                 </span>
                 <span className="font-mono text-sm font-bold tabular-nums" style={{ color }}>
-                  {s.pm25.toFixed(0)}
+                  {value}
                 </span>
               </div>
             );
