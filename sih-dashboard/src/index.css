@@ -224,22 +224,13 @@
     }
   }
 
-  /* And on touch it is simply the resting state. The shimmer's only trigger
-     was :hover, which a phone never satisfies, so it sat `paused` for the
-     life of the page and the button ran half its animation - the border swept
-     but nothing moved inside it. Where there is no pointer to hover with
-     there is no resting-versus-lit distinction to draw, so the button just
-     runs in full. */
-  @media (hover: none) {
-    .shiny-cta {
-      --shine-spread: 20%;
-      --shine-offset: 95deg;
-      --shine-tint: rgb(var(--as-shine-peak));
-    }
-    .shiny-cta::after {
-      animation-play-state: running;
-    }
-  }
+  /* Touch gets neither of these, and deliberately. The lit state runs the
+     inner shimmer on top of a conic border that repaints every frame, behind
+     a backdrop-filter, over the animating globe - and a phone cannot hold a
+     frame through that. An earlier version of this rule switched it all on
+     under `(hover: none)` to stop the button looking frozen, and bought the
+     stutter that replaced it. What a phone gets instead is the composited
+     sheen at the end of this file, which moves without repainting. */
 
   @keyframes shine-sweep {
     to {
@@ -661,12 +652,21 @@
    This replaces it with a sheen that only ever moves a layer: transform is
    composited, so the button is rasterised once and then slid, which a weak GPU
    can do without touching the main thread. */
-:root[data-perf='low'] .shiny-cta {
-  animation: none !important;
-}
+/* Defined once, switched on by the two situations that cannot afford the real
+   sweep: the low tier, and any touch device.
 
-:root[data-perf='low'] .shiny-cta::before {
+   Touch is the addition, and it is the case this was missing. `deviceTier()`
+   only answers 'low' at two cores or fewer, or narrow *and* four cores/GB or
+   fewer, so a current phone - eight cores, eight GB, 390px - is 'mobile' and
+   matched none of the rules here. It got the full conic repaint, the
+   backdrop-filter over the globe and, briefly, the inner shimmer as well. The
+   tier is about how weak the device is; this is about a phone GPU compositing
+   a blur over a live canvas, which is expensive on a good phone too. So the
+   signal is the pointer, not the tier. */
+.shiny-cta::before {
   content: '';
+  /* No layer at all until something below asks for one. */
+  display: none;
   position: absolute;
   inset: 0;
   z-index: -1;
@@ -680,6 +680,33 @@
   animation: cheap-sheen 3s linear infinite;
 }
 
+:root[data-perf='low'] .shiny-cta::before {
+  display: block;
+}
+:root[data-perf='low'] .shiny-cta {
+  animation: none !important;
+}
+
+@media (hover: none) {
+  .shiny-cta::before {
+    display: block;
+  }
+  .shiny-cta {
+    animation: none !important;
+    /* The conic border still paints, once, as a static ring. What has to go
+       is the per-frame work: the blur is recomputed every frame against the
+       globe behind it, which is the single most expensive thing this button
+       does on a phone. */
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  /* Belt and braces: the shimmer is the other continuous layer, and nothing
+     on a touch device should be starting it. */
+  .shiny-cta::after {
+    animation: none;
+  }
+}
+
 @keyframes cheap-sheen {
   from {
     transform: translateX(-110%);
@@ -689,9 +716,15 @@
   }
 }
 
-/* Someone who asked for less motion gets less motion, tier regardless. */
+/* Someone who asked for less motion gets less motion, tier regardless.
+   Covers the real sweep and the shimmer as well as the stand-in: the CSS
+   shine is the one animation on this page that never passed through
+   MotionConfig, so it was the one thing still moving on a page the reader had
+   asked to hold still. */
 @media (prefers-reduced-motion: reduce) {
-  :root[data-perf='low'] .shiny-cta::before {
-    animation: none;
+  .shiny-cta,
+  .shiny-cta::before,
+  .shiny-cta::after {
+    animation: none !important;
   }
 }
