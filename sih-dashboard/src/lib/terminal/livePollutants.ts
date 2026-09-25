@@ -95,6 +95,11 @@ export function livePollutants(station: LiveStation): LivePollutant[] {
     const series = station.hourly[p.id] ?? [];
     const rolling = station.historyKind === 'rolling_24h_mean';
     const recorded = series.filter((v) => v != null).length;
+    // Whether the recorder keeps this channel at all. It stores PM2.5, PM10
+    // and O3 and nothing else - see live_history.LABEL_TO_KEY - so the payload
+    // simply carries no key for SO2, NO2, CO or NH3. An absent key and an
+    // empty array mean different things and the card has to say which.
+    const tracked = p.id in station.hourly;
     return {
       ...p,
       measured: true,
@@ -115,9 +120,18 @@ export function livePollutants(station: LiveStation): LivePollutant[] {
       // a single snapshot. So an empty series there is our own history not yet
       // gathered, not an instrument that failed to report, and saying "no
       // readings" would blame the sensor for it.
-      emptyNote: rolling
-        ? 'Live history recording — first hours appear shortly'
-        : undefined,
+      //
+      // Unless the recorder never keeps this channel, in which case "first
+      // hours appear shortly" promises hours that will never arrive - the SO2
+      // card said it over a sub-index of 15 built from 24 valid hours, so the
+      // panel was simultaneously reporting a full window and waiting for one.
+      // The reading is there; the stored history is what is missing, and the
+      // wording now says only that.
+      emptyNote: !tracked
+        ? 'No stored readings for this channel'
+        : rolling
+          ? 'Live history recording — first hours appear shortly'
+          : undefined,
       // Named on the chart because it is not the same quantity as the archive's
       // hourly readings; see MeshStation.history_kind.
       caption:
