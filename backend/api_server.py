@@ -15,6 +15,7 @@ Endpoints:
 from __future__ import annotations
 
 import asyncio
+import threading
 import gzip
 import json
 import time
@@ -224,6 +225,29 @@ async def _record_live_history() -> None:
             log.warning("live history: skipped a sample (%s)", exc)
 
 
+async def _warm_then_record() -> None:
+    """Build the live mesh once, record it, then keep recording.
+
+    One task rather than two so the recorder's first sample is the warm build
+    itself, not a second fetch racing it. Same rule as the recorder: nothing
+    escapes, because a dead task raises nowhere.
+    """
+    log = _logging.getLogger("api_server")
+    try:
+        warm = await asyncio.to_thread(_live_mesh)
+        if warm:
+            log.info("live mesh warm: %d stations, %d indexable, as of %s",
+                     warm["count"], warm["indexable"], warm["as_of"])
+            await asyncio.to_thread(live_history.record, warm)
+        else:
+            log.warning("live mesh warm returned nothing; serving the archive until a feed answers")
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - a cold first request, never a dead recorder
+        log.warning("could not warm the live mesh (%s)", exc)
+    await _record_live_history()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import logging
@@ -237,25 +261,26 @@ async def lifespan(app: FastAPI):
     ).to(cfg.device)
     _state.model.eval()
 
-    # Warm the live mesh off the request path. Building it costs a round trip
-    # per station - about six seconds - and the dashboard gives up after eight,
-    # so the first visitor after a restart would have raced it and lost, seeing
-    # the archive and a DEMO badge with a live feed working perfectly behind it.
+    # Warm the live mesh off the request path - and off the startup path too.
+    #
+    # Building it costs a round trip per station, and the first visitor after a
+    # restart would otherwise race the build and lose, seeing the archive and a
+    # DEMO badge with a live feed working perfectly behind it. That is why the
+    # warm exists. But it used to be awaited here, before `yield`, and uvicorn
+    # does not bind its port until lifespan startup returns. So the warm, meant
+    # to make the first request fast, made every request impossible until it
+    # finished: on 25 September api.data.gov.in read-timed out at 20s, and the
+    # whole API answered 502 for about a minute and a half after a restart.
+    #
+    # It now runs as a background task, and `_live_mesh` is single-flight, so a
+    # visitor who arrives mid-warm waits for that build instead of starting a
+    # second one - and every other endpoint serves from the first second.
     #
     # Gated on either feed, not on WAQI alone: CPCB's bulletin became the
     # preferred source and a box configured for CPCB only would have skipped
     # both the warm and the recorder.
     if waqi_live.available() or cpcb_live.available():
-        try:
-            warm = await asyncio.to_thread(_live_mesh)
-            if warm:
-                log.info("live mesh warm: %d stations, %d indexable, as of %s",
-                         warm["count"], warm["indexable"], warm["as_of"])
-                await asyncio.to_thread(live_history.record, warm)
-        except Exception as exc:  # noqa: BLE001 - never block startup on a feed
-            log.warning("could not warm the live mesh (%s)", exc)
-
-        _state.recorder = asyncio.create_task(_record_live_history())
+        _state.recorder = asyncio.create_task(_warm_then_record())
 
     if not cfg.mock_mode:
         try:
@@ -1044,6 +1069,14 @@ def _blend(live: dict[str, Any], archive: dict[str, Any] | None) -> dict[str, An
     }
 
 
+#: One build of the live mesh at a time. The feeds cache their own results, so
+#: whoever waits here gets the finished build on a cache hit instead of sending
+#: the same slow request upstream again - which matters most in the first
+#: minute after a restart, when the warm and the first visitors all arrive
+#: before any cache is filled.
+_LIVE_MESH_LOCK = threading.Lock()
+
+
 def _live_mesh() -> dict[str, Any] | None:
     """The live mesh the page is served, whichever feed answered.
 
@@ -1055,21 +1088,23 @@ def _live_mesh() -> dict[str, Any] | None:
     had empty sparklines over a recorder that was faithfully filling up with
     stations nobody was displaying.
     """
-    live = None
-    try:
-        live = cpcb_live.mesh()
-    except Exception as exc:  # noqa: BLE001 - WAQI and the archive still stand
-        _log.warning("CPCB bulletin unavailable (%s); trying WAQI", exc)
+    with _LIVE_MESH_LOCK:
+        live = None
+        try:
+            live = cpcb_live.mesh()
+        except Exception as exc:  # noqa: BLE001 - WAQI and the archive still stand
+            _log.warning("CPCB bulletin unavailable (%s); trying WAQI", exc)
 
-    try:
-        if live is None or live["indexable"] < MIN_LIVE_STATIONS:
-            live = waqi_live.mesh() or live
-    except Exception as exc:  # noqa: BLE001 - the archive still stands
-        # `_log`, not `log`: this handler runs precisely when the live feed has
-        # failed, and a bare `log` is unbound at module scope, so the fallback
-        # would have raised NameError over the error it exists to report.
-        _log.warning("live mesh unavailable (%s); serving the archive", exc)
-    return live
+        try:
+            if live is None or live["indexable"] < MIN_LIVE_STATIONS:
+                live = waqi_live.mesh() or live
+        except Exception as exc:  # noqa: BLE001 - the archive still stands
+            # `_log`, not `log`: this handler runs precisely when the live feed
+            # has failed, and a bare `log` is unbound at module scope, so the
+            # fallback would have raised NameError over the error it exists to
+            # report.
+            _log.warning("live mesh unavailable (%s); serving the archive", exc)
+        return live
 
 
 @app.get("/api/v1/stations")
@@ -1109,7 +1144,12 @@ async def stations(response: Response):
     # bulletin - a whole band, on the pollutant that set the index.
     #
     # Without a data.gov.in key this returns None and nothing changes.
-    live = _live_mesh()
+    #
+    # In a worker thread. This handler is async, and calling a blocking network
+    # fetch directly inside it froze the event loop for as long as CPCB took -
+    # so one slow bulletin stalled /health, the forecast and GRAP along with it,
+    # not just this endpoint.
+    live = await asyncio.to_thread(_live_mesh)
 
     archive = None
     try:

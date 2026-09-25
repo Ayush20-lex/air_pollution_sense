@@ -71,6 +71,14 @@ MAX_PAGES = 12
 
 CACHE_S = 600
 
+#: How long to stop asking after the bulletin fails. A failed fetch was never
+#: remembered, so while data.gov.in was down every /stations request waited out
+#: the full read timeout before falling back to WAQI - 20s per page load, on an
+#: outage that on 25 September lasted minutes. Two minutes is short enough that
+#: recovery is picked up promptly and long enough to stop hammering a host that
+#: is not answering.
+RETRY_AFTER_S = 120
+
 #: data.gov.in silently black-holes requests carrying the `python-requests`
 #: default User-Agent - the connection opens and then never answers, so it
 #: surfaces as a read timeout rather than a refusal. curl from the same host
@@ -108,6 +116,9 @@ NCR_CITIES = {
 }
 
 _cache: tuple[float, dict[str, Any] | None] = (0.0, None)
+
+#: monotonic time of the last failed fetch; 0 means none.
+_failed_at: float = 0.0
 
 
 def token() -> str | None:
@@ -239,9 +250,13 @@ def _short_name(full: str) -> str:
 
 def mesh(force: bool = False) -> dict[str, Any] | None:
     """Every live NCR station, shaped like the archive registry's payload."""
-    global _cache
+    global _cache, _failed_at
     if not force and _cache[1] is not None and time.monotonic() - _cache[0] < CACHE_S:
         return _cache[1]
+    # Recently failed: answer "unavailable" at once and let the caller fall back,
+    # instead of making this request pay the timeout the last one already paid.
+    if not force and _failed_at and time.monotonic() - _failed_at < RETRY_AFTER_S:
+        return None
 
     tok = token()
     if not tok:
@@ -250,8 +265,11 @@ def mesh(force: bool = False) -> dict[str, Any] | None:
     try:
         records = _records(tok)
     except Exception as exc:  # noqa: BLE001 - the caller has a fallback
-        logger.warning("CPCB bulletin unavailable (%s); staying on the previous feed", exc)
+        _failed_at = time.monotonic()
+        logger.warning("CPCB bulletin unavailable (%s); staying on the previous feed"
+                       " and not retrying for %ds", exc, RETRY_AFTER_S)
         return None
+    _failed_at = 0.0
 
     # Group the flat pollutant rows into stations.
     grouped: dict[str, dict[str, Any]] = {}
