@@ -186,15 +186,27 @@ export function PollutantDetail({
             ) : (
               <div className="space-y-3 p-4">
                 <p className="font-body text-sm text-term-ink-variant">
-                  The archive has no reading for {p.symbol} at this station and hour, so no
-                  sub-index can be computed. The card shows a dash rather than a number.
+                  There&rsquo;s no {p.symbol} reading available from this station for this
+                  time, so we can&rsquo;t calculate the sub-index. That&rsquo;s why the card
+                  shows a dash instead of a value.
                 </p>
                 <p className="font-body text-[11px] leading-relaxed text-term-outline">
-                  A pollutant can be absent because the station does not measure it, because
-                  its readings failed quality control, or — for CO — because it is excluded
-                  from the index deliberately, the catalogue unit being contradicted by its
-                  own values.
+                  This doesn&rsquo;t necessarily mean {p.symbol} isn&rsquo;t present. The
+                  station may simply not measure it, or the available reading may not have
+                  passed the required checks.
                 </p>
+                {/* CO only, and it has to stay. The sentence above is true of every
+                    other channel and false of this one: CO is measured and is left
+                    out on purpose, because the unit the catalogue gives it is
+                    contradicted by its own values. Without this a reader would take
+                    the absence for a missing instrument. */}
+                {p.id === 'co' && (
+                  <p className="font-body text-[11px] leading-relaxed text-term-outline">
+                    CO is the exception: it is measured here, and excluded from the index
+                    deliberately, because the unit the catalogue gives it is contradicted by
+                    its own values.
+                  </p>
+                )}
               </div>
             )}
           </motion.div>
