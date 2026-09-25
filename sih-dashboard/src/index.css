@@ -197,13 +197,48 @@
     animation: shine-shimmer 7.5s linear infinite paused;
   }
 
-  .shiny-cta:is(:hover, :focus-visible) {
+  /* The lit state: the sweep opens out and the inner shimmer starts.
+     Reached three ways, because "hovered" is not a thing a phone can be.
+
+     Keyboard first, and unguarded, so focus works on any device. */
+  .shiny-cta:focus-visible {
     --shine-spread: 20%;
     --shine-offset: 95deg;
     --shine-tint: rgb(var(--as-shine-peak));
   }
-  .shiny-cta:is(:hover, :focus-visible)::after {
+  .shiny-cta:focus-visible::after {
     animation-play-state: running;
+  }
+
+  /* Then hover, guarded the way .glass-hover below is. Unguarded, a tap on a
+     phone leaves :hover stuck on the button until something else is tapped,
+     so the lit state arrives at the wrong moment and then will not leave. */
+  @media (hover: hover) and (pointer: fine) {
+    .shiny-cta:hover {
+      --shine-spread: 20%;
+      --shine-offset: 95deg;
+      --shine-tint: rgb(var(--as-shine-peak));
+    }
+    .shiny-cta:hover::after {
+      animation-play-state: running;
+    }
+  }
+
+  /* And on touch it is simply the resting state. The shimmer's only trigger
+     was :hover, which a phone never satisfies, so it sat `paused` for the
+     life of the page and the button ran half its animation - the border swept
+     but nothing moved inside it. Where there is no pointer to hover with
+     there is no resting-versus-lit distinction to draw, so the button just
+     runs in full. */
+  @media (hover: none) {
+    .shiny-cta {
+      --shine-spread: 20%;
+      --shine-offset: 95deg;
+      --shine-tint: rgb(var(--as-shine-peak));
+    }
+    .shiny-cta::after {
+      animation-play-state: running;
+    }
   }
 
   @keyframes shine-sweep {
