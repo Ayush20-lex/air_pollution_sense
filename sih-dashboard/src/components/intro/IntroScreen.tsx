@@ -355,7 +355,7 @@ export function IntroScreen() {
           <span className="hud-label">Problem statement ID26082 · NCMRWF</span>
           <h1 className="mt-2 max-w-3xl font-mono text-2xl font-bold uppercase leading-tight tracking-[0.12em] text-ink [overflow-wrap:anywhere] sm:text-3xl">
             Two-way coupled
-            <span className="text-accent"> meteorology / chemistry</span>
+            <span className="text-accent"> framework</span>
           </h1>
         </motion.div>
 
