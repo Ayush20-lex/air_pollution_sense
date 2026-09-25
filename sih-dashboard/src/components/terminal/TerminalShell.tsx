@@ -419,20 +419,19 @@ function TerminalHeader({ onOpenNav }: { onOpenNav: () => void }) {
             a page showing measured severe air while calling itself synthetic
             invites a reader to discount figures that are real.
 
-            The claim is scoped rather than blanket: LIVE / MEASURED names the
-            mesh, and the title says which panels it covers, because the rest of
-            this route still renders lib/terminal/content.ts. Offline it returns
-            to DEMO / SYNTHETIC, which is then the honest reading - the station
-            list falls back to a frozen snapshot of the same archive, real but
-            no longer current. */}
-        <div
-          title={
-            mesh.live
-              ? `Node ledger and plume map are measured from CPCB stations (${mesh.index}), ${mesh.feed === 'waqi_live' ? 'reporting live' : 'replayed from the archive'}. Other panels on this route are demo content.`
-              : 'Backend unreachable. The mesh is a frozen snapshot of the archive and other panels are demo content.'
-          }
-          className="flex shrink-0 items-center gap-2 rounded-full border border-term-primary/40 bg-term-primary/10 px-3 py-1.5 shadow-[0_0_15px_rgba(78,222,163,0.15)]"
-        >
+            Offline it returns to DEMO / SYNTHETIC, which is then the honest
+            reading - the station list falls back to a frozen snapshot of the
+            same archive, real but no longer current.
+
+            The badge carried a `title` that scoped the claim - which panels
+            the word "measured" covered, and that the rest of the route renders
+            lib/terminal/content.ts. Removed on request. Worth knowing what
+            went with it: LIVE / MEASURED now stands unqualified, and a reader
+            hovering for the boundary finds nothing. The panels that are still
+            demo content say so individually where they can - the pollutant
+            grid prints "5 of 8 measured" - but there is no longer one place
+            that draws the line. */}
+        <div className="flex shrink-0 items-center gap-2 rounded-full border border-term-primary/40 bg-term-primary/10 px-3 py-1.5 shadow-[0_0_15px_rgba(78,222,163,0.15)]">
           <span
             className={cn(
               'size-2.5 rounded-full',
