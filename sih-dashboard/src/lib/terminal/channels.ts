@@ -55,6 +55,38 @@ export const CHANNEL_WINDOW_HOURS: Record<string, number> = {
  */
 export const MIN_VALID_HOURS: Record<number, number> = { 24: 16, 8: 6 };
 
+/**
+ * The concentration that indexes as 100 - CPCB's own standard for the channel.
+ *
+ * Read off the second row of BREAKPOINTS in backend/aqi_cpcb.py, where the
+ * band 51-100 ends. It is the number the whole index is calibrated against:
+ * below it a channel is within the national standard, above it the channel
+ * alone is enough to push a station past Satisfactory. Change one, change both.
+ */
+export const CHANNEL_STANDARD: Record<string, { value: number; unit: string }> = {
+  'PM2.5': { value: 60, unit: 'ug/m3' },
+  PM10: { value: 100, unit: 'ug/m3' },
+  NO2: { value: 80, unit: 'ug/m3' },
+  SO2: { value: 80, unit: 'ug/m3' },
+  NH3: { value: 400, unit: 'ug/m3' },
+  Pb: { value: 1.0, unit: 'ug/m3' },
+  CO: { value: 2.0, unit: 'mg/m3' },
+  O3: { value: 100, unit: 'ug/m3' },
+};
+
+/**
+ * The window the live feed's own sub-index is computed over, where it differs.
+ *
+ * Taken from the backend's stated reason for withholding each channel rather
+ * than asserted here, so the two cannot drift: if aqi_cpcb changes its mind
+ * about a channel, its text changes and this table should be revisited.
+ * Absent means the feed and CPCB agree on the window.
+ */
+export const FEED_WINDOW_HOURS: Record<string, number> = {
+  NO2: 1,
+  SO2: 1,
+};
+
 /** The order the grid draws them, so every panel agrees. */
 export const CHANNEL_ORDER = ['PM2.5', 'PM10', 'NO2', 'O3', 'SO2', 'CO', 'NH3', 'Pb'] as const;
 

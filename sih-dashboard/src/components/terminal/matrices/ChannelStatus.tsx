@@ -13,7 +13,12 @@
 import * as React from 'react';
 import { Ban, Check, Minus } from 'lucide-react';
 import { Label, SectionHead, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
-import { channelStates, CHANNEL_WINDOW_HOURS } from '@/lib/terminal/channels';
+import {
+  CHANNEL_STANDARD,
+  CHANNEL_WINDOW_HOURS,
+  FEED_WINDOW_HOURS,
+  channelStates,
+} from '@/lib/terminal/channels';
 import { isLive, useMesh } from '@/lib/terminal/useMesh';
 import type { LiveStation } from '@/lib/terminal/meshApi';
 import { cn } from '@/lib/utils';
@@ -128,7 +133,11 @@ export function ChannelStatus() {
 
         {withheld.map((s) =>
           s.kind === 'withheld' ? (
-            <TelemetryCard key={s.key} className="space-y-2 p-5">
+            /* flex column so the arithmetic block below sits on the card's
+               floor rather than leaving a pool of empty card under it: these
+               cards are stretched by the taller one beside them, and a short
+               refusal left most of that height blank. */
+            <TelemetryCard key={s.key} className="flex flex-col gap-2 p-5">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-display text-base font-bold text-term-ink">{s.key}</span>
                 <span
@@ -147,10 +156,71 @@ export function ChannelStatus() {
               <p className="font-body text-xs leading-relaxed text-term-ink-variant">
                 {s.reason}
               </p>
+              <Mismatch channel={s.key} />
             </TelemetryCard>
           ) : null,
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The arithmetic behind the refusal, for one withheld channel.
+ *
+ * The sentence above says the windows do not match. This is the mismatch, in
+ * numbers a reader can check against CPCB's table: the window each side
+ * averages over, and the concentration that indexes as 100.
+ *
+ * Why a window mismatch is not a rounding error. A one-hour sub-index is
+ * anchored to a one-hour limit and a 24-hour sub-index to a 24-hour one, and
+ * for the same air the shorter window sees peaks the longer one averages
+ * away - NO2 above a road at 09:00 is not the day that road had. Feeding one
+ * into the other's scale does not lose precision, it changes what is being
+ * measured, and the result would still print as a tidy integer.
+ */
+function Mismatch({ channel }: { channel: string }) {
+  const cpcb = CHANNEL_WINDOW_HOURS[channel];
+  const feed = FEED_WINDOW_HOURS[channel];
+  const std = CHANNEL_STANDARD[channel];
+  if (!cpcb || !std) return null;
+  return (
+    <div className="mt-auto space-y-2 border-t border-term-outline-variant/40 pt-3">
+      {/* The second box only exists where the windows actually differ. CO's
+          refusal is about the unit the archive carries, not the window, and
+          printing a matching 8h in amber beside it would invent a second
+          fault. */}
+      <div className={cn('grid gap-2', feed ? 'grid-cols-2' : 'grid-cols-1')}>
+        <div className="rounded-lg border border-term-outline-variant/60 bg-term-surface-low p-2">
+          <Label className="block">CPCB window</Label>
+          <span className="font-display text-base font-extrabold tabular-nums text-term-ink">
+            {cpcb}
+            <span className="font-mono text-[10px] font-normal">
+              {feed != null ? ' h' : ' h — both sides agree'}
+            </span>
+          </span>
+        </div>
+        {feed != null && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2">
+            <Label className="block">Feed window</Label>
+            <span className="font-display text-base font-extrabold tabular-nums text-amber-600 dark:text-amber-400">
+              {feed}
+              <span className="font-mono text-[10px] font-normal"> h</span>
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="flex items-baseline justify-between gap-2 font-mono text-[10px] text-term-ink-variant">
+        <span>National standard, index 100</span>
+        <span className="font-semibold text-term-ink">
+          {std.value} {std.unit.replace('ug/m3', 'µg/m³').replace('mg/m3', 'mg/m³')}
+        </span>
+      </div>
+      <p className="font-body text-[10px] leading-relaxed text-term-ink-variant">
+        {feed
+          ? `A ${feed}-hour sub-index is anchored to a ${feed}-hour limit. Read onto CPCB's ${cpcb}-hour scale it would keep the peaks a ${cpcb}-hour mean averages out, and still print as a tidy integer.`
+          : `The window matches; what does not is the unit the archive carries it in, and a wrong unit is invisible once it becomes an index.`}
+      </p>
     </div>
   );
 }

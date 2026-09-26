@@ -19,7 +19,10 @@
  */
 import * as React from 'react';
 import { Label, Meter, SectionHead, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
-import { indexDrivers } from '@/lib/terminal/channels';
+import { CHANNEL_ORDER, indexDrivers } from '@/lib/terminal/channels';
+import { AQI_RAMP } from '@/lib/terminal/bands';
+import type { LiveStation } from '@/lib/terminal/meshApi';
+import type { Station } from '@/lib/terminal/stations';
 import { isLive, useFreshStations, useMesh } from '@/lib/terminal/useMesh';
 import { SEVERITY } from '@/lib/tokens';
 import { TERM } from '@/lib/terminal/palette';
@@ -94,6 +97,8 @@ export function IndexDrivers() {
               </div>
             ))}
           </div>
+
+          <SubIndexSpread stations={fresh} />
         </TelemetryCard>
 
         <TelemetryCard className="space-y-3 p-5 lg:col-span-5">
@@ -144,6 +149,114 @@ export function IndexDrivers() {
           </p>
         </TelemetryCard>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Every station's sub-index, channel by channel - the evidence under the bars.
+ *
+ * The bars above say PM10 decides almost every station. They do not say why,
+ * and "why" is the whole scientific content: the index takes the maximum of a
+ * station's sub-indices, so the channel that decides is simply the one whose
+ * spread sits highest. Drawn as one dot per station per channel against the
+ * CPCB bands, that is visible in a glance rather than asserted - PM10's cloud
+ * sits in Moderate while PM2.5's sits in Good, at the same stations, on the
+ * same air, in the same hour.
+ *
+ * It also shows the thing a bar chart hides: how close the contest is. Two
+ * clouds that overlap mean the deciding channel changes station to station and
+ * hour to hour; two that are far apart mean it will not.
+ */
+function SubIndexSpread({ stations }: { stations: (Station | LiveStation)[] }) {
+  const rows = React.useMemo(() => {
+    const out: { key: string; values: number[]; median: number }[] = [];
+    for (const key of CHANNEL_ORDER) {
+      const values: number[] = [];
+      for (const s of stations) {
+        // The offline curated mesh carries no sub-indices at all, so this
+        // reads undefined there and the plot simply does not render.
+        const v = ('subIndices' in s ? s.subIndices : undefined)?.[key]?.sub_index;
+        if (typeof v === 'number' && Number.isFinite(v)) values.push(v);
+      }
+      if (!values.length) continue;
+      const sorted = [...values].sort((a, b) => a - b);
+      out.push({ key, values, median: sorted[Math.floor(sorted.length / 2)] });
+    }
+    return out;
+  }, [stations]);
+
+  if (rows.length < 2) return null;
+
+  const peak = Math.max(...rows.flatMap((r) => r.values));
+  // Scaled to the CPCB band the data actually reaches, not to 500: a fixed
+  // full-scale axis squashes every ordinary day into the left fifth.
+  const band = AQI_RAMP.find((b) => peak <= b.to) ?? AQI_RAMP[AQI_RAMP.length - 1];
+  const max = band.to;
+
+  const W = 320;
+  const ROW = 26;
+  // Headroom for the first row's label, which sits above its dots and was
+  // being clipped by the top of the viewBox.
+  const TOP = 11;
+  const H = TOP + rows.length * ROW + 14;
+  const x = (v: number) => (Math.min(v, max) / max) * W;
+
+  return (
+    <div className="space-y-1 border-t border-term-outline-variant/40 pt-3">
+      <Label className="block">Sub-index spread, one dot per station</Label>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img"
+        aria-label="Sub-index per station for each channel, against the CPCB bands">
+        {/* CPCB bands behind the dots, so a position reads as a category. */}
+        {AQI_RAMP.map((b) => {
+          const x0 = x(b.from);
+          const x1 = x(Math.min(b.to, max));
+          if (x1 - x0 <= 0) return null;
+          return (
+            <rect key={b.label} x={x0} y={TOP} width={x1 - x0} height={rows.length * ROW}
+              fill={b.color} opacity={0.08} />
+          );
+        })}
+        {rows.map((r, i) => {
+          const cy = TOP + i * ROW + ROW / 2;
+          return (
+            <g key={r.key}>
+              <line x1={0} x2={W} y1={cy + ROW / 2} y2={cy + ROW / 2}
+                stroke={TERM.outlineVariant} strokeWidth={0.5} opacity={0.6} />
+              {r.values.map((v, j) => (
+                <circle key={j} cx={x(v)} cy={cy} r={3}
+                  fill={CHANNEL_COLOR[r.key] ?? TERM.primary} opacity={0.5} />
+              ))}
+              {/* The median, marked: with two dozen overlapping dots the eye
+                  finds the densest patch, which is not the same thing. */}
+              <line x1={x(r.median)} x2={x(r.median)} y1={cy - 8} y2={cy + 8}
+                stroke={TERM.ink} strokeWidth={1.5} />
+              <text x={2} y={cy - 9} fontSize="8" fill={TERM.inkVariant}
+                fontFamily="var(--font-mono), monospace" letterSpacing="0.08em">
+                {r.key.toUpperCase()}
+              </text>
+              <text x={W - 2} y={cy - 9} fontSize="8" fill={TERM.inkVariant} textAnchor="end"
+                fontFamily="var(--font-mono), monospace">
+                median {r.median}
+              </text>
+            </g>
+          );
+        })}
+        {/* Band edges, which are the numbers that mean something here. */}
+        {AQI_RAMP.filter((b) => b.from > 0 && b.from <= max).map((b) => (
+          <text key={`t-${b.label}`} x={x(b.from)} y={H - 3} fontSize="8" textAnchor="middle"
+            fill={TERM.outline} fontFamily="var(--font-mono), monospace">
+            {b.from}
+          </text>
+        ))}
+        <text x={0} y={H - 3} fontSize="8" fill={TERM.outline}
+          fontFamily="var(--font-mono), monospace">0</text>
+      </svg>
+      <p className="font-body text-[10px] leading-relaxed text-term-ink-variant">
+        The index is the highest of these, so the channel whose dots sit furthest right
+        decides the station. Overlapping clouds would mean the deciding channel changes from
+        station to station; separated ones mean it will not.
+      </p>
     </div>
   );
 }
