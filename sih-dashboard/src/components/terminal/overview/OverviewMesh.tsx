@@ -142,9 +142,12 @@ export function IncidentBanners({ limit }: { limit?: number } = {}) {
               this says why the air is about to do what it does. */}
           <InversionPanel />
 
-          {/* The meteorology the project reads but does not forecast from, and
-              whether that file is still current. It is expired as this ships,
-              which is precisely why it belongs on screen. */}
+          {/* The meteorology the project reads but does not forecast from.
+              Renders only while the committed cycle still covers future hours;
+              expired or missing, it draws nothing. It feeds no forecast, so its
+              staleness moves no figure here, and a dead panel on the overview
+              only spends a reader's confidence in numbers it does not touch.
+              /api/v1/status reports the source in either state. */}
           <MetSourcePanel />
         </>
       )}

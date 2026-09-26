@@ -43,7 +43,6 @@ export function MetSourcePanel() {
   // surface they fail contrast badly. See useSeverityInk.
   const ink = useSeverityInk();
   const [data, setData] = React.useState<GfsPayload | null>(null);
-  const [tried, setTried] = React.useState(false);
 
   React.useEffect(() => {
     let alive = true;
@@ -52,7 +51,6 @@ export function MetSourcePanel() {
       const d = await fetchGfs();
       if (!alive) return;
       if (d) setData(d);
-      setTried(true);
       timer = setTimeout(() => void tick(), REFRESH_MS);
     };
     void tick();
@@ -62,18 +60,30 @@ export function MetSourcePanel() {
     };
   }, []);
 
-  if (!data) {
-    if (!tried) return null;
-    return (
-      <TelemetryCard className="p-4">
-        <span className="font-mono text-xs text-term-outline">
-          No GFS extract available — the partner pipeline has not committed one
-        </span>
-      </TelemetryCard>
-    );
-  }
+  // Same rule as the expired case below, for the same reason: this channel
+  // feeds no forecast, so its absence changes no figure on the page, and a
+  // card announcing a missing side channel is a worry a reader cannot act on.
+  // It was a grey line rather than a red one, but showing it here while
+  // hiding the expired state would have been two behaviours for one fact.
+  if (!data) return null;
 
   const f = data.freshness;
+
+  // An expired cycle is drawn as nothing at all.
+  //
+  // Not because the panel was wrong - it was exactly right, and the backend
+  // agreed with it: 132 hours old, the whole 72-hour window in the past. The
+  // problem is that it is a read-only side channel which feeds no forecast, so
+  // its staleness changes no number anywhere on this site, and a dead red box
+  // on the overview costs a reader confidence in figures it has no bearing on.
+  //
+  // The extract is committed to the repository by a partner pipeline rather
+  // than fetched, so it expires roughly three days after each commit and there
+  // is nothing this page can do about it. When a fresh cycle is committed this
+  // panel returns on its own; `/api/v1/status` reports the source either way,
+  // so nothing is concealed from anyone auditing the system.
+  if (f.expired) return null;
+
   const tone = GFS_STATUS[f.status] ?? GFS_STATUS.stale;
   const Icon = f.expired ? CloudOff : CloudSun;
   const fields = Object.entries(data.fields);
@@ -99,9 +109,12 @@ export function MetSourcePanel() {
                 {f.status}
               </div>
               <div className="mt-0.5 font-mono text-xs text-term-ink-variant">{tone.means}</div>
-              {f.note ? (
-                <div className="mt-1 max-w-md font-mono text-[11px] text-term-outline">{f.note}</div>
-              ) : null}
+              {/* The backend's note is written for whoever maintains the
+                  pipeline - "re-run the partner fetcher and commit a fresh
+                  cycle" - and this is a public read-only terminal. The status
+                  word and its plain-English meaning above are what a reader
+                  here can act on; the operator instruction stays in
+                  /api/v1/status where the operator will look. */}
             </div>
           </div>
 
