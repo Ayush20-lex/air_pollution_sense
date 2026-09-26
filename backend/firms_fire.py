@@ -81,6 +81,32 @@ SP_SOURCE = "VIIRS_SNPP_SP"
 #: read for the radiative power.
 COLUMNS = ["latitude", "longitude", "frp", "acq_date"]
 
+#: Fields FIRMS already returns in the same CSV that the fusion layer has no
+#: use for but a map does. Kept as a separate list so `COLUMNS` - the contract
+#: every existing consumer was written against - is unchanged.
+#:
+#: `confidence` is NOT a number on VIIRS: it is 'l', 'n' or 'h' (low, nominal,
+#: high), so it is read as a string. `acq_time` is a zero-padded HHMM in UTC.
+#: `type` is FIRMS's own inference: 0 presumed vegetation fire, 1 active
+#: volcano, 2 other static land source, 3 offshore. It is carried because a
+#: page that calls every thermal anomaly a stubble fire is overclaiming, and
+#: this is the flag that says otherwise.
+EXTRA_COLUMNS = [
+    "acq_time",
+    "satellite",
+    "instrument",
+    "confidence",
+    "daynight",
+    "bright_ti4",
+    "type",
+]
+ALL_COLUMNS = COLUMNS + EXTRA_COLUMNS
+
+#: Bumped when the parsed column set changes, because the disk cache stores the
+#: parsed frame rather than the raw body. Files written under an older schema
+#: are simply no longer looked for - nothing here deletes them.
+CACHE_SCHEMA = "v2"
+
 _memo: dict[tuple[str, int], pd.DataFrame] = {}
 
 
@@ -110,29 +136,67 @@ def _source_for(start: date) -> tuple[str, str]:
 
 
 def _cache_path(source: str, start: date, days: int) -> Path:
-    return CACHE_DIR / f"{source}_{start.isoformat()}_{days}d.csv"
+    return CACHE_DIR / f"{source}_{start.isoformat()}_{days}d.{CACHE_SCHEMA}.csv"
+
+
+def _opt_float(value: Any) -> float | None:
+    """A float, or None. Never 0 for a missing reading - see the FRP note."""
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    return f if f == f else None  # NaN is not a measurement either
+
+
+def _opt_str(value: Any) -> str | None:
+    s = str(value).strip() if value is not None else ""
+    return s or None
 
 
 def _parse(body: str) -> pd.DataFrame:
     if "latitude" not in body.lower():
-        return pd.DataFrame(columns=COLUMNS)
+        return pd.DataFrame(columns=ALL_COLUMNS)
     rows = []
     for r in csv.DictReader(io.StringIO(body)):
         try:
-            rows.append(
-                {
-                    "latitude": float(r["latitude"]),
-                    "longitude": float(r["longitude"]),
-                    # A pixel with no FRP is a detection without a measured
-                    # power. Dropped rather than zeroed: zero would dilute the
-                    # interpolation with a fire that reads as no fire.
-                    "frp": float(r["frp"]),
-                    "acq_date": r.get("acq_date", ""),
-                }
-            )
+            row = {
+                "latitude": float(r["latitude"]),
+                "longitude": float(r["longitude"]),
+                # A pixel with no FRP is a detection without a measured
+                # power. Dropped rather than zeroed: zero would dilute the
+                # interpolation with a fire that reads as no fire.
+                "frp": float(r["frp"]),
+                "acq_date": r.get("acq_date", ""),
+            }
         except (KeyError, TypeError, ValueError):
             continue
-    return pd.DataFrame(rows, columns=COLUMNS)
+        # Best effort, and only after the row has earned its place: a pixel is
+        # still a usable detection when FIRMS omits its confidence flag.
+        row["acq_time"] = _opt_str(r.get("acq_time"))
+        row["satellite"] = _opt_str(r.get("satellite"))
+        row["instrument"] = _opt_str(r.get("instrument"))
+        row["confidence"] = (_opt_str(r.get("confidence")) or "").lower() or None
+        row["daynight"] = _opt_str(r.get("daynight"))
+        row["bright_ti4"] = _opt_float(r.get("bright_ti4"))
+        row["type"] = _opt_float(r.get("type"))
+        rows.append(row)
+    return pd.DataFrame(rows, columns=ALL_COLUMNS)
+
+
+def _ensure_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Every column in ALL_COLUMNS present, so an older cache cannot KeyError.
+
+    A file written before CACHE_SCHEMA existed carries four columns. It is no
+    longer looked for by name, but a frame can also reach here from the memo of
+    a process that predates a reload, so the guarantee is made here rather than
+    assumed at every call site. The extras are optional everywhere downstream.
+    """
+    missing = [c for c in ALL_COLUMNS if c not in df.columns]
+    if missing:
+        df = df.copy()
+        for c in missing:
+            df[c] = None
+    return df
 
 
 def _download(source: str, start: date, days: int, key: str) -> pd.DataFrame | None:
@@ -164,14 +228,14 @@ def fetch(start: date | str, days: int = DEFAULT_DAYS) -> pd.DataFrame:
 
     memo_key = (start.isoformat(), days)
     if memo_key in _memo:
-        return _memo[memo_key]
+        return _ensure_columns(_memo[memo_key])
 
     preferred, fallback = _source_for(start)
 
     for source in (preferred, fallback):
         path = _cache_path(source, start, days)
         if path.exists():
-            df = pd.read_csv(path)
+            df = _ensure_columns(pd.read_csv(path))
             if not df.empty:
                 _memo[memo_key] = df
                 return df
@@ -179,11 +243,11 @@ def fetch(start: date | str, days: int = DEFAULT_DAYS) -> pd.DataFrame:
     key = token()
     if key is None:
         logger.info("no NASA_FIRMS_KEY; the fire channels stay zero and say so")
-        empty = pd.DataFrame(columns=COLUMNS)
+        empty = pd.DataFrame(columns=ALL_COLUMNS)
         _memo[memo_key] = empty
         return empty
 
-    result = pd.DataFrame(columns=COLUMNS)
+    result = pd.DataFrame(columns=ALL_COLUMNS)
     for source in (preferred, fallback):
         df = _download(source, start, days, key)
         if df is None:
@@ -258,7 +322,10 @@ def season_hint(when: date | str | None = None) -> str:
         else "outside the burning season"
 
 
-__all__ = ["available", "fetch", "describe", "season_hint", "token", "BBOX", "DEFAULT_DAYS"]
+__all__ = [
+    "available", "fetch", "describe", "season_hint", "token",
+    "BBOX", "DEFAULT_DAYS", "COLUMNS", "ALL_COLUMNS", "CACHE_SCHEMA",
+]
 
 
 # ── plume field ──────────────────────────────────────────────────────────────

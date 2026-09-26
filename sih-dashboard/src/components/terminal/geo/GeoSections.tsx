@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { useAppStore } from '@/store/useAppStore';
 import { TERM, TERM_SEVERITY, useTermPalette, useSeverityInk } from '@/lib/terminal/palette';
+import { FireCorridorSection } from './FireCorridorSection';
 
 /** Everything below the map on the geo page. */
 export function GeoSections({ frame }: { frame: TerminalFrame }) {
@@ -23,6 +24,9 @@ export function GeoSections({ frame }: { frame: TerminalFrame }) {
         <MeshRanking frame={frame} />
         <TrappingProfile />
       </div>
+      {/* Where the page stops being about the mesh inside NCR and asks where
+          the air came from, before it becomes a ledger of nodes. */}
+      <FireCorridorSection />
       <NodeLedger frame={frame} />
       <SpatialAlerts />
       <CoverageStrip />

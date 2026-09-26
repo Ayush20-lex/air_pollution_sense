@@ -31,7 +31,8 @@ import {
 } from '@/lib/terminal/stations';
 import { stationHour } from '@/lib/terminal/meshApi';
 import { useMesh, useFreshStations, isStale } from '@/lib/terminal/useMesh';
-import { livePlumeSources, shareLabel, useMeasuredWind } from '@/lib/terminal/plumes';
+import { corridorRibbons, livePlumeSources, shareLabel, useMeasuredWind } from '@/lib/terminal/plumes';
+import { useFires } from '@/lib/terminal/useFires';
 import { fetchModelGrid, type ModelGrid } from '@/lib/terminal/gridApi';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { TERM, useTermPalette, useSeverityInk } from '@/lib/terminal/palette';
@@ -922,14 +923,30 @@ function SourceRibbons() {
   // lib/terminal/plumes.
   const wind = useMeasuredWind(0);
   const fire = useAppStore((st) => st.source?.fire);
-  const sources = React.useMemo(
+  // Per-cluster ribbons where the fire service has answered, each on the
+  // bearing its own fires lie on. Before this there was one ribbon, drawn to
+  // the FRP-weighted mean of the entire corridor, which is why the smoke
+  // looked like it came from a single field. The centroid path stays as the
+  // fallback: it is what there is when /api/v1/fires is unreachable.
+  //
+  // Only ever the live window. The corridor section below can be switched to a
+  // past episode, and that switch must not reach up here: this map is drawn
+  // over live station readings, and hanging November's ribbons on it would put
+  // two different days on one screen with nothing to tell them apart.
+  const { data: fires, window: fireWindow } = useFires();
+  const clusters =
+    fireWindow.kind === 'live' && fires?.available ? fires.clusters : undefined;
+  const sources = React.useMemo(() => {
+    const corridor = clusters?.length ? corridorRibbons(clusters, CHEAP_PINS ? 3 : 6) : [];
+    if (corridor.length) return corridor;
     // A measured zero stays in the rail as "0%", where it is a finding. On the
     // map it would be a transport path for smoke that is not there - a ribbon
     // drawn at zero width still carries a label claiming a route into the
     // basin - so it is not drawn at all.
-    () => livePlumeSources(wind?.fromDeg ?? null, fire).filter((s) => !(s.measured && s.share === 0)),
-    [wind?.fromDeg, fire],
-  );
+    return livePlumeSources(wind?.fromDeg ?? null, fire).filter(
+      (s) => !(s.measured && s.share === 0),
+    );
+  }, [clusters, wind?.fromDeg, fire]);
 
   const ribbons = React.useMemo(
     () =>
@@ -1004,7 +1021,7 @@ function SourceRibbons() {
               iconAnchor: [66, 8],
               html:
                 `<span class="term-ribbon-label" style="--c:${r.color}">` +
-                `${r.label.toUpperCase()} · ${shareLabel(r)}</span>`,
+                `${r.mapLabel ? r.mapLabel.toUpperCase() : `${r.label.toUpperCase()} · ${shareLabel(r)}`}</span>`,
             })}
           />
         </React.Fragment>
