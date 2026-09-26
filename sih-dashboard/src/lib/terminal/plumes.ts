@@ -14,12 +14,17 @@
  * twenty on a day when the corridor is barely alight, and at the November peak
  * the same figure reads 22.7%.
  *
- * The other three have no data behind them. There is no emissions inventory in
- * this system, so industrial, vehicular and construction cannot be computed
- * from anything - they are an editorial attribution of the sectors NCR is known
- * to carry. They are kept, because dropping them would leave a reader thinking
- * stubble is the only source, and they are marked so nobody reads an estimate
- * as a measurement.
+ * The other three are gone. Industrial, vehicular and construction had no data
+ * behind them at all - there is no emissions inventory in this system, so their
+ * 39/33/27 were an editorial guess at the sectors NCR is known to carry, drawn
+ * as ribbons entering the basin along routes nothing measured. Marking them
+ * "est." was not enough: a labelled arrow on a map of live readings is read as
+ * a finding, and three invented ones outnumbered the single real one.
+ *
+ * So only measured transport is drawn now. When the fire feed has nothing to
+ * say, the map draws no attribution at all, and the rail says so in words -
+ * which is the true state of this system's knowledge of where the pollution
+ * came from.
  */
 import * as React from 'react';
 import { useAppStore } from '@/store/useAppStore';
@@ -94,33 +99,7 @@ export function livePlumeSources(
   windFromDeg: number | null,
   fire: FireMeta | undefined,
 ): LivePlumeSource[] {
-  return closeTheBudget(rawPlumeSources(windFromDeg, fire));
-}
-
-/**
- * Scale the editorial sectors so the apportionment still sums to 100%.
- *
- * The four static shares were written as a closed budget: 34 + 26 + 22 + 18.
- * Once stubble is measured it no longer takes its 34, but the other three kept
- * theirs - so a measured 0% left the rail reading 0 + 26 + 22 + 18 = 66%, and a
- * measured 12% left it at 78%. A source apportionment that does not close
- * invites exactly one question, and it is the wrong one.
- *
- * The estimates keep their relative weights and take whatever the measured
- * share leaves. They stay marked as estimates: this makes them consistent with
- * the measurement, not more precise than they were.
- */
-function closeTheBudget(sources: LivePlumeSource[]): LivePlumeSource[] {
-  const measured = sources.filter((x) => x.measured);
-  if (!measured.length) return sources;
-  const taken = measured.reduce((a, x) => a + x.share, 0);
-  const estimates = sources.filter((x) => !x.measured);
-  const weight = estimates.reduce((a, x) => a + x.share, 0);
-  if (weight <= 0) return sources;
-  const room = Math.max(0, 100 - taken);
-  return sources.map((x) =>
-    x.measured ? x : { ...x, share: Math.round((x.share / weight) * room) },
-  );
+  return rawPlumeSources(windFromDeg, fire).filter((s) => s.measured);
 }
 
 function rawPlumeSources(
@@ -190,9 +169,9 @@ function rawPlumeSources(
   });
 }
 
-/** "34%" for an estimate, "1.5% measured" for the real one. */
+/** The share, as the map and the rail both print it. */
 export function shareLabel(s: LivePlumeSource): string {
-  return s.measured ? `${s.share}%` : `~${s.share}% est.`;
+  return `${s.share}%`;
 }
 
 

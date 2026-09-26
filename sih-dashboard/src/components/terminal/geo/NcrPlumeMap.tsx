@@ -72,7 +72,17 @@ export function NcrPlumeMap({ frame }: { frame: TerminalFrame }) {
       className="size-full"
       style={{ background: 'transparent' }}
     >
-      <TileLayer url={TILE_URL} attribution={ATTRIB} maxZoom={19} />
+      {/* keepBuffer above the default 2: a focus pan crosses a screen's width
+          in under a second, and a tighter buffer means it arrives over blank
+          tiles. updateWhenZooming off so the layer waits for the zoom to land
+          instead of fetching a set it is about to throw away. */}
+      <TileLayer
+        url={TILE_URL}
+        attribution={ATTRIB}
+        maxZoom={19}
+        keepBuffer={4}
+        updateWhenZooming={false}
+      />
       <Fitter />
       <SelectionFocus selectedId={selectedId} />
       {layers.heatmap && <HeatOverlay frame={frame} field={field} />}
@@ -453,8 +463,44 @@ function Fitter() {
  */
 const FOCUS_ZOOM = 12;
 
-/** How long the flight takes, in seconds. Shorter where frames are scarce. */
-const FOCUS_DURATION = CHEAP_PINS ? 0.9 : 1.5;
+/**
+ * How long a move takes, in seconds.
+ *
+ * Was 1.5, which is where most of the clunk came from: a long flight gives the
+ * eye time to notice every frame the main thread misses, and the parabola
+ * `flyTo` traces pulls back out before it comes in, which on a map this small
+ * reads as a wobble rather than a journey.
+ */
+const FOCUS_DURATION = CHEAP_PINS ? 0.7 : 1;
+
+/**
+ * Move the map to a place, over the shortest animation that fits the move.
+ *
+ * Two cases, because Leaflet animates them with two different mechanisms.
+ *
+ * When only the centre changes - picking a second station while already zoomed
+ * in - `panTo` slides the map pane under a CSS transition. Nothing is
+ * reprojected and nothing is refetched; the compositor does the whole move.
+ *
+ * When the zoom changes too, it has to be `flyTo`. The obvious-looking
+ * alternative is an animated `setView`, which is the cheaper composited zoom -
+ * but Leaflet ends that animation on a hardcoded 250ms timer regardless of
+ * what CSS says, so it cannot be slowed down, and stretching the transition
+ * underneath it only gets the transform cut off part way. A quarter of a
+ * second across three zoom levels is a jump, not a zoom.
+ */
+function focus(map: L.Map, center: L.LatLng, zoom: number): void {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    map.setView(center, zoom, { animate: false });
+    return;
+  }
+  if (zoom === map.getZoom()) {
+    map.panTo(center, { duration: FOCUS_DURATION, easeLinearity: 0.25 });
+    return;
+  }
+  // `easeLinearity` is a pan option and is ignored here; flyTo eases itself.
+  map.flyTo(center, zoom, { duration: FOCUS_DURATION });
+}
 
 /**
  * Flies to whichever station is selected, from wherever the selection came.
@@ -504,10 +550,7 @@ function SelectionFocus({ selectedId }: { selectedId: string }) {
     if (lastReset.current !== resetAt) {
       lastReset.current = resetAt;
       focused.current = selectedId;
-      map.flyToBounds(FIT_BOUNDS, {
-        padding: [FIT_PADDING.x, FIT_PADDING.y],
-        duration: FOCUS_DURATION,
-      });
+      focus(map, FIT_BOUNDS.getCenter(), map.getBoundsZoom(FIT_BOUNDS, false, FIT_PADDING));
       return;
     }
     if (focused.current === selectedId) return;
@@ -515,20 +558,7 @@ function SelectionFocus({ selectedId }: { selectedId: string }) {
     if (!st) return;
     focused.current = selectedId;
 
-    const target = L.latLng(st.lat, st.lng);
-    const zoom = Math.max(map.getZoom(), FOCUS_ZOOM);
-
-    // Someone who has asked for less motion gets the same destination without
-    // the journey. `animate: false` rather than a fast flight: a 200ms lurch
-    // is the thing the preference is set to avoid.
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-      map.setView(target, zoom, { animate: false });
-      return;
-    }
-
-    // easeLinearity below Leaflet's 0.25 default lengthens the ease-out, so
-    // the last third of the flight glides in rather than stopping dead.
-    map.flyTo(target, zoom, { duration: FOCUS_DURATION, easeLinearity: 0.18 });
+    focus(map, L.latLng(st.lat, st.lng), Math.max(map.getZoom(), FOCUS_ZOOM));
   }, [map, selectedId, resetAt]);
 
   return null;

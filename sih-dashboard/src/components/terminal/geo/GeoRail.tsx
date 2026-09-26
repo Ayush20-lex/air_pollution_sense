@@ -39,7 +39,7 @@ function SourceAttribution({ frame }: { frame: TerminalFrame }) {
     <TelemetryCard className="space-y-3 p-5">
       <div className="flex items-center justify-between">
         <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Source Attribution</h3>
-        <Label>Last 24h</Label>
+        <Label>Measured only</Label>
       </div>
 
       <div className="space-y-2.5">
@@ -49,9 +49,6 @@ function SourceAttribution({ frame }: { frame: TerminalFrame }) {
               <span className="flex items-center gap-2">
                 <span className="size-2.5 rounded-full" style={{ background: s.color }} />
                 <span className="font-medium text-term-ink">{s.label}</span>
-                {/* The share itself carries "est." here, so a badge beside it
-                    said the same word twice. The map label has no room for the
-                    suffix and keeps its own mark instead. */}
               </span>
               <span className="font-mono font-bold" style={{ color: ink(s.color) }}>
                 {shareLabel(s)}
@@ -61,6 +58,16 @@ function SourceAttribution({ frame }: { frame: TerminalFrame }) {
             <Label className="mt-0.5 block">{s.detail}</Label>
           </div>
         ))}
+        {/* The industrial, vehicular and construction bars stood here and were
+            invented - see lib/terminal/plumes. What is left is whatever the
+            fire feed can actually account for, which on most days is a small
+            share of one source and sometimes nothing. Saying that plainly is
+            better than filling the card with three numbers nothing measured. */}
+        <p className="font-body text-[11px] leading-relaxed text-term-ink-variant">
+          {sources.length
+            ? 'Only transport this system can measure is apportioned. The rest of the load is local emission — traffic, industry and dust — which no feed here quantifies.'
+            : 'Nothing measurable is being transported into the basin this hour. The load is local emission, which no feed here quantifies.'}
+        </p>
       </div>
 
       <div className="flex items-center gap-2 border-t border-term-outline-variant/40 pt-2 font-mono text-[11px] font-bold text-term-primary">
