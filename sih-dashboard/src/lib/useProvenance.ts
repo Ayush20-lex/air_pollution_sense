@@ -179,24 +179,22 @@ export function useProvenance(): Provenance {
   const unconfirmed = liveStatus === 'offline';
   const aged = fetchAgeMs != null && fetchAgeMs >= STALE_AFTER_MS;
   const runStale = runAgeMs != null && runAgeMs >= RUN_STALE_AFTER_MS;
-  if (!unconfirmed && !aged && !runStale) return base;
 
   const fetchAge = fetchAgeMs == null ? null : formatAge(fetchAgeMs);
   const runAge = runAgeMs == null ? null : formatAge(runAgeMs);
 
-  // The run's own age leads when it is the thing that is wrong. "Issued 6d
-  // ago" is what a reader needs; that we re-fetched it a moment ago is true
-  // and beside the point.
-  if (runStale && !unconfirmed) {
-    return {
-      ...base,
-      label: `${base.short} · issued ${runAge} ago`,
-      detail:
-        base.detail +
-        ` — but this run was issued ${runAge} ago, so these figures describe ` +
-        'that hour rather than the present one.',
-      tone: 'stale',
-    };
+  // The run's own age no longer escalates the badge. It used to: a run older
+  // than RUN_STALE_AFTER_MS turned the header amber and appended "· issued 6d
+  // ago", which on an archive-replay deployment is permanently true and so
+  // permanently shouting. The fact itself is kept - it moves into the `title`
+  // the header already renders - so hovering still gives the run's age, but
+  // the badge reads on whether the backend is answering, which is the thing
+  // that actually changes.
+  const runNote =
+    runStale && runAge ? ` The run behind it was issued ${runAge} ago.` : '';
+
+  if (!unconfirmed && !aged) {
+    return runNote ? { ...base, detail: base.detail + runNote } : base;
   }
 
   return {

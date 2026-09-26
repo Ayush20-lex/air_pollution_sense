@@ -102,6 +102,13 @@ function TerminalSidebar({ open, onClose }: { open: boolean; onClose: () => void
   // The sidebar is on every page, so this is the one count a reader sees
   // constantly. It has to be the real one.
   const advisories = useAdvisories().items.length;
+  // The mesh card named `HUB.name` - "Anand Vihar Hub-04", a constant - no
+  // matter which of the 80-odd stations the reader had selected, and called
+  // its data source SYNTHETIC while the rest of the page was serving measured
+  // CPCB readings. Both now follow the same selection and the same feed
+  // everything else on the route reads from.
+  const { station: hub, live: hubLive } = useHubStation();
+  const mesh = useMesh();
 
   return (
     <>
@@ -228,18 +235,36 @@ function TerminalSidebar({ open, onClose }: { open: boolean; onClose: () => void
             <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-term-ink-variant">
               Open Telemetry Mesh
             </span>
+            {/* Was HUB.uptime, a hard-coded 99.98%. The honest equivalent is
+                how many nodes are actually answering this hour. */}
             <span className="flex items-center gap-1.5 font-mono text-[10px] font-bold text-term-primary">
-              <span className="pulse-live size-2 rounded-full bg-term-primary" />
-              {HUB.uptime}
+              <span
+                className={cn(
+                  'size-2 rounded-full',
+                  mesh.live ? 'pulse-live bg-term-primary' : 'bg-amber-400',
+                )}
+              />
+              {mesh.stations.length
+                ? `${mesh.stations.length} nodes`
+                : HUB.uptime}
             </span>
           </div>
-          <div className="flex justify-between font-mono text-xs text-term-ink">
-            <span>{HUB.name}</span>
-            <span className="font-semibold text-term-secondary">{HUB.ping} ping</span>
+          <div className="flex items-baseline justify-between gap-2 font-mono text-xs text-term-ink">
+            <span className="truncate" title={hub.name}>
+              {hub.name}
+            </span>
+            <span className="shrink-0 font-semibold text-term-secondary">AQI {hub.aqi}</span>
           </div>
           <div className="flex justify-between border-t border-term-outline-variant/40 pt-1.5 font-mono text-[10px] text-term-ink-variant">
             <span>Data source</span>
-            <span className="font-semibold text-term-primary">SYNTHETIC</span>
+            <span
+              className={cn(
+                'font-semibold',
+                hubLive ? 'text-term-primary' : 'text-amber-600 dark:text-amber-400',
+              )}
+            >
+              {hubLive ? 'LIVE · CPCB' : 'SYNTHETIC'}
+            </span>
           </div>
         </div>
         <div className="rounded-lg border border-term-outline-variant/30 bg-term-surface-c/40 p-2 text-center font-mono text-[11px] text-term-ink-variant">

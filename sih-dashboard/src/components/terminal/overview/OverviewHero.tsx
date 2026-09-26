@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { Check, HeartPulse, Hospital, Radio, Share2, Thermometer, Wind } from 'lucide-react';
 import { Label, Meter, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
-import { ADVISORY_TEXT, BIOMETRIC_IMPACTS, CPCB_SCALE, HUB } from '@/lib/terminal/content';
+import { ADVISORY_TEXT, CPCB_SCALE, HUB } from '@/lib/terminal/content';
+import { advisoryLevel, exposureRisks } from '@/lib/terminal/exposureRisk';
 import { aqiColor, bandForAqi } from '@/lib/terminal/bands';
 import { useHubStation, useMeshRange } from '@/lib/terminal/useMesh';
 import { isLive, isStale } from '@/lib/terminal/useMesh';
@@ -274,12 +275,17 @@ function MicroStat({ label, value, valueClass }: { label: string; value: string;
   );
 }
 
-/** Public health guidance and the biometric impact meters. */
+/** Public health guidance and the live exposure meters. */
 function HealthAdvisory() {
   // Severity hues are chosen to be read as fills; as ink on the light
   // surface they fail contrast badly. See useSeverityInk.
   const ink = useSeverityInk();
   const icons = [HeartPulse, Hospital, Thermometer, Wind];
+  // The four meters used to be constants in content.ts. They are now computed
+  // from this station's own published sub-indices, so they move with the feed
+  // and with the reader's selection - see lib/terminal/exposureRisk.
+  const { station, live } = useHubStation();
+  const risks = React.useMemo(() => exposureRisks(station), [station]);
   const [copied, setCopied] = React.useState<'idle' | 'ok' | 'fail'>('idle');
 
   /**
@@ -339,7 +345,7 @@ function HealthAdvisory() {
           Air Quality Advisory
         </h2>
         <span className="rounded border border-amber-500/40 bg-amber-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300">
-          Level 3 Caution
+          {advisoryLevel(station.aqi)}
         </span>
       </div>
 
@@ -349,13 +355,28 @@ function HealthAdvisory() {
       </p>
 
       <div className="flex flex-col gap-3 border-t border-term-outline-variant/40 pt-3">
-        <Label>Biometric Impact Threat Assessments</Label>
+        {/* Was "Biometric Impact Threat Assessments" - four words of menace
+            over four numbers that never changed. The heading now names what
+            the rows are and, beside it, the node they were computed from, so
+            the claim is checkable. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <Label className="text-term-ink">Who This Air Is Hurting · Live Exposure Index</Label>
+          <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-term-ink-variant">
+            <span
+              className={cn(
+                'size-1.5 rounded-full',
+                live ? 'pulse-live bg-term-primary' : 'bg-amber-400',
+              )}
+            />
+            {live ? station.name : 'demo values'}
+          </span>
+        </div>
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-          {BIOMETRIC_IMPACTS.map((b, i) => {
+          {risks.map((b, i) => {
             const Icon = icons[i % icons.length];
             return (
               <div
-                key={b.label}
+                key={b.id}
                 className="flex flex-col gap-2 rounded-xl border border-term-outline-variant/60 bg-term-surface-low p-2.5"
               >
                 <div className="flex items-center justify-between gap-2">
@@ -381,6 +402,11 @@ function HealthAdvisory() {
                     {b.pct}%
                   </span>
                   <Meter pct={b.pct} color={b.color} />
+                  {/* Which channels this row was actually built from. A health
+                      figure with no stated input is unfalsifiable. */}
+                  <span className="block font-mono text-[9px] uppercase tracking-wider text-term-outline">
+                    {b.driver}
+                  </span>
                 </div>
               </div>
             );

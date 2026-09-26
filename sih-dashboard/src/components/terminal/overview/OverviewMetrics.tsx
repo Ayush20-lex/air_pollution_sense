@@ -100,7 +100,7 @@ export function PollutantMatrix({ limit }: { limit?: number }) {
           limit ? (
             <SeeAll to="/terminal/matrices">All {all.length} channels</SeeAll>
           ) : (
-            <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-term-ink-variant">
+            <span className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-term-ink">
               <span className={cn('size-2 rounded-full', live ? 'bg-term-primary' : 'bg-amber-400')} />
               {live
                 ? `CPCB National AQI · ${measuredCount} of ${all.length} measured`

@@ -72,7 +72,7 @@ export function IntroScreen() {
   const interventions = useAppStore((s) => s.interventions);
   // The hour the clock is actually in, not the run's origin hour. See
   // useNowFrame: `frames[0]` pinned the rail to whenever the run was issued.
-  const { frame, index: nowIndex, covers: runCoversNow } = useNowFrame();
+  const { frame, index: nowIndex } = useNowFrame();
   // And for the quantities that are observed rather than modelled, the station
   // mesh rather than the run at all. Picking the right hour of a run whose
   // archive ends 2026-09-19 still yields six-day-old PM2.5; only the mesh is
@@ -337,15 +337,6 @@ export function IntroScreen() {
 
       {/* --- left telemetry rail ------------------------------------------ */}
       <div className="absolute left-5 top-1/2 z-20 hidden -translate-y-1/2 flex-col gap-4 sm:left-8 lg:flex">
-        {/* Said once, above the three, rather than on each: it is one fact
-            about the run they all come from. Only when the run's horizon has
-            been overtaken — a current run needs no caveat, and a caveat that
-            is always there stops being read. */}
-        {!runCoversNow && (
-          <div className="hud-label text-amber-700 dark:text-amber-400">
-            Last completed run &middot; horizon passed
-          </div>
-        )}
         <TelemetryStat
           label={now.live ? `PM2.5 · ${now.stations} STATIONS` : 'PM2.5 AVG'}
           value={(now.pm25 ?? frame.avgPm25).toFixed(0)}
