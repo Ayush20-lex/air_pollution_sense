@@ -68,6 +68,13 @@ export type MeshStation = {
    *  over, so a chart shows the hole instead of drawing across it. */
   hourly: Record<string, (number | null)[]>;
   reasons: string[];
+  /**
+   * Per-pollutant reasons a channel was not indexed, in CPCB's own arithmetic:
+   * `{"PM2.5": "15 valid hours, needs 16 for a 24-hourly average"}`. The
+   * backend has always sent this and nothing read it, so a station vanished
+   * from the index with only the station-level `reasons` to explain it.
+   */
+  dropped?: Record<string, string>;
   /** WAQI's own US-scale figure, present only on the live feed. */
   aqi_us?: number | null;
   /**
@@ -258,6 +265,13 @@ export type UnindexedStation = {
   pollutants: string[];
   /** CPCB's own words for why there is no index. */
   reason: string;
+  /** Every reason, where `reason` is only the first. */
+  reasons: string[];
+  /**
+   * Which channels fell short and by how much. This is the evidence behind
+   * `reason`: not "no index" but "15 of the 16 hours CPCB requires".
+   */
+  shortfalls: Record<string, string>;
   /**
    * The sub-indices it *did* produce, which are real measurements on the AQI
    * scale - Knowledge Park III was carrying O3 25 and CO 59. They are shown
@@ -384,6 +398,8 @@ export function mergeMesh(payload: MeshPayload): MergedMesh {
         lng: s.lon,
         pollutants: s.pollutants ?? [],
         reason: s.reasons?.[0] ?? 'no publishable index this hour',
+        reasons: s.reasons ?? [],
+        shortfalls: s.dropped ?? {},
         subIndices: s.sub_indices ?? {},
         freshness: s.freshness ?? (payload.source === 'waqi_live' ? 'live' : 'archive'),
       }),
