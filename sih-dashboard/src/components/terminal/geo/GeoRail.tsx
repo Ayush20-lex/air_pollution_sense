@@ -7,7 +7,7 @@ import { fetchStationForecast, type StationForecast } from '@/lib/forecastApi';
 import { DISPERSION, type TerminalFrame } from '@/lib/terminal/field';
 import { findById } from '@/lib/terminal/stations';
 import { livePlumeSources, shareLabel, useMeasuredWind } from '@/lib/terminal/plumes';
-import { useMesh } from '@/lib/terminal/useMesh';
+import { useHubStation, useMesh } from '@/lib/terminal/useMesh';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { compassName } from '@/lib/terminal/wind';
 import { useAppStore } from '@/store/useAppStore';
@@ -90,9 +90,18 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
   // Re-render when the theme flips; TERM values below are baked into SVG
   // attributes at render time and will not restyle themselves.
   useTermPalette();
-  const selectedId = useTerminalStore((s) => s.selectedId);
   const rollMs = useRollDuration();
-  const station = findById(useMesh().stations, selectedId);
+  // The hub, not the stored id - the same resolution the header's picker uses,
+  // and for the same reason.
+  //
+  // `selectedId` defaults to the curated master, and the live CPCB bulletin
+  // does not carry that station. So on first load `findById` returned nothing
+  // and this card returned null: the rail lost its largest panel, leaving 406
+  // pixels of empty column beside the map, and the page looked like it had a
+  // layout bug rather than a missing selection. The header did not show the
+  // problem because it already resolves through `useHubStation` and was
+  // quietly naming a different station than this card was looking for.
+  const { station } = useHubStation();
 
   // The node's own 72-hour line. The mesh-wide track on the overview is a
   // composite; this is the station a reader has actually selected.
