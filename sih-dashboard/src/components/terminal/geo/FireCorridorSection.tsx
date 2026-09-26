@@ -164,7 +164,15 @@ export function FireCorridorSection() {
                 </div>
               </div>
             </TelemetryCard>
-            <div className="lg:col-span-4">
+            {/* Capped to the map's own height from lg up, and scrolled inside.
+                `items-start` stopped the map *card* from stretching, but the
+                grid row is still as tall as its tallest child - an 858px table
+                beside a 542px map leaves 316px of empty page under the map,
+                which is the gap that was left. Bounding the table to the same
+                clamp the map uses makes the row exactly one map tall. Below lg
+                the two stack, where a nested scroll area would be a trap, so
+                the cap lifts. */}
+            <div className="lg:col-span-4 lg:max-h-[clamp(360px,60vh,620px)] lg:overflow-y-auto lg:pr-1">
               <FireHotspots data={data} />
             </div>
           </div>
