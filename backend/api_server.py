@@ -550,7 +550,8 @@ def _generate_forecast_tensor() -> tuple[torch.Tensor, bool]:
     return pred.cpu(), is_synthetic
 
 
-def _tensor_to_geojson(pred: torch.Tensor, step: int, channels: list[int]) -> dict:
+def _tensor_to_geojson(pred: torch.Tensor, step: int, channels: list[int],
+                       stride: int | None = None) -> dict:
     """
     Converts a single-step prediction grid to GeoJSON FeatureCollection.
     Each grid cell becomes a Point feature.
@@ -560,6 +561,8 @@ def _tensor_to_geojson(pred: torch.Tensor, step: int, channels: list[int]) -> di
     pred : (1, T, C, H, W) prediction tensor.
     step : Timestep index to extract.
     channels : List of channel indices to include as properties.
+    stride : Cell step. None keeps the historical 10x10 subsample; 1 returns
+        every cell at the model's own ~1.1 km resolution.
     """
     ch_names = ["pm25", "pm10", "o3", "nox", "u_wind", "v_wind",
                 "temp", "rh", "solar_irr", "pbl", "frp", "smoke"]
@@ -571,8 +574,13 @@ def _tensor_to_geojson(pred: torch.Tensor, step: int, channels: list[int]) -> di
     frame = pred[0, step].numpy()   # (C, H, W)
     features = []
 
-    # Subsample to 10×10 for fast GeoJSON (full grid = msgpack binary endpoint)
-    step_h, step_w = GRID_H // 10, GRID_W // 10
+    # `stride` 1 is every cell of the 70x80 field - the ~1.1 km resolution the
+    # model actually runs at, and what the dashboard draws its heat field from.
+    # The default 10x10 subsample stays for cheap callers: at stride 1 a
+    # single-channel step is ~5,600 features, which gzips to tens of KB, but
+    # asking for all twelve channels at once does not.
+    step_h = max(1, GRID_H // 10) if stride is None else max(1, stride)
+    step_w = max(1, GRID_W // 10) if stride is None else max(1, stride)
     for i in range(0, GRID_H, step_h):
         for j in range(0, GRID_W, step_w):
             props = {ch_names[c]: round(float(frame[c, i, j]) * norms[c], 2) for c in channels}
@@ -684,6 +692,10 @@ async def forecast_grid(
     step: int = Query(default=0, ge=0, le=71, description="Forecast hour offset (0–71)"),
     channels: str = Query(default="0,6,9,8", description="Comma-separated channel indices"),
     compress: bool = Query(default=True, description="gzip compress response"),
+    stride: int | None = Query(
+        default=None, ge=1, le=35,
+        description="Cell step: 1 = full 70x80 field (~1.1 km). Omit for the 10x10 subsample.",
+    ),
 ):
     """
     Returns the 72-hour forecast spatial grid for Delhi NCR as GeoJSON.
@@ -693,7 +705,7 @@ async def forecast_grid(
     - `compress`: Apply gzip compression (recommended for frontend).
     """
     cfg = get_settings()
-    cache_key = f"grid:{step}:{channels}"
+    cache_key = f"grid:{step}:{channels}:{stride}"
     cached = _cache_get(cache_key, cfg.cache_ttl_s)
     if cached:
         if compress:
@@ -714,7 +726,7 @@ async def forecast_grid(
         valid_from=now.isoformat(),
         valid_to=now.replace(hour=(now.hour + 71) % 24).isoformat(),
     )
-    geojson = _tensor_to_geojson(pred, step, ch_list)
+    geojson = _tensor_to_geojson(pred, step, ch_list, stride)
     geojson["meta"] = meta.model_dump()
     geojson["meta"]["data_mode"] = "synthetic" if is_synthetic else "live"
     geojson["meta"]["weights_loaded"] = _state.weights_loaded

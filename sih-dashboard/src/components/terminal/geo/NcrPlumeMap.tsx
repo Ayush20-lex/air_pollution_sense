@@ -32,6 +32,7 @@ import {
 import { stationHour } from '@/lib/terminal/meshApi';
 import { useMesh, useFreshStations, isStale } from '@/lib/terminal/useMesh';
 import { livePlumeSources, shareLabel, useMeasuredWind } from '@/lib/terminal/plumes';
+import { fetchModelGrid, type ModelGrid } from '@/lib/terminal/gridApi';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { TERM, useTermPalette, useSeverityInk } from '@/lib/terminal/palette';
 
@@ -590,6 +591,22 @@ function HeatOverlay({ frame, field }: { frame: TerminalFrame; field: TerminalFi
   const overlay = React.useRef<L.ImageOverlay | null>(null);
   const lut = React.useMemo(() => buildRampLut(), []);
 
+  // The model's own field, fetched only when it is the one being asked for.
+  // 5,600 cells per hour is cheap to draw and not cheap to fetch 72 times, so
+  // gridApi caches per step and this never runs for the observed fields.
+  const [grid, setGrid] = React.useState<ModelGrid | null>(null);
+  React.useEffect(() => {
+    if (field !== 'MODEL') return;
+    let alive = true;
+    setGrid(null);
+    void fetchModelGrid(frame.offset).then((g) => {
+      if (alive) setGrid(g);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [field, frame.offset]);
+
   React.useEffect(() => {
     const canvas = document.createElement('canvas');
     canvas.width = HEAT_W;
@@ -602,6 +619,28 @@ function HeatOverlay({ frame, field }: { frame: TerminalFrame; field: TerminalFi
 
     // --- accumulate intensity as greyscale ---
     ctx.clearRect(0, 0, HEAT_W, HEAT_H);
+
+    if (field === 'MODEL') {
+      // Cell by cell, not blob by blob. The observed fields interpolate
+      // between scattered stations, so they are drawn as overlapping radial
+      // gradients; the model already is a regular field, and painting each
+      // cell as its own rectangle shows exactly what it holds rather than a
+      // smoothed guess at it. Nothing to draw yet means keep the canvas empty
+      // - an interpolation of the stations here would be captioned "model".
+      if (!grid) return;
+      const cw = HEAT_W / grid.cols;
+      const chh = HEAT_H / grid.rows;
+      for (const c of grid.cells) {
+        const v = Math.min(1, Math.max(0, c.value / 120));
+        if (v <= 0.01) continue;
+        const x = ((c.lng - NCR_BOUNDS.west) / lngSpan) * HEAT_W;
+        const y = ((NCR_BOUNDS.north - c.lat) / latSpan) * HEAT_H;
+        ctx.fillStyle = `rgba(255,255,255,${v.toFixed(3)})`;
+        // +1 so neighbouring cells meet instead of leaving seams.
+        ctx.fillRect(x - cw / 2, y - chh / 2, cw + 1, chh + 1);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    } else {
     ctx.globalCompositeOperation = 'lighter';
     for (const st of stations) {
       // The frame can lag the mesh by one render; a node with no sample has
@@ -631,6 +670,7 @@ function HeatOverlay({ frame, field }: { frame: TerminalFrame; field: TerminalFi
       ctx.fill();
     }
     ctx.globalCompositeOperation = 'source-over';
+    }
 
     // --- map accumulated alpha through the dispersion ramp ---
     const img = ctx.getImageData(0, 0, HEAT_W, HEAT_H);
@@ -665,7 +705,7 @@ function HeatOverlay({ frame, field }: { frame: TerminalFrame; field: TerminalFi
         className: 'term-heat',
       }).addTo(map);
     }
-  }, [frame, field, map, lut, stations]);
+  }, [frame, field, map, lut, stations, grid]);
 
   // Strip the overlay when the layer is switched off or the map unmounts.
   React.useEffect(

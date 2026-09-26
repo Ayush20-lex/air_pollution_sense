@@ -4,6 +4,7 @@ import { Cloudy, Layers, MapPin, Spline, Waves, Wind } from 'lucide-react';
 import { TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { TERMINAL_FIELDS, dispersionGradientCss, type TerminalField } from '@/lib/terminal/bands';
 import type { TerminalFrame } from '@/lib/terminal/field';
+import { fetchModelGrid } from '@/lib/terminal/gridApi';
 import { TimelineTrack } from './TimelineTrack';
 import { cn } from '@/lib/utils';
 import { useTerminalStore, type TerminalLayer } from '@/store/useTerminalStore';
@@ -39,6 +40,19 @@ export function GeoMapPanel({
   const layers = useTerminalStore((s) => s.layers);
   const toggleLayer = useTerminalStore((s) => s.toggleLayer);
   const field = useTerminalStore((s) => s.field);
+  // Only to caption the model field with the run it came from; the overlay
+  // fetches and draws it independently and gridApi caches the request.
+  const [modelRun, setModelRun] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (field !== 'MODEL') return;
+    let alive = true;
+    void fetchModelGrid(frame.offset).then((g) => {
+      if (alive) setModelRun(g?.issuedAt ?? null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [field, frame.offset]);
   const setField = useTerminalStore((s) => s.setField);
 
   return (
@@ -113,7 +127,22 @@ export function GeoMapPanel({
             {/* The grid is 70x80 over a 78 km domain, so a cell is about a
                 kilometre. "250 m" was neither the grid nor the canvas (which
                 draws at roughly 100 m a pixel and adds no information). */}
-            <div>IDW interpolation · ~1 km grid</div>
+            {/* The model field is not an interpolation of anything and does
+                not describe now, so it says neither. Its run origin matters:
+                on an archive-replay deployment the run can be days behind the
+                clock, which is why its values will not match the live pins. */}
+            {field === 'MODEL' ? (
+              <>
+                <div>Forecast tensor · 70×80 · ~1.1 km cells</div>
+                <div>
+                  {modelRun
+                    ? `run issued ${new Date(modelRun).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })} IST`
+                    : 'loading the run…'}
+                </div>
+              </>
+            ) : (
+              <div>IDW interpolation · ~1 km grid</div>
+            )}
             <div>28.28–28.92°N · 76.82–77.62°E</div>
           </div>
         </div>
