@@ -74,6 +74,7 @@ export function NcrPlumeMap({ frame }: { frame: TerminalFrame }) {
     >
       <TileLayer url={TILE_URL} attribution={ATTRIB} maxZoom={19} />
       <Fitter />
+      <SelectionFocus selectedId={selectedId} />
       {layers.heatmap && <HeatOverlay frame={frame} field={field} />}
       {layers.contours && <IsoContours frame={frame} />}
       {layers.tracks && <SourceRibbons />}
@@ -441,6 +442,98 @@ function Fitter() {
   return null;
 }
 
+/**
+ * The zoom a picked station is flown to.
+ *
+ * 12 of a possible 13. Far enough in that the reader lands on a neighbourhood
+ * rather than the basin, and one step short of the maximum so there is still
+ * somewhere to go by hand. Also the zoom at which usePinDensity stops having
+ * to collapse this part of the mesh into dots, so the pins around the one you
+ * picked come back as labelled cards on arrival.
+ */
+const FOCUS_ZOOM = 12;
+
+/** How long the flight takes, in seconds. Shorter where frames are scarce. */
+const FOCUS_DURATION = CHEAP_PINS ? 0.9 : 1.5;
+
+/**
+ * Flies to whichever station is selected, from wherever the selection came.
+ *
+ * One effect covers both routes into it because both go through the same
+ * store: tapping a pin calls `select(s.id)`, and so does the header's picker
+ * and the command palette. A `MapFocus` component existed for the second case
+ * and was never mounted anywhere, so neither one moved the map at all - you
+ * picked a station from a list of eighty and the map stayed exactly where it
+ * was, with the selection somewhere off screen.
+ *
+ * Three things it deliberately does not do.
+ *
+ * It does not fire on mount. The map opens fitted to the NCR domain and a
+ * flight starting in the same frame as `fitBounds` fights it; the reader would
+ * watch the map settle and then immediately leave. Only a selection *change*
+ * moves it.
+ *
+ * It never zooms out. `Math.max` against the current zoom means picking a
+ * second station while you are in close pans across at the zoom you chose,
+ * rather than yanking you back out to 12 each time.
+ *
+ * It does not re-fly when the mesh refreshes. The station list is replaced
+ * every two minutes and reading it through a ref keeps it out of the
+ * dependencies - otherwise the map would fly to the current selection, unasked,
+ * every time the feed came back.
+ */
+function SelectionFocus({ selectedId }: { selectedId: string }) {
+  const map = useMap();
+  const stations = useFreshStations();
+  const stationsRef = React.useRef(stations);
+  stationsRef.current = stations;
+  // What this component has already flown to, seeded with whatever is
+  // selected at mount. Comparing identities rather than counting runs: a
+  // "have I run before" flag looks equivalent and is not, because StrictMode
+  // mounts every effect twice in development - the first pass set the flag,
+  // the second sailed past it, and the map flew to the default selection the
+  // moment the page opened, fighting the fitBounds it had just done.
+  const focused = React.useRef(selectedId);
+  // Reset restores the selection as well, and that arrives here as an ordinary
+  // change. Without this the button labelled "reset mesh view" would fly the
+  // camera *in*, to the master station, which is the opposite of what it says.
+  const resetAt = useTerminalStore((s) => s.resetAt);
+  const lastReset = React.useRef(resetAt);
+
+  React.useEffect(() => {
+    if (lastReset.current !== resetAt) {
+      lastReset.current = resetAt;
+      focused.current = selectedId;
+      map.flyToBounds(FIT_BOUNDS, {
+        padding: [FIT_PADDING.x, FIT_PADDING.y],
+        duration: FOCUS_DURATION,
+      });
+      return;
+    }
+    if (focused.current === selectedId) return;
+    const st = stationsRef.current.find((s) => s.id === selectedId);
+    if (!st) return;
+    focused.current = selectedId;
+
+    const target = L.latLng(st.lat, st.lng);
+    const zoom = Math.max(map.getZoom(), FOCUS_ZOOM);
+
+    // Someone who has asked for less motion gets the same destination without
+    // the journey. `animate: false` rather than a fast flight: a 200ms lurch
+    // is the thing the preference is set to avoid.
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      map.setView(target, zoom, { animate: false });
+      return;
+    }
+
+    // easeLinearity below Leaflet's 0.25 default lengthens the ease-out, so
+    // the last third of the flight glides in rather than stopping dead.
+    map.flyTo(target, zoom, { duration: FOCUS_DURATION, easeLinearity: 0.18 });
+  }, [map, selectedId, resetAt]);
+
+  return null;
+}
+
 type PinDensity = 'full' | 'compact' | 'dot';
 
 /**
@@ -545,16 +638,6 @@ function usePinDensity(selectedId: string | null): Record<string, PinDensity> {
     }
     return out;
   }
-}
-
-/** Recentres and zooms when a station is picked from a list elsewhere. */
-export function MapFocus({ station }: { station?: Station }) {
-  const map = useMap();
-  React.useEffect(() => {
-    if (!station) return;
-    map.flyTo([station.lat, station.lng], Math.max(map.getZoom(), 11), { duration: 0.8 });
-  }, [map, station]);
-  return null;
 }
 
 /**
