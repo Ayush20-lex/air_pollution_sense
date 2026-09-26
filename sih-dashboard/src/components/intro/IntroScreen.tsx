@@ -337,15 +337,6 @@ export function IntroScreen() {
 
       {/* --- left telemetry rail ------------------------------------------ */}
       <div className="absolute left-5 top-1/2 z-20 hidden -translate-y-1/2 flex-col gap-4 sm:left-8 lg:flex">
-        {/* Said once, above the three, rather than on each: it is one fact
-            about the run they all come from. Only when the run's horizon has
-            been overtaken — a current run needs no caveat, and a caveat that
-            is always there stops being read. */}
-        {!runCoversNow && (
-          <div className="hud-label text-amber-700 dark:text-amber-400">
-            Last completed run &middot; horizon passed
-          </div>
-        )}
         <TelemetryStat
           label={now.live ? `PM2.5 · ${now.stations} STATIONS` : 'PM2.5 AVG'}
           value={(now.pm25 ?? frame.avgPm25).toFixed(0)}
@@ -354,6 +345,21 @@ export function IntroScreen() {
           delta={now.live ? undefined : signed(pmTrend)}
           delay={0.15}
         />
+        {/* Above the two modelled rows rather than the whole rail, and below
+            PM2.5 deliberately. It used to head the list, back when all three
+            came from the run and it was one fact about all of them. PM2.5 is
+            measured now, so a caveat sitting over it would age the one figure
+            here that is current. Said once rather than on each row, and only
+            when the horizon has actually been overtaken — a caveat that is
+            always there stops being read.
+
+            It carries when the two rows below are from, which their own
+            "· forecast" labels say they are but not how old. */}
+        {!runCoversNow && (
+          <div className="hud-label text-amber-700 dark:text-amber-400">
+            Forecast &middot; last completed run, horizon passed
+          </div>
+        )}
         <TelemetryStat
           label="PBL Height · forecast"
           value={String(frame.avgPbl)}
