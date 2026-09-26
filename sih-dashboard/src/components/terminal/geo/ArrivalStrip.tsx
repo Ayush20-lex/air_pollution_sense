@@ -100,6 +100,15 @@ export function ArrivalStrip({ data }: { data: FireCorridor }) {
   // The earliest arrival has to come from an inbound cluster for the same
   // reason the path does: a fire already inside the domain has nothing to
   // travel, and its four hours would headline the panel over a real plume.
+  // The share is recomputed over inbound clusters rather than taken from the
+  // payload's `carrying_frp_share_pct`, which counts anything the flow moves
+  // including fires already inside NCR - "0 inbound" beside "20.7% carried"
+  // is two true numbers that cannot both be about the same thing.
+  const inboundShare = Math.round(
+    data.clusters
+      .filter((c) => c.transit.carrying === true && c.stateApprox !== 'Delhi NCR')
+      .reduce((a, c) => a + c.frpSharePct, 0) * 10,
+  ) / 10;
   const inboundEtas = data.clusters
     .filter((c) => c.transit.carrying === true && c.stateApprox !== 'Delhi NCR')
     .map((c) => c.transit)
@@ -178,7 +187,11 @@ export function ArrivalStrip({ data }: { data: FireCorridor }) {
         <Figure
           label="Clusters inbound"
           value={`${inbound} / ${data.clusters.length}`}
-          sub={`${t.carryingFrpSharePct}% of corridor radiative power — a share of the burning, not of Delhi's PM2.5`}
+          sub={
+            inbound > 0
+              ? `${inboundShare}% of corridor radiative power — a share of the burning, not of Delhi's PM2.5`
+              : 'nothing upwind is being carried into the domain'
+          }
         />
         <Figure
           label="Detections"
