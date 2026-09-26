@@ -4,6 +4,7 @@ import { BAND_ORDER, fetchCityHistory, type CityHistory } from '@/lib/historyApi
 import { SEVERITY } from '@/lib/tokens';
 import { isLive, useFreshStations } from '@/lib/terminal/useMesh';
 import { POLLUTANTS } from '@/lib/terminal/content';
+import { useCorrelatorChannels } from '@/lib/terminal/useCorrelatorChannels';
 import { cn } from '@/lib/utils';
 import { ForecastTrack, type ForecastPoint } from './ForecastTrack';
 import { useAppStore } from '@/store/useAppStore';
@@ -338,9 +339,20 @@ function Correlator() {
   // Re-render when the theme flips; TERM values below are baked into SVG
   // attributes at render time and will not restyle themselves.
   useTermPalette();
-  const [active, setActive] = React.useState<Record<string, boolean>>(() =>
-    Object.fromEntries(POLLUTANTS.map((p, i) => [p.id, i < 4])),
+  // Stable identity, so the hook's memo is not invalidated every render.
+  const ids = React.useMemo(() => POLLUTANTS.map((p) => p.id), []);
+  const { channels, stationCount, kind } = useCorrelatorChannels(ids);
+
+  // Default to what is actually measured rather than the first four listed.
+  // The old default was positional and the fifth onward were fixtures, so it
+  // happened to pick four drawable channels; on real data the measured set is
+  // whatever the archive carries this hour.
+  const [active, setActive] = React.useState<Record<string, boolean> | null>(null);
+  const measuredIds = React.useMemo(
+    () => ids.filter((id) => channels[id]?.measured),
+    [ids, channels],
   );
+  const shown = active ?? Object.fromEntries(measuredIds.map((id) => [id, true]));
 
   // The exposure histogram shares this card's grid row, so it reads the archive
   // here rather than fetching a second copy.
@@ -360,6 +372,27 @@ function Correlator() {
         color: bandColor[b] ?? TERM.outline,
       }))
     : [];
+  // First and last scored day, as "18 Aug – 16 Sep". Read off `days` rather
+  // than computed back from window_days: the backend drops thin days, so the
+  // window it returns is not simply the last N dates.
+  const windowRange = React.useMemo(() => {
+    const d = history?.days;
+    if (!d?.length) return null;
+    const fmt = (iso: string) => {
+      const t = Date.parse(iso);
+      return Number.isNaN(t)
+        ? null
+        : new Intl.DateTimeFormat('en-GB', {
+            day: 'numeric',
+            month: 'short',
+            timeZone: 'Asia/Kolkata',
+          }).format(t);
+    };
+    const a = fmt(d[0].date);
+    const b = fmt(d[d.length - 1].date);
+    return a && b ? `${a} – ${b}` : null;
+  }, [history]);
+
   const total = bands.reduce((a, b) => a + b.days, 0);
   // CPCB's sensitive-group advice begins at Moderate.
   const aboveSensitive = bands
@@ -372,55 +405,145 @@ function Correlator() {
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
       <TelemetryCard className="space-y-3 p-5 lg:col-span-8">
-        <SectionHead title="Multi-Pollutant Correlator" sub="Normalised channels over the last 24 hours" />
+        <SectionHead
+          title="Multi-Pollutant Correlator"
+          // Says which 24 hours, because it is not always this one. The
+          // instantaneous series come from the archive half of the mesh; the
+          // live half publishes a rolling mean with no shape left in it.
+          sub={
+            stationCount
+              ? `Normalised channels · ${stationCount} stations · ` +
+                (kind === 'hourly'
+                  ? "the archive's last 24 measured hours"
+                  : 'last 24 hours, 24h rolling mean')
+              : 'Normalised channels over the last 24 hours'
+          }
+        />
 
         <div className="flex flex-wrap gap-1.5">
           {POLLUTANTS.map((p) => {
-            const on = active[p.id];
+            const ch = channels[p.id];
+            const measured = !!ch?.measured;
+            const on = measured && !!shown[p.id];
             return (
               <label
                 key={p.id}
+                // Kept on screen when the archive has no series for it, rather
+                // than dropped. A missing channel is a fact about the feed -
+                // CPCB publishes no hourly NH3, Pb, SO2 or CO here - and a
+                // toggle that quietly disappears reads as a shorter list, not
+                // as an absence.
+                title={
+                  measured
+                    ? `${p.name} · city mean of ${ch.stations} stations`
+                    : `${p.name} — the archive carries no hourly series for this pollutant`
+                }
                 className={cn(
-                  'flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors',
-                  on ? 'text-term-ink' : 'border-term-outline-variant/60 bg-term-surface-c/80 text-term-ink-variant',
+                  'flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors',
+                  !measured && 'cursor-not-allowed border-term-outline-variant/40 bg-term-surface-c/40 text-term-outline opacity-60',
+                  measured && on && 'cursor-pointer text-term-ink',
+                  measured && !on && 'cursor-pointer border-term-outline-variant/60 bg-term-surface-c/80 text-term-ink-variant',
                 )}
-                style={on ? { borderColor: `${p.color}80`, background: `${p.color}1f` } : undefined}
+                style={on ? { borderColor: `${ch.color}80`, background: `${ch.color}1f` } : undefined}
               >
                 <input
                   type="checkbox"
                   checked={on}
-                  onChange={() => setActive((a) => ({ ...a, [p.id]: !a[p.id] }))}
-                  className="size-3 cursor-pointer rounded border-term-outline bg-transparent text-term-primary focus:ring-0 focus:ring-offset-0"
+                  disabled={!measured}
+                  onChange={() =>
+                    setActive((a) => {
+                      const base = a ?? Object.fromEntries(measuredIds.map((id) => [id, true]));
+                      return { ...base, [p.id]: !base[p.id] };
+                    })
+                  }
+                  className="size-3 cursor-pointer rounded border-term-outline bg-transparent text-term-primary focus:ring-0 focus:ring-offset-0 disabled:cursor-not-allowed"
                 />
-                <span className="size-2 rounded-full" style={{ background: p.color }} />
+                <span
+                  className="size-2 rounded-full"
+                  style={{ background: measured ? ch.color : 'transparent', boxShadow: measured ? undefined : `inset 0 0 0 1px ${TERM.outline}` }}
+                />
                 {p.symbol}
               </label>
             );
           })}
         </div>
 
+        {/* Nothing measured. Says so, rather than leaving an empty grid that
+            reads as a chart that failed to draw. This panel used to fall back
+            to hand-written constants, so it was never empty and never honest;
+            an offline mesh now shows its own absence. */}
+        {!measuredIds.length && (
+          <p className="py-10 text-center font-mono text-xs text-term-ink-variant">
+            No hourly series in the mesh right now — the correlator needs a
+            station reporting readings by the hour.
+          </p>
+        )}
+
+        {!!measuredIds.length && (
         <svg viewBox={`0 0 ${w} ${h}`} className="w-full" role="img" aria-label="Correlated pollutant channels">
           {[0.25, 0.5, 0.75].map((f) => (
             <line key={f} x1="0" y1={h * f} x2={w} y2={h * f} stroke={TERM.outlineVariant} strokeWidth="1" strokeDasharray="4 6" />
           ))}
-          {POLLUTANTS.filter((p) => active[p.id]).map((p) => {
-            const min = Math.min(...p.trend);
-            const max = Math.max(...p.trend);
+
+          {/* Missing hours, marked on the baseline, the way MeasuredTrend
+              marks them. Breaking the line at a gap is only half the job: an
+              unexplained two-point stub floating clear of the rest reads as a
+              rendering fault rather than as an hour nothing reported. The tick
+              underneath says which it is. Drawn from the longest channel,
+              since the gaps are the archive's hours and common to all. */}
+          {(() => {
+            const ref = POLLUTANTS.map((p) => channels[p.id])
+              .filter((c) => c?.measured)
+              .sort((a, b) => b.series.length - a.series.length)[0];
+            if (!ref) return null;
+            const step = w / Math.max(ref.series.length, 1);
+            return ref.series.map((v, i) =>
+              v == null ? (
+                <rect
+                  key={`gap-${i}`}
+                  x={(i / Math.max(ref.series.length - 1, 1)) * w - step / 2}
+                  y={h - 3}
+                  width={step}
+                  height={3}
+                  fill={TERM.outlineVariant}
+                />
+              ) : null,
+            );
+          })()}
+          {POLLUTANTS.filter((p) => channels[p.id]?.measured && shown[p.id]).map((p) => {
+            const series = channels[p.id].series;
+            const read = series.filter((v): v is number => v != null);
+            const min = Math.min(...read);
+            const max = Math.max(...read);
             const span = max - min || 1;
-            const d = p.trend
-              .map((v, i) => {
-                const px = (i / (p.trend.length - 1)) * w;
+
+            // One subpath per run of consecutive readings, so an hour nothing
+            // reported leaves a gap instead of a straight line drawn across
+            // it. The mesh sends those hours as null on purpose; joining them
+            // would invent the measurement it declined to make up.
+            const d = series
+              .reduce<string[]>((runs, v, i) => {
+                if (v == null) {
+                  runs.push('');
+                  return runs;
+                }
+                const px = (i / Math.max(series.length - 1, 1)) * w;
                 // Each channel is normalised so shapes can be compared.
                 const py = h - 16 - ((v - min) / span) * (h - 36);
-                return `${i === 0 ? 'M' : 'L'}${px.toFixed(1)},${py.toFixed(1)}`;
-              })
+                const last = runs[runs.length - 1];
+                const cmd = `${last ? 'L' : 'M'}${px.toFixed(1)},${py.toFixed(1)}`;
+                runs[runs.length - 1] = last ? `${last} ${cmd}` : cmd;
+                return runs;
+              }, [''])
+              .filter(Boolean)
               .join(' ');
+
             return (
               <path
                 key={p.id}
                 d={d}
                 fill="none"
-                stroke={p.color}
+                stroke={channels[p.id].color}
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -429,6 +552,7 @@ function Correlator() {
             );
           })}
         </svg>
+        )}
       </TelemetryCard>
 
       <TelemetryCard className="space-y-3 p-5 lg:col-span-4">
@@ -436,7 +560,15 @@ function Correlator() {
           <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">
             {history ? `${history.window_days}-Day Exposure Frequency` : 'Exposure Frequency'}
           </h3>
-          <Label>Days spent in each CPCB band, from the archive</Label>
+          {/* Names the window. The panel was already reading the archive, but
+              said only "from the archive" - and a distribution that is real,
+              yet carries no date and happens to sit entirely in two bands,
+              reads as a fixture. The dates are the answer to "is this live":
+              they move as the archive does. */}
+          <Label>
+            Days spent in each CPCB band
+            {windowRange ? ` · ${windowRange}` : ', from the archive'}
+          </Label>
         </div>
         {/* Was five literals - 2/6/13/7/2 - summing to thirty under a heading
             that promised thirty days of history nothing had. Bands with no days
