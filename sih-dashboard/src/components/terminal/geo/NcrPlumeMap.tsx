@@ -1063,18 +1063,24 @@ function SourceRibbons() {
  * swallowed by a label sitting over it - the pins carry the readings and the
  * selection, and these carry nothing.
  *
- * They also thin out rather than pile up. At the fitted NCR view the nine
- * names overlapped each other fifteen ways and every one of them sat across a
- * station pin - the centre of Delhi holds four of them within a few
- * kilometres, and the mesh is densest over exactly that ground. Zoom
- * thresholds were the first attempt and they are the wrong tool: the right
- * threshold depends on the viewport, the pan position and how many stations
- * are reporting, none of which is known when the number is written.
+ * The dot is always drawn; the name is what comes and goes. That is the same
+ * bargain the station pins strike - a pin zoomed out is a dot with its
+ * reading withheld, not an absent station - and it matters more here, because
+ * a landmark that vanishes entirely takes the orientation with it. Zoomed
+ * out, nine dots still say "there are places here"; zoomed in, they say which.
  *
- * So the layer lays labels out instead. Each is projected to a pixel box,
- * taken in rank order, and kept only if it clears every box already placed -
- * greedy, which is not optimal but is stable, and stability matters more here
- * because an unstable layout flickers names in and out as the map pans.
+ * Two things withhold a name. The first is the zoom, tested against the zoom
+ * `Fitter` fits the region to and asked of the map rather than written down,
+ * exactly as usePinDensity does it: a literal would have to guess, because
+ * the fit depends on the container, and the constant that reads as "one step
+ * out" on a wide screen is the opening view on a narrow one.
+ *
+ * The second is crowding. Past that zoom the names are laid out - projected
+ * to pixel boxes, taken in rank order, each kept only if it clears every box
+ * already placed - and one that does not fit falls back to its dot rather
+ * than disappearing. Greedy, which is not optimal but is stable, and
+ * stability matters more here because an unstable layout flickers names in
+ * and out as the map pans.
  *
  * Station pins reserve their space first, each at the size its own density
  * draws it - 86x48 for a labelled pin down to 16x16 for a dot - taken from
@@ -1126,10 +1132,15 @@ function LandmarkLabels({ selectedId }: { selectedId: string | null }) {
     };
   }, [map]);
 
-  const shown = React.useMemo(() => {
+  const labelled = React.useMemo(() => {
     // `view` is read so the memo re-runs on pan and zoom; the projection below
     // depends on the map's state rather than on any value in this scope.
     void view;
+
+    // Zoomed out past the opening view: dots only, no exceptions. See above.
+    if (map.getZoom() < map.getBoundsZoom(FIT_BOUNDS, false, FIT_PADDING)) {
+      return new Map<string, boolean>();
+    }
 
     const placed: { x: number; y: number; w: number; h: number }[] = [];
 
@@ -1147,7 +1158,9 @@ function LandmarkLabels({ selectedId }: { selectedId: string | null }) {
       placed.push({ x: pt.x - pw / 2, y: pt.y - ph, w: pw, h: ph });
     }
 
-    const keep: { l: (typeof LANDMARKS)[number]; flip: boolean }[] = [];
+    // id -> flipped. Absent means the name did not fit and the place keeps
+    // only its dot.
+    const keep = new Map<string, boolean>();
     for (const l of [...LANDMARKS].sort((a, b) => a.rank - b.rank)) {
       const pt = map.latLngToContainerPoint([l.lat, l.lon]);
       const w = labelWidth(l.label);
@@ -1163,14 +1176,14 @@ function LandmarkLabels({ selectedId }: { selectedId: string | null }) {
           : null;
       if (!fits) continue;
       placed.push(fits);
-      keep.push({ l, flip: fits === left });
+      keep.set(l.id, fits === left);
     }
     return keep;
   }, [map, stations, density, view]);
 
   return (
     <>
-      {shown.map(({ l, flip }) => (
+      {LANDMARKS.map((l) => (
         <Marker
           key={l.id}
           position={[l.lat, l.lon]}
@@ -1180,14 +1193,18 @@ function LandmarkLabels({ selectedId }: { selectedId: string | null }) {
           // latitude by default, which would let a southern landmark cover a
           // northern station.
           zIndexOffset={-1000}
-          icon={buildLandmark(l.label, flip)}
+          icon={buildLandmark(
+            l.label,
+            labelled.has(l.id),
+            labelled.get(l.id) === true,
+          )}
         />
       ))}
     </>
   );
 }
 
-function buildLandmark(label: string, flip: boolean) {
+function buildLandmark(label: string, named: boolean, flip: boolean) {
   return L.divIcon({
     className: 'term-landmark-wrap',
     // Sized to the text rather than a box: the anchor is the dot, and the
@@ -1195,9 +1212,14 @@ function buildLandmark(label: string, flip: boolean) {
     iconSize: [0, 0],
     iconAnchor: [0, 0],
     html:
-      `<span class="term-landmark${flip ? ' term-landmark-flip' : ''}">` +
+      `<span class="term-landmark${named ? (flip ? ' term-landmark-flip' : '') : ' term-landmark-bare'}">` +
       '<span class="term-landmark-dot"></span>' +
-      `<span class="term-landmark-text">${label}</span>` +
+      // `title` on the dot so a place still answers for itself when its name
+      // is withheld - the marker is inert to clicks, but a tooltip is the one
+      // affordance that costs nothing and needs no hit testing.
+      (named
+        ? `<span class="term-landmark-text">${label}</span>`
+        : `<span class="term-landmark-sr">${label}</span>`) +
       '</span>',
   });
 }

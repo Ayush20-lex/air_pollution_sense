@@ -558,6 +558,30 @@
   transform: translate(6px, -50%);
 }
 
+/* Name withheld - zoomed out, or no room for it - so the dot is all there is.
+   It centres on the coordinate instead of standing off to one side: the
+   offset exists to keep a name clear of the point it labels, and with no name
+   it would just put the dot in the wrong place. Slightly larger, because it
+   is now the only thing marking the spot. */
+.term-landmark-bare {
+  transform: translate(-50%, -50%);
+}
+.term-landmark-bare .term-landmark-dot {
+  width: 6px;
+  height: 6px;
+}
+
+/* The name, kept for assistive tech when it is not drawn. A place should still
+   answer for itself on a screen reader at any zoom. */
+.term-landmark-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* Placed to the left instead, when the layout found no room on the right.
    The row reverses so the dot still sits against the coordinate and the name
    runs away from it, rather than the whole chip shifting and leaving the dot
