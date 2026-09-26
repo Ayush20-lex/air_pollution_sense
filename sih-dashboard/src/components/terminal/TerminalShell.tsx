@@ -267,9 +267,6 @@ function TerminalSidebar({ open, onClose }: { open: boolean; onClose: () => void
             </span>
           </div>
         </div>
-        <div className="rounded-lg border border-term-outline-variant/30 bg-term-surface-c/40 p-2 text-center font-mono text-[11px] text-term-ink-variant">
-          PUBLIC ACCESS TERMINAL • READ-ONLY
-        </div>
       </div>
       </aside>
     </>

@@ -535,3 +535,82 @@
   line-height: 1.3;
   white-space: nowrap;
 }
+
+/* ---- Place labels, for orienting on the plume ----
+ *
+ * Quiet on purpose. These sit under a heat surface and a mesh of station pins
+ * that carry the actual readings, and a label competing with those would be
+ * the map telling a reader to look at the one thing on it that is not a
+ * measurement. So: a small dot at the coordinate, the name beside it, and a
+ * backing plate only so the text survives the plume's brightest bands.
+ *
+ * pointer-events none as well as Leaflet's `interactive: false` - one keeps
+ * them out of hit testing, the other keeps the cursor from changing over
+ * them, and a reader should never feel there is something here to click. */
+.term-landmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  /* Hangs off the anchor rather than centring on it, so the dot marks the
+     place and the name never covers it. */
+  transform: translate(6px, -50%);
+}
+
+/* Name withheld - zoomed out, or no room for it - so the dot is all there is.
+   It centres on the coordinate instead of standing off to one side: the
+   offset exists to keep a name clear of the point it labels, and with no name
+   it would just put the dot in the wrong place. Slightly larger, because it
+   is now the only thing marking the spot. */
+.term-landmark-bare {
+  transform: translate(-50%, -50%);
+}
+.term-landmark-bare .term-landmark-dot {
+  width: 6px;
+  height: 6px;
+}
+
+/* The name, kept for assistive tech when it is not drawn. A place should still
+   answer for itself on a screen reader at any zoom. */
+.term-landmark-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Placed to the left instead, when the layout found no room on the right.
+   The row reverses so the dot still sits against the coordinate and the name
+   runs away from it, rather than the whole chip shifting and leaving the dot
+   adrift. */
+.term-landmark-flip {
+  flex-direction: row-reverse;
+  transform: translate(calc(-100% - 6px), -50%);
+}
+
+.term-landmark-dot {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--t-ink-variant);
+  box-shadow: 0 0 0 2px var(--t-bg);
+}
+
+.term-landmark-text {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--t-glass-bg);
+  color: var(--t-ink-variant);
+  font-family: var(--font-mono), monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  /* The plate is the legibility, not a border: a bordered chip at this size
+     reads as a control, and these are not clickable. */
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+}

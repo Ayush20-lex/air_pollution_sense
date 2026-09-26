@@ -11,7 +11,7 @@ import { MASTER_STATION } from '@/lib/terminal/stations';
  * none of which this read-only public surface has.
  */
 
-export type TerminalLayer = 'heatmap' | 'contours' | 'tracks' | 'wind' | 'pins';
+export type TerminalLayer = 'heatmap' | 'contours' | 'tracks' | 'wind' | 'pins' | 'landmarks';
 export type PlaybackRate = 1 | 4 | 12;
 
 type TerminalState = {
@@ -66,6 +66,10 @@ const DEFAULT_LAYERS: Record<TerminalLayer, boolean> = {
   tracks: true,
   wind: true,
   pins: true,
+  // On by default: the layer exists to tell a reader where they are, and a
+  // reader who does not know where they are will not think to go looking for
+  // a control that would tell them.
+  landmarks: true,
 };
 
 const LAST_FRAME = FRAME_COUNT - 1;
