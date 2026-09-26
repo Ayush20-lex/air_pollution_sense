@@ -137,9 +137,14 @@ export function FireCorridorSection() {
       {data && data.available && (
         <>
           <ArrivalStrip data={data} />
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+          {/* items-start, or the grid stretches both columns to the taller
+              one: the hotspot table ran to 923px and the map card was
+              stretched to match it, leaving 560px of empty card under a 363px
+              map. The map keeps its own height and the card stops where the
+              map stops. */}
+          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
             <TelemetryCard className="overflow-hidden p-0 lg:col-span-8">
-              <div className="term-map relative h-[clamp(320px,52vh,560px)]">
+              <div className="term-map relative h-[clamp(360px,60vh,620px)]">
                 {near ? (
                   <CorridorMap data={data} />
                 ) : (

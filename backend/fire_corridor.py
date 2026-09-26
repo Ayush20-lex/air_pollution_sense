@@ -387,11 +387,20 @@ def cluster(
     for r in rows:
         r["frp_share_pct"] = round(r["frp_total_mw"] / corridor_frp * 100.0, 1)
 
-    kept, rest = rows[:limit], rows[limit:]
+    # A cell holding one detection is not a cluster, and listing it as one
+    # fills the table with rows that each say "1 px" - which is how thirteen
+    # scattered anomalies came to look like nine separate fire fronts. They
+    # stay on the map, where a single pixel is honestly a single pixel, and
+    # roll into the count below the table.
+    grouped = [r for r in rows if r["pixels"] >= 2]
+    isolated = [r for r in rows if r["pixels"] < 2]
+
+    kept, rest = grouped[:limit], grouped[limit:] + isolated
     other = {
         "clusters": len(rest),
         "pixels": sum(r["pixels"] for r in rest),
         "frp_total_mw": round(sum(r["frp_total_mw"] for r in rest), 1),
+        "isolated": len(isolated),
     }
     return kept, other
 
