@@ -468,7 +468,13 @@ export function IntroScreen() {
           negative top margin, which lifted it above the fold and printed it on
           top of the CTA on short and mobile viewports. */}
       <div className="relative z-20 px-5 pb-[8vh] sm:px-8">
-        <section className="flex min-h-[100svh] flex-col justify-center gap-6">
+        {/* Sized by its content, like the closing section below it.
+            It was `min-h-[100svh] justify-center`: on a 900px viewport that is
+            a 900px box around roughly 330px of heading and telemetry cards, so
+            570px of it was empty and the page read as a hole between the
+            forecast and the ways in. The vertical padding is what a panel
+            needs to breathe; the viewport is not a unit of content. */}
+        <section className="flex flex-col justify-center gap-6 py-[9vh]">
           <ScrollSectionHead frame={frame} />
           <ScrollPanels frame={frame} series={series} interventions={interventions} />
         </section>
