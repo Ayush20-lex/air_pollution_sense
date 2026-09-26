@@ -199,9 +199,22 @@ export function AssistantLauncher() {
     [running],
   );
 
-  // Nothing renders until the backend has answered, and nothing at all when it
-  // reports no key: a widget that cannot answer is not worth a button.
-  if (!checked || !status?.available) return null;
+  /**
+   * Shown when the assistant cannot actually answer - dev only.
+   *
+   * On the deployed site a widget with no key behind it hides completely:
+   * every question would fail, and a chat button that errors on each attempt
+   * is worse than no button. That is the same rule the meteorology panel
+   * follows for an expired cycle.
+   *
+   * It is the wrong rule while building, where the point is to look at the
+   * thing. So in `npm run dev` it renders anyway, with the composer disabled
+   * and a notice saying why - and `import.meta.env.DEV` is compiled out of the
+   * production bundle, so this branch cannot reach a reader.
+   */
+  const unconfigured = !status?.available;
+  if (!checked) return null;
+  if (unconfigured && !import.meta.env.DEV) return null;
 
   return (
     <>
@@ -266,12 +279,12 @@ export function AssistantLauncher() {
                     <span
                       className={cn(
                         'truncate font-mono text-[10px] uppercase tracking-wider',
-                        grounding.tone === 'offline'
+                        unconfigured || grounding.tone === 'offline'
                           ? 'text-amber-600 dark:text-amber-400'
                           : 'text-term-ink-variant',
                       )}
                     >
-                      {grounding.text}
+                      {unconfigured ? 'No API key — dev preview' : grounding.text}
                     </span>
                   </div>
                 </div>
@@ -322,6 +335,17 @@ export function AssistantLauncher() {
                       </div>
                     </div>
 
+                    {unconfigured && (
+                      <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+                        <p className="font-body text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+                          <span className="font-semibold">Dev preview.</span> The server has no{' '}
+                          <code className="font-mono">GEMINI_API_KEY</code>, so nothing here will
+                          answer. This panel is hidden entirely on the deployed site rather than
+                          shown broken — set the key and it appears on its own.
+                        </p>
+                      </div>
+                    )}
+
                     <div className="space-y-1.5">
                       <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-term-ink-variant">
                         Try asking
@@ -330,6 +354,7 @@ export function AssistantLauncher() {
                         <button
                           key={q}
                           type="button"
+                          disabled={unconfigured}
                           onClick={() => void ask(q)}
                           className="flex w-full items-center justify-between gap-2 rounded-xl border border-term-outline-variant/60 bg-term-surface-low px-3 py-2.5 text-left font-body text-xs text-term-ink transition-colors hover:border-[#ff5ecf]/40"
                         >
@@ -401,15 +426,21 @@ export function AssistantLauncher() {
                     onChange={(e) => setDraft(e.target.value)}
                     onFocus={() => setFocused(true)}
                     onBlur={() => setFocused(false)}
-                    maxLength={status.limits.maxQuestionChars}
-                    disabled={running}
-                    placeholder={running ? 'Reading the mesh…' : 'Ask about the air…'}
+                    maxLength={status?.limits.maxQuestionChars ?? 600}
+                    disabled={running || unconfigured}
+                    placeholder={
+                      unconfigured
+                        ? 'No API key on the server'
+                        : running
+                          ? 'Reading the mesh…'
+                          : 'Ask about the air…'
+                    }
                     aria-label="Ask the assistant"
                     className="min-w-0 flex-1 bg-transparent font-body text-xs text-term-ink outline-none placeholder:text-term-outline disabled:cursor-not-allowed"
                   />
                   <button
                     type="submit"
-                    disabled={!draft.trim() || running}
+                    disabled={!draft.trim() || running || unconfigured}
                     aria-label="Send"
                     className="flex size-6 shrink-0 items-center justify-center rounded-md text-term-ink-variant transition-colors enabled:hover:text-[#ff5ecf] disabled:opacity-40"
                   >
