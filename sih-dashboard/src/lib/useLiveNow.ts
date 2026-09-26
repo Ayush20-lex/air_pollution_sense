@@ -26,9 +26,11 @@ import type { TerminalZone } from '@/lib/terminal/stations';
 
 export type LiveSector = {
   zone: TerminalZone;
-  /** Mean CPCB AQI across the zone's reporting stations. */
+  /** The worst station's own CPCB AQI. Not a mean; see the note on `sectors`. */
   aqi: number;
-  /** How many stations that mean is built from. */
+  /** The instrument reporting it. */
+  station: string;
+  /** How many stations in the sector, so the pill can say what it chose from. */
   count: number;
   color: string;
 };
@@ -40,7 +42,24 @@ export type LiveNow = {
   aqi: number | null;
   /** Stations behind those means. */
   stations: number;
-  /** The four compass sectors, worst first. Empty until the mesh answers. */
+  /**
+   * The four compass sectors, each reporting its worst station this hour.
+   *
+   * Worst rather than a mean, and this is the figure two different views were
+   * computing two different ways. The globe's pills took the maximum; this
+   * strip took the average; and because a sector's average sits far below its
+   * worst, the same page showed North as 182 on a wide screen and 24 on a
+   * narrow one. One source now, so they cannot disagree again.
+   *
+   * Worst is the right one to keep. A landing page is read for a few seconds,
+   * and in those seconds "how bad is the north" has one answer - the number a
+   * reader would act on. A mean answers a question nobody asked and hides the
+   * station that matters: a sector with one hazardous node and six clean ones
+   * averages to fine.
+   *
+   * The station's name travels with it, because "the worst in the north" is
+   * unfalsifiable without saying which instrument said so.
+   */
   sectors: LiveSector[];
   /** True once real measurements are on screen. */
   live: boolean;
@@ -67,12 +86,24 @@ export function useLiveNow(): LiveNow {
       .map((s) => stationPm25(s).value)
       .filter((v): v is number => typeof v === 'number');
 
+    // Only stations reporting this hour, which `useFreshStations` has already
+    // narrowed to. It matters here more than anywhere: the globe's pills were
+    // reading the whole mesh, so every one of the four was quoting an archive
+    // station from nine days earlier - 182, 151, 141, 133 - under a header
+    // that said LIVE. The live maxima that hour were 38, 97, 63 and 22.
     const sectors = SECTORS.map((zone) => {
       const inZone = live.filter((s) => s.zone === zone);
-      const a = mean(inZone.map((s) => s.aqi));
-      return a == null
+      let worst: (typeof inZone)[number] | null = null;
+      for (const s of inZone) if (!worst || s.aqi > worst.aqi) worst = s;
+      return worst == null
         ? null
-        : { zone, aqi: Math.round(a), count: inZone.length, color: aqiColor(a) };
+        : {
+            zone,
+            aqi: worst.aqi,
+            station: worst.name,
+            count: inZone.length,
+            color: aqiColor(worst.aqi),
+          };
     }).filter((x): x is LiveSector => x !== null);
 
     return {

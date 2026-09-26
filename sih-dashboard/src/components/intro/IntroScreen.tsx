@@ -400,8 +400,9 @@ export function IntroScreen() {
             also written into the label for anyone who cannot use colour. */}
         <div className="pointer-events-auto grid w-full grid-cols-4 gap-1.5 md:hidden">
           {(now.live ? now.sectors : SLOTS).map((entry) => {
-            // Live: the zone's own mean AQI across the stations reporting in
-            // it. Offline: the forecast district, as before.
+            // Live: the sector's worst station this hour - the same figure and
+            // the same source as the globe's pills on a wide screen, which it
+            // used to disagree with. Offline: the forecast district, as before.
             const isLiveSector = 'zone' in entry;
             const slot = isLiveSector ? null : (entry as typeof SLOTS[number]);
             const d = slot ? DISTRICTS.find((x) => x.id === slot.id)! : null;
@@ -417,7 +418,7 @@ export function IntroScreen() {
               ? String((entry as { aqi: number }).aqi)
               : s!.pm25.toFixed(0);
             const aria = isLiveSector
-              ? `${label} sector, AQI ${value} across ${(entry as { count: number }).count} stations`
+              ? `${label} sector, worst AQI ${value} at ${(entry as { station: string }).station}, of ${(entry as { count: number }).count} reporting`
               : `${d!.zone}, ${s!.alert}, ${s!.pm25.toFixed(0)} micrograms per cubic metre`;
             return (
               <div
