@@ -1,6 +1,6 @@
 import * as React from 'react';
 import dynamic from '@/lib/dynamic';
-import { Cloudy, Layers, MapPin, Spline, Waves, Wind } from 'lucide-react';
+import { Cloudy, Landmark, Layers, MapPin, Spline, Waves, Wind } from 'lucide-react';
 import { TelemetryCard } from '@/components/terminal/TerminalPrimitives';
 import { TERMINAL_FIELDS, dispersionGradientCss, type TerminalField } from '@/lib/terminal/bands';
 import type { TerminalFrame } from '@/lib/terminal/field';
@@ -26,6 +26,7 @@ const LAYER_META: { id: TerminalLayer; label: string; icon: React.ReactNode }[] 
   { id: 'tracks', label: 'Plume tracks', icon: <Spline className="size-3.5" /> },
   { id: 'wind', label: 'Wind flow', icon: <Wind className="size-3.5" /> },
   { id: 'pins', label: 'Stations', icon: <MapPin className="size-3.5" /> },
+  { id: 'landmarks', label: 'Landmarks', icon: <Landmark className="size-3.5" /> },
 ];
 
 

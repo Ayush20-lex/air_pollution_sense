@@ -1,6 +1,7 @@
 import * as React from 'react';
 import L from 'leaflet';
 import { deviceTier } from '@/lib/device-tier';
+import { LANDMARKS } from '@/lib/terminal/landmarks';
 import type { Pm25Basis } from '@/lib/terminal/pm25Basis';
 import 'leaflet/dist/leaflet.css';
 import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip as LTooltip, useMap } from 'react-leaflet';
@@ -90,6 +91,10 @@ export function NcrPlumeMap({ frame }: { frame: TerminalFrame }) {
       {layers.contours && <IsoContours frame={frame} />}
       {layers.tracks && <SourceRibbons />}
       {layers.wind && <WindStreamlines frame={frame} />}
+      {/* Before the pins, so a station marker always wins the overlap: the
+          landmark says where, the pin says what, and only one of them is a
+          measurement. */}
+      {layers.landmarks && <LandmarkLabels selectedId={selectedId} />}
       {layers.pins && (
         <MeshCanvasProvider>
           <StationPins frame={frame} selectedId={selectedId} select={select} />
@@ -1044,6 +1049,159 @@ function SourceRibbons() {
  *
  * Attaching on `add` is the one point where the element is guaranteed to exist.
  */
+/**
+ * Place labels, for orienting on the plume.
+ *
+ * The map is accurate and, until this layer, anonymous: the basemap's own
+ * names are desaturated so the plume reads over them, and a station named for
+ * the road it stands on locates the instrument rather than the city. A plume
+ * sitting over east Delhi means much more when the label under it says
+ * Akshardham.
+ *
+ * Deliberately inert. `interactive: false` keeps them out of Leaflet's hit
+ * testing entirely, so a click meant for a station pin underneath is never
+ * swallowed by a label sitting over it - the pins carry the readings and the
+ * selection, and these carry nothing.
+ *
+ * They also thin out rather than pile up. At the fitted NCR view the nine
+ * names overlapped each other fifteen ways and every one of them sat across a
+ * station pin - the centre of Delhi holds four of them within a few
+ * kilometres, and the mesh is densest over exactly that ground. Zoom
+ * thresholds were the first attempt and they are the wrong tool: the right
+ * threshold depends on the viewport, the pan position and how many stations
+ * are reporting, none of which is known when the number is written.
+ *
+ * So the layer lays labels out instead. Each is projected to a pixel box,
+ * taken in rank order, and kept only if it clears every box already placed -
+ * greedy, which is not optimal but is stable, and stability matters more here
+ * because an unstable layout flickers names in and out as the map pans.
+ *
+ * Station pins reserve their space first, each at the size its own density
+ * draws it - 86x48 for a labelled pin down to 16x16 for a dot - taken from
+ * the same PIN_SIZE the pins use, so the reservation cannot drift from what
+ * is on screen. They carry the readings; a landmark is orientation, and where
+ * the two cannot both be legible the measurement wins.
+ *
+ * A label that does not fit to the right of its dot tries the left before it
+ * gives up, which is most of the difference between two names surviving the
+ * fitted view and seven.
+ */
+
+/** Height of a label box, and the padding kept between boxes. */
+const LM_H = 14;
+const LM_PAD = 3;
+
+/** Rough label width: the plate, the dot, and ~5.1px per uppercase 9px char. */
+function labelWidth(label: string): number {
+  return 18 + label.length * 5.1;
+}
+
+function overlaps(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+): boolean {
+  return (
+    a.x < b.x + b.w + LM_PAD &&
+    b.x < a.x + a.w + LM_PAD &&
+    a.y < b.y + b.h + LM_PAD &&
+    b.y < a.y + a.h + LM_PAD
+  );
+}
+
+function LandmarkLabels({ selectedId }: { selectedId: string | null }) {
+  const map = useMap();
+  const { stations } = useMesh();
+  const density = usePinDensity(selectedId);
+  // Bumped on every view change, to re-run the layout against new pixel
+  // positions. The value is meaningless; only that it changes matters.
+  const [view, setView] = React.useState(0);
+
+  React.useEffect(() => {
+    const bump = () => setView((v) => v + 1);
+    map.on('zoomend', bump);
+    map.on('moveend', bump);
+    return () => {
+      map.off('zoomend', bump);
+      map.off('moveend', bump);
+    };
+  }, [map]);
+
+  const shown = React.useMemo(() => {
+    // `view` is read so the memo re-runs on pan and zoom; the projection below
+    // depends on the map's state rather than on any value in this scope.
+    void view;
+
+    const placed: { x: number; y: number; w: number; h: number }[] = [];
+
+    // The pins go in first: they are not ours to drop. Only the ones that
+    // carry text, though. A dot is a 16px ring with no reading written on it,
+    // and a name crossing one costs nothing - reserving those as well was
+    // what took the fitted view from nine labels to none, because the mesh
+    // draws most of itself as dots and they blanket the region.
+    for (const st of stations) {
+      const d = density[st.id] ?? 'dot';
+      if (d === 'dot') continue;
+      const pt = map.latLngToContainerPoint([st.lat, st.lng]);
+      const [pw, ph] = PIN_SIZE[d];
+      // A labelled pin sits above its point rather than centred on it.
+      placed.push({ x: pt.x - pw / 2, y: pt.y - ph, w: pw, h: ph });
+    }
+
+    const keep: { l: (typeof LANDMARKS)[number]; flip: boolean }[] = [];
+    for (const l of [...LANDMARKS].sort((a, b) => a.rank - b.rank)) {
+      const pt = map.latLngToContainerPoint([l.lat, l.lon]);
+      const w = labelWidth(l.label);
+      const y = pt.y - LM_H / 2;
+      // Right of the dot first, then left. Anything else - above, below -
+      // moves the name away from the place it names.
+      const right = { x: pt.x, y, w, h: LM_H };
+      const left = { x: pt.x - w, y, w, h: LM_H };
+      const fits = !placed.some((q) => overlaps(right, q))
+        ? right
+        : !placed.some((q) => overlaps(left, q))
+          ? left
+          : null;
+      if (!fits) continue;
+      placed.push(fits);
+      keep.push({ l, flip: fits === left });
+    }
+    return keep;
+  }, [map, stations, density, view]);
+
+  return (
+    <>
+      {shown.map(({ l, flip }) => (
+        <Marker
+          key={l.id}
+          position={[l.lat, l.lon]}
+          interactive={false}
+          keyboard={false}
+          // Under the pins and the plume outlines. Leaflet stacks markers by
+          // latitude by default, which would let a southern landmark cover a
+          // northern station.
+          zIndexOffset={-1000}
+          icon={buildLandmark(l.label, flip)}
+        />
+      ))}
+    </>
+  );
+}
+
+function buildLandmark(label: string, flip: boolean) {
+  return L.divIcon({
+    className: 'term-landmark-wrap',
+    // Sized to the text rather than a box: the anchor is the dot, and the
+    // label hangs off it to whichever side the layout found room on.
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+    html:
+      `<span class="term-landmark${flip ? ' term-landmark-flip' : ''}">` +
+      '<span class="term-landmark-dot"></span>' +
+      `<span class="term-landmark-text">${label}</span>` +
+      '</span>',
+  });
+}
+
 function classOnAdd(...names: string[]) {
   return {
     add(e: { target: { getElement?: () => Element | null } }) {
