@@ -47,6 +47,15 @@ type TerminalState = {
   refreshedAt: number;
   refresh: () => void;
 
+  /**
+   * Bumped by `resetView`, so the map can put its camera back too.
+   *
+   * The reset restores the selection, and the map now flies to whatever is
+   * selected - which would have left "reset" zoomed in on the master station
+   * rather than framing NCR. The map watches this and re-fits instead.
+   */
+  resetAt: number;
+
   /** Restores layers, field, playback and frame position to their defaults. */
   resetView: () => void;
 };
@@ -95,8 +104,11 @@ export const useTerminalStore = create<TerminalState>((set) => ({
   refreshedAt: 0,
   refresh: () => set({ refreshedAt: Date.now() }),
 
+  resetAt: 0,
+
   resetView: () =>
     set({
+      resetAt: Date.now(),
       layers: { ...DEFAULT_LAYERS },
       field: 'PM2.5',
       frameIndex: NOW_FRAME,

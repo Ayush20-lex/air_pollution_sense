@@ -34,23 +34,42 @@ const TICK_HOURS = 12;
 export type ForecastPoint = { hour: number; aqi: number };
 
 
-/** "+12h" and the IST clock time it lands on. */
-function tickLabel(originIso: string | undefined, hour: number): { lead: string; clock: string } {
+/**
+ * The axis clock ticks on the reader's own hour, not the run's origin.
+ *
+ * It used to read `source.origin`, and on an archive-replay deployment that
+ * origin does not move: the axis under a chart captioned "the next three days"
+ * said "now · Sun 04:30" on a Friday afternoon, and said it again the next day,
+ * and the day after. Whatever the run is replaying, the horizon a reader is
+ * being shown starts at the hour they are in, so the dates roll over with the
+ * calendar instead of freezing on the run.
+ */
+const IST_CLOCK = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Kolkata',
+  weekday: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+const IST_DATE = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Kolkata',
+  day: '2-digit',
+  month: 'short',
+});
+
+/** "+12h", the IST clock time it lands on, and its calendar date. */
+function tickLabel(baseMs: number, hour: number): { lead: string; clock: string; date: string } {
   const lead = hour === 0 ? 'now' : `+${hour}h`;
-  if (!originIso) return { lead, clock: '' };
-  const t = new Date(originIso);
-  if (Number.isNaN(t.getTime())) return { lead, clock: '' };
-  const at = new Date(t.getTime() + hour * 3_600_000);
-  return {
-    lead,
-    clock: new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Asia/Kolkata',
-      weekday: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(at),
-  };
+  const at = new Date(baseMs + hour * 3_600_000);
+  return { lead, clock: IST_CLOCK.format(at), date: IST_DATE.format(at) };
+}
+
+/** The top of the current hour, in epoch ms. Every tick hangs off this. */
+function currentHour(): number {
+  const d = new Date();
+  d.setMinutes(0, 0, 0);
+  return d.getTime();
 }
 
 export function ForecastTrack({
@@ -64,10 +83,21 @@ export function ForecastTrack({
   // attributes at render time and will not restyle themselves.
   useTermPalette();
   const reduced = usePrefersReducedMotion();
+  // Re-read at the top of each hour so "now" stays now and the weekday under
+  // the far end of the axis turns over at midnight on its own. A minute is
+  // fine as the poll: it costs one cheap re-render and means the label is
+  // never more than sixty seconds behind the hour it names.
+  const [axisBase, setAxisBase] = React.useState(currentHour);
+  React.useEffect(() => {
+    const id = window.setInterval(() => setAxisBase(currentHour()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
   const w = 760;
-  const h = 260;
+  const h = 272;
   const padL = 34;
-  const padB = 34;
+  // Deep enough for three rows under the axis: the lead, the clock, and the
+  // calendar date where the day turns over.
+  const padB = 46;
   const padT = 10;
 
   if (points.length < 2) {
@@ -236,8 +266,13 @@ export function ForecastTrack({
           )}
 
           {/* 12-hour marks */}
-          {ticks.map((t) => {
-            const { lead, clock } = tickLabel(source?.origin, t.hour);
+          {ticks.map((t, i) => {
+            const { lead, clock, date } = tickLabel(axisBase, t.hour);
+            // The calendar date only where it changes. Under every tick it is
+            // six repetitions of two days; at the crossings it is the one
+            // thing the weekday alone cannot tell you - which 04:30 this is.
+            const prev = i > 0 ? tickLabel(axisBase, ticks[i - 1].hour).date : null;
+            const showDate = prev !== date;
             return (
               <g key={t.hour}>
                 <line
@@ -270,6 +305,19 @@ export function ForecastTrack({
                 >
                   {clock}
                 </text>
+                {showDate && (
+                  <text
+                    x={x(t.hour)}
+                    y={h - padB + 35}
+                    textAnchor="middle"
+                    fontSize="8"
+                    fill={TERM.outline}
+                    fontFamily="var(--font-mono), monospace"
+                    letterSpacing="0.06em"
+                  >
+                    {date}
+                  </text>
+                )}
               </g>
             );
           })}

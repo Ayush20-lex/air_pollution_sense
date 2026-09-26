@@ -57,6 +57,7 @@ import waqi_live
 import cpcb_live
 import live_history
 import firms_fire
+import fire_corridor
 import coupled_feedback
 
 
@@ -1344,6 +1345,180 @@ def met_gfs(response: Response):
         response.status_code = 204
         return None
     return data
+
+
+def _corridor_wind(when: str | None) -> tuple[dict[str, Any] | None, str | None]:
+    """The archive's own NCR-mean wind at `when`, and why if there is none.
+
+    Reads the forecaster only if it is already warm. Calling `get_forecaster()`
+    here would load and QC the whole archive on the first request - 41 to 58 s
+    on the deployed box - and turn a cheap endpoint into the thing that stalls
+    a cold page load. Any other endpoint warms it within seconds of a visit and
+    the client's next poll picks the wind up, so the cost of waiting is one
+    tick of a panel that already says what it is missing.
+
+    `when` matters because this endpoint serves two windows. For the live
+    window it is the run's own origin. For a past episode it is that episode's
+    hour, so the arrival times are computed from the wind that was actually
+    blowing while those fires burned - not from today's, which would be two
+    different days wearing one label.
+    """
+    # Imported here, not at module scope, matching how every other handler
+    # reaches the forecaster - and note it is the module, never get_forecaster.
+    import baseline_forecaster
+
+    inst = getattr(baseline_forecaster, "_singleton", None)
+    if inst is None or getattr(inst, "u", None) is None:
+        return None, "the forecast archive is not loaded yet"
+    try:
+        times = inst.times
+        target = pd.Timestamp(when) if when else pd.Timestamp(times[-1])
+        if target.tzinfo is None and times.tz is not None:
+            target = target.tz_localize("UTC")
+        elif target.tzinfo is not None and times.tz is None:
+            target = target.tz_localize(None)
+        # Nearest hour rather than an exact hit: an episode date lands on a
+        # calendar day, and the window it names is hours wide.
+        i = int(np.abs((times - target).values.astype("timedelta64[s]").astype(float)).argmin())
+        gap_h = abs((times[i] - target).total_seconds()) / 3600.0
+        if gap_h > 36.0:
+            return None, "the archive does not cover this window's wind"
+        u = float(np.nanmean(inst.u[i]))
+        v = float(np.nanmean(inst.v[i]))
+        if not (np.isfinite(u) and np.isfinite(v)):
+            return None, "no usable wind in the archive for this hour"
+        return (
+            fire_corridor.wind_block(
+                u, v,
+                "Open-Meteo station forecast, NCR domain mean, "
+                f"{pd.Timestamp(times[i]).strftime('%d %b %Y %H:%MZ')}",
+            ),
+            None,
+        )
+    except Exception as exc:  # noqa: BLE001 - a missing wind is a state, not an error
+        return None, f"wind unavailable ({type(exc).__name__})"
+
+
+@app.get("/api/v1/fires")
+# A plain `def`, not `async def`, for the reason given on /api/v1/status.
+def fires(
+    start: str | None = Query(default=None, description="window start, YYYY-MM-DD"),
+    days: int = Query(default=firms_fire.DEFAULT_DAYS, ge=1, le=10),
+    max_pixels: int = Query(default=1200, ge=100, le=3000),
+    compress: bool = Query(default=True, description="gzip compress response"),
+):
+    """
+    Every fire pixel NASA FIRMS reports over the corridor, not their average.
+
+    The forecast has always burned all of them - `firms_fire.plume_field`
+    accumulates a Gaussian plume per pixel - but the only fire data that ever
+    reached a client was one FRP-weighted centroid, which is why the map drew
+    the smoke as coming from a single point. This serves the pixels, the
+    clusters they fall into, rollups by region, and the transit time the
+    measured flow implies for each cluster.
+
+    `start` selects the window. Left out it follows the forecast run, so the
+    map and the forecast cannot disagree about which fires are in play. Given
+    a date it serves that window instead, with that window's own wind - which
+    is how a past episode is shown honestly rather than by pasting old fires
+    under today's weather.
+
+    Never 204 and never an error for an empty corridor: no fires is a fact
+    about the season, and it is returned as one.
+    """
+    cfg = get_settings()
+    meta_fire = (_state.forecast_meta or {}).get("fire") or {}
+    origin_iso = (_state.forecast_meta or {}).get("origin")
+
+    if start:
+        window_start = str(start)[:10]
+        wind_at = f"{window_start}T12:00:00"
+        aligned = False
+    else:
+        window_start = meta_fire.get("window_start") or (
+            datetime.now(timezone.utc).date() - timedelta(days=2)
+        ).isoformat()
+        wind_at = origin_iso
+        aligned = bool(meta_fire.get("window_start"))
+
+    key = f"fires:{window_start}:{days}:{max_pixels}:{wind_at}"
+    cached = _cache_get(key, cfg.cache_ttl_s)
+    if cached is None:
+        if not firms_fire.available():
+            payload: dict[str, Any] = {
+                "available": False,
+                "reason": firms_fire.describe().get("reason", "no NASA_FIRMS_KEY"),
+            }
+        else:
+            try:
+                frame = firms_fire.fetch(window_start, days)
+            except Exception as exc:  # noqa: BLE001 - FIRMS being down is a state
+                frame = None
+                payload = {"available": False, "reason": f"FIRMS unreachable ({type(exc).__name__})"}
+            if frame is not None:
+                wind, wind_reason = _corridor_wind(wind_at)
+                # The instant arrivals are counted from. NaT is the case that
+                # matters: on a server whose forecast has not been built yet
+                # there is no origin, and `pd.Timestamp(None)` is NaT rather
+                # than an error - which then fails much later, inside the
+                # per-cluster arithmetic.
+                origin = None
+                if wind is not None:
+                    ts = pd.Timestamp(wind_at) if wind_at else pd.NaT
+                    if pd.isna(ts):
+                        ts = pd.Timestamp(datetime.now(timezone.utc))
+                    origin = ts.to_pydatetime()
+                    if origin.tzinfo is None:
+                        origin = origin.replace(tzinfo=timezone.utc)
+                snap = fire_corridor.snapshot(
+                    frame,
+                    window_start=window_start,
+                    window_days=days,
+                    wind=wind,
+                    origin=origin,
+                    max_pixels=max_pixels,
+                )
+                if wind_reason:
+                    snap["transport"]["reason"] = wind_reason
+                payload = {
+                    "available": True,
+                    "product": f"{firms_fire.NRT_SOURCE} / {firms_fire.SP_SOURCE}",
+                    "bbox": [float(x) for x in firms_fire.BBOX.split(",")],
+                    "aligned_to_forecast_origin": aligned,
+                    "queried_at": datetime.now(timezone.utc)
+                    .replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+                    "season": firms_fire.season_hint(window_start),
+                    "status": (
+                        meta_fire.get("status") if aligned else None
+                    ) or (
+                        "observed" if len(frame)
+                        else "corridor quiet - a real zero, not a missing feed"
+                    ),
+                    # The one apportionment figure this system does compute,
+                    # carried with the caveat it has always been published
+                    # with. Only for the live window: the share belongs to the
+                    # run, and a past episode's fires did not produce it.
+                    "smoke": (
+                        {
+                            "share_pct": meta_fire.get("smoke_share_pct"),
+                            "basis": "domain-and-horizon mean of the forecast smoke "
+                                     "channel over its PM2.5 channel",
+                            "note": "the smoke channel is a proxy scaled by one "
+                                    "calibrated constant, not a measured concentration",
+                        }
+                        if aligned and meta_fire.get("smoke_share_pct") is not None
+                        else None
+                    ),
+                    **snap,
+                }
+        cached = payload
+        _cache_set(key, cached)
+
+    body = json.dumps(cached).encode()
+    if compress:
+        return Response(content=gzip.compress(body), media_type="application/json",
+                        headers={"Content-Encoding": "gzip"})
+    return Response(content=body, media_type="application/json")
 
 
 def _station_grid_index(lats, lons):

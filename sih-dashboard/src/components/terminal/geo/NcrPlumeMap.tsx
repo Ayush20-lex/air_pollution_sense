@@ -31,7 +31,8 @@ import {
 } from '@/lib/terminal/stations';
 import { stationHour } from '@/lib/terminal/meshApi';
 import { useMesh, useFreshStations, isStale } from '@/lib/terminal/useMesh';
-import { livePlumeSources, shareLabel, useMeasuredWind } from '@/lib/terminal/plumes';
+import { corridorRibbons, livePlumeSources, shareLabel, useMeasuredWind } from '@/lib/terminal/plumes';
+import { useFires } from '@/lib/terminal/useFires';
 import { fetchModelGrid, type ModelGrid } from '@/lib/terminal/gridApi';
 import { useTerminalStore } from '@/store/useTerminalStore';
 import { TERM, useTermPalette, useSeverityInk } from '@/lib/terminal/palette';
@@ -72,8 +73,19 @@ export function NcrPlumeMap({ frame }: { frame: TerminalFrame }) {
       className="size-full"
       style={{ background: 'transparent' }}
     >
-      <TileLayer url={TILE_URL} attribution={ATTRIB} maxZoom={19} />
+      {/* keepBuffer above the default 2: a focus pan crosses a screen's width
+          in under a second, and a tighter buffer means it arrives over blank
+          tiles. updateWhenZooming off so the layer waits for the zoom to land
+          instead of fetching a set it is about to throw away. */}
+      <TileLayer
+        url={TILE_URL}
+        attribution={ATTRIB}
+        maxZoom={19}
+        keepBuffer={4}
+        updateWhenZooming={false}
+      />
       <Fitter />
+      <SelectionFocus selectedId={selectedId} />
       {layers.heatmap && <HeatOverlay frame={frame} field={field} />}
       {layers.contours && <IsoContours frame={frame} />}
       {layers.tracks && <SourceRibbons />}
@@ -441,6 +453,118 @@ function Fitter() {
   return null;
 }
 
+/**
+ * The zoom a picked station is flown to.
+ *
+ * 12 of a possible 13. Far enough in that the reader lands on a neighbourhood
+ * rather than the basin, and one step short of the maximum so there is still
+ * somewhere to go by hand. Also the zoom at which usePinDensity stops having
+ * to collapse this part of the mesh into dots, so the pins around the one you
+ * picked come back as labelled cards on arrival.
+ */
+const FOCUS_ZOOM = 12;
+
+/**
+ * How long a move takes, in seconds.
+ *
+ * Was 1.5, which is where most of the clunk came from: a long flight gives the
+ * eye time to notice every frame the main thread misses, and the parabola
+ * `flyTo` traces pulls back out before it comes in, which on a map this small
+ * reads as a wobble rather than a journey.
+ */
+const FOCUS_DURATION = CHEAP_PINS ? 0.7 : 1;
+
+/**
+ * Move the map to a place, over the shortest animation that fits the move.
+ *
+ * Two cases, because Leaflet animates them with two different mechanisms.
+ *
+ * When only the centre changes - picking a second station while already zoomed
+ * in - `panTo` slides the map pane under a CSS transition. Nothing is
+ * reprojected and nothing is refetched; the compositor does the whole move.
+ *
+ * When the zoom changes too, it has to be `flyTo`. The obvious-looking
+ * alternative is an animated `setView`, which is the cheaper composited zoom -
+ * but Leaflet ends that animation on a hardcoded 250ms timer regardless of
+ * what CSS says, so it cannot be slowed down, and stretching the transition
+ * underneath it only gets the transform cut off part way. A quarter of a
+ * second across three zoom levels is a jump, not a zoom.
+ */
+function focus(map: L.Map, center: L.LatLng, zoom: number): void {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    map.setView(center, zoom, { animate: false });
+    return;
+  }
+  if (zoom === map.getZoom()) {
+    map.panTo(center, { duration: FOCUS_DURATION, easeLinearity: 0.25 });
+    return;
+  }
+  // `easeLinearity` is a pan option and is ignored here; flyTo eases itself.
+  map.flyTo(center, zoom, { duration: FOCUS_DURATION });
+}
+
+/**
+ * Flies to whichever station is selected, from wherever the selection came.
+ *
+ * One effect covers both routes into it because both go through the same
+ * store: tapping a pin calls `select(s.id)`, and so does the header's picker
+ * and the command palette. A `MapFocus` component existed for the second case
+ * and was never mounted anywhere, so neither one moved the map at all - you
+ * picked a station from a list of eighty and the map stayed exactly where it
+ * was, with the selection somewhere off screen.
+ *
+ * Three things it deliberately does not do.
+ *
+ * It does not fire on mount. The map opens fitted to the NCR domain and a
+ * flight starting in the same frame as `fitBounds` fights it; the reader would
+ * watch the map settle and then immediately leave. Only a selection *change*
+ * moves it.
+ *
+ * It never zooms out. `Math.max` against the current zoom means picking a
+ * second station while you are in close pans across at the zoom you chose,
+ * rather than yanking you back out to 12 each time.
+ *
+ * It does not re-fly when the mesh refreshes. The station list is replaced
+ * every two minutes and reading it through a ref keeps it out of the
+ * dependencies - otherwise the map would fly to the current selection, unasked,
+ * every time the feed came back.
+ */
+function SelectionFocus({ selectedId }: { selectedId: string }) {
+  const map = useMap();
+  const stations = useFreshStations();
+  const stationsRef = React.useRef(stations);
+  stationsRef.current = stations;
+  // What this component has already flown to, seeded with whatever is
+  // selected at mount. Comparing identities rather than counting runs: a
+  // "have I run before" flag looks equivalent and is not, because StrictMode
+  // mounts every effect twice in development - the first pass set the flag,
+  // the second sailed past it, and the map flew to the default selection the
+  // moment the page opened, fighting the fitBounds it had just done.
+  const focused = React.useRef(selectedId);
+  // Reset restores the selection as well, and that arrives here as an ordinary
+  // change. Without this the button labelled "reset mesh view" would fly the
+  // camera *in*, to the master station, which is the opposite of what it says.
+  const resetAt = useTerminalStore((s) => s.resetAt);
+  const lastReset = React.useRef(resetAt);
+
+  React.useEffect(() => {
+    if (lastReset.current !== resetAt) {
+      lastReset.current = resetAt;
+      focused.current = selectedId;
+      focus(map, FIT_BOUNDS.getCenter(), map.getBoundsZoom(FIT_BOUNDS, false, FIT_PADDING));
+      return;
+    }
+    if (focused.current === selectedId) return;
+    const st = stationsRef.current.find((s) => s.id === selectedId);
+    if (!st) return;
+    focused.current = selectedId;
+
+    focus(map, L.latLng(st.lat, st.lng), Math.max(map.getZoom(), FOCUS_ZOOM));
+  }, [map, selectedId, resetAt]);
+
+  return null;
+}
+
 type PinDensity = 'full' | 'compact' | 'dot';
 
 /**
@@ -545,16 +669,6 @@ function usePinDensity(selectedId: string | null): Record<string, PinDensity> {
     }
     return out;
   }
-}
-
-/** Recentres and zooms when a station is picked from a list elsewhere. */
-export function MapFocus({ station }: { station?: Station }) {
-  const map = useMap();
-  React.useEffect(() => {
-    if (!station) return;
-    map.flyTo([station.lat, station.lng], Math.max(map.getZoom(), 11), { duration: 0.8 });
-  }, [map, station]);
-  return null;
 }
 
 /**
@@ -809,14 +923,30 @@ function SourceRibbons() {
   // lib/terminal/plumes.
   const wind = useMeasuredWind(0);
   const fire = useAppStore((st) => st.source?.fire);
-  const sources = React.useMemo(
+  // Per-cluster ribbons where the fire service has answered, each on the
+  // bearing its own fires lie on. Before this there was one ribbon, drawn to
+  // the FRP-weighted mean of the entire corridor, which is why the smoke
+  // looked like it came from a single field. The centroid path stays as the
+  // fallback: it is what there is when /api/v1/fires is unreachable.
+  //
+  // Only ever the live window. The corridor section below can be switched to a
+  // past episode, and that switch must not reach up here: this map is drawn
+  // over live station readings, and hanging November's ribbons on it would put
+  // two different days on one screen with nothing to tell them apart.
+  const { data: fires, window: fireWindow } = useFires();
+  const clusters =
+    fireWindow.kind === 'live' && fires?.available ? fires.clusters : undefined;
+  const sources = React.useMemo(() => {
+    const corridor = clusters?.length ? corridorRibbons(clusters, CHEAP_PINS ? 3 : 6) : [];
+    if (corridor.length) return corridor;
     // A measured zero stays in the rail as "0%", where it is a finding. On the
     // map it would be a transport path for smoke that is not there - a ribbon
     // drawn at zero width still carries a label claiming a route into the
     // basin - so it is not drawn at all.
-    () => livePlumeSources(wind?.fromDeg ?? null, fire).filter((s) => !(s.measured && s.share === 0)),
-    [wind?.fromDeg, fire],
-  );
+    return livePlumeSources(wind?.fromDeg ?? null, fire).filter(
+      (s) => !(s.measured && s.share === 0),
+    );
+  }, [clusters, wind?.fromDeg, fire]);
 
   const ribbons = React.useMemo(
     () =>
@@ -891,7 +1021,7 @@ function SourceRibbons() {
               iconAnchor: [66, 8],
               html:
                 `<span class="term-ribbon-label" style="--c:${r.color}">` +
-                `${r.label.toUpperCase()} · ${shareLabel(r)}</span>`,
+                `${r.mapLabel ? r.mapLabel.toUpperCase() : `${r.label.toUpperCase()} · ${shareLabel(r)}`}</span>`,
             })}
           />
         </React.Fragment>

@@ -72,7 +72,7 @@ export function IntroScreen() {
   const interventions = useAppStore((s) => s.interventions);
   // The hour the clock is actually in, not the run's origin hour. See
   // useNowFrame: `frames[0]` pinned the rail to whenever the run was issued.
-  const { frame, index: nowIndex, covers: runCoversNow } = useNowFrame();
+  const { frame, index: nowIndex } = useNowFrame();
   // And for the quantities that are observed rather than modelled, the station
   // mesh rather than the run at all. Picking the right hour of a run whose
   // archive ends 2026-09-19 still yields six-day-old PM2.5; only the mesh is

@@ -14,23 +14,36 @@
  * twenty on a day when the corridor is barely alight, and at the November peak
  * the same figure reads 22.7%.
  *
- * The other three have no data behind them. There is no emissions inventory in
- * this system, so industrial, vehicular and construction cannot be computed
- * from anything - they are an editorial attribution of the sectors NCR is known
- * to carry. They are kept, because dropping them would leave a reader thinking
- * stubble is the only source, and they are marked so nobody reads an estimate
- * as a measurement.
+ * The other three are gone. Industrial, vehicular and construction had no data
+ * behind them at all - there is no emissions inventory in this system, so their
+ * 39/33/27 were an editorial guess at the sectors NCR is known to carry, drawn
+ * as ribbons entering the basin along routes nothing measured. Marking them
+ * "est." was not enough: a labelled arrow on a map of live readings is read as
+ * a finding, and three invented ones outnumbered the single real one.
+ *
+ * So only measured transport is drawn now. When the fire feed has nothing to
+ * say, the map draws no attribution at all, and the rail says so in words -
+ * which is the true state of this system's knowledge of where the pollution
+ * came from.
  */
 import * as React from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { meanBearing } from './wind';
 import { NCR_CENTER, PLUME_SOURCES, type PlumeSource } from './stations';
+import { TERM } from './palette';
 
 export type LivePlumeSource = PlumeSource & {
   /** True when both the direction and the share come from the backend. */
   measured: boolean;
   /** What the number is, in a few words, for the label. */
   note: string;
+  /**
+   * What the ribbon's own label should read, when the default - name and
+   * share - would be wrong. A per-cluster ribbon cannot carry the share: that
+   * figure describes the whole domain, and printing it on six ribbons would
+   * turn one measurement into six claims.
+   */
+  mapLabel?: string;
 };
 
 /** The fire block the backend attaches to every forecast. */
@@ -94,33 +107,7 @@ export function livePlumeSources(
   windFromDeg: number | null,
   fire: FireMeta | undefined,
 ): LivePlumeSource[] {
-  return closeTheBudget(rawPlumeSources(windFromDeg, fire));
-}
-
-/**
- * Scale the editorial sectors so the apportionment still sums to 100%.
- *
- * The four static shares were written as a closed budget: 34 + 26 + 22 + 18.
- * Once stubble is measured it no longer takes its 34, but the other three kept
- * theirs - so a measured 0% left the rail reading 0 + 26 + 22 + 18 = 66%, and a
- * measured 12% left it at 78%. A source apportionment that does not close
- * invites exactly one question, and it is the wrong one.
- *
- * The estimates keep their relative weights and take whatever the measured
- * share leaves. They stay marked as estimates: this makes them consistent with
- * the measurement, not more precise than they were.
- */
-function closeTheBudget(sources: LivePlumeSource[]): LivePlumeSource[] {
-  const measured = sources.filter((x) => x.measured);
-  if (!measured.length) return sources;
-  const taken = measured.reduce((a, x) => a + x.share, 0);
-  const estimates = sources.filter((x) => !x.measured);
-  const weight = estimates.reduce((a, x) => a + x.share, 0);
-  if (weight <= 0) return sources;
-  const room = Math.max(0, 100 - taken);
-  return sources.map((x) =>
-    x.measured ? x : { ...x, share: Math.round((x.share / weight) * room) },
-  );
+  return rawPlumeSources(windFromDeg, fire).filter((s) => s.measured);
 }
 
 function rawPlumeSources(
@@ -190,9 +177,81 @@ function rawPlumeSources(
   });
 }
 
-/** "34%" for an estimate, "1.5% measured" for the real one. */
+/** The share, as the map and the rail both print it. */
 export function shareLabel(s: LivePlumeSource): string {
-  return s.measured ? `${s.share}%` : `~${s.share}% est.`;
+  return `${s.share}%`;
+}
+
+/**
+ * One ribbon per burning cluster, each on its own measured bearing.
+ *
+ * This is the fix for the map appearing to think all the smoke comes from one
+ * place. It did not: `plume_field` convolves every VIIRS pixel. But the only
+ * fire geometry that reached the browser was `centroid_lat/lon` - the
+ * FRP-weighted mean of the whole corridor - so `bearingToFires` had exactly
+ * one direction to draw, and a corridor burning from Amritsar to Karnal was
+ * rendered as a single arrow from their average.
+ *
+ * With `/api/v1/fires` there are real clusters, so each significant one enters
+ * on the bearing it actually lies on. `upwindEntry` is unchanged and still
+ * starts the ribbon at the edge of the view, because the fires themselves are
+ * 200-400 km away and off this map - the corridor map is where they are drawn
+ * where they are.
+ *
+ * Filtered hard on purpose. Twenty-four ribbons is a starburst, and a cluster
+ * the flow is carrying nowhere is not an inflow. Only clusters the wind is
+ * actually carrying, holding at least 1% of the corridor's radiative power,
+ * strongest first.
+ */
+export function corridorRibbons(
+  clusters: {
+    id: string;
+    stateApprox: string;
+    band: string;
+    fromDelhiDeg: number;
+    distKm: number;
+    fromDelhiCompass: string;
+    frpTotalMw: number;
+    frpSharePct: number;
+    pixels: number;
+    transit: { carrying: boolean | null; hours: number | null };
+  }[],
+  max = 6,
+): LivePlumeSource[] {
+  return clusters
+    .filter(
+      (c) =>
+        c.transit.carrying === true &&
+        // An inflow ribbon is transport into the basin. A cluster inside the
+        // NCR box has nothing to travel: the advection arithmetic returns a
+        // cheerful four hours for a fire twenty kilometres away, and drawing
+        // that as an arrow entering from the edge of the map would dress a
+        // local field fire as an inbound plume from Punjab. The band is
+        // geometric, so this test cannot be wrong the way the state guess can.
+        c.band !== 'NCR domain' &&
+        c.pixels >= 2 &&
+        c.frpSharePct >= 1,
+    )
+    .sort((a, b) => b.frpTotalMw - a.frpTotalMw)
+    .slice(0, max)
+    .map((c) => ({
+      id: `fire-${c.id}`,
+      label: c.stateApprox,
+      detail: `${Math.round(c.distKm)} km ${c.fromDelhiCompass} · ${c.pixels} detections · ${Math.round(c.frpTotalMw)} MW`,
+      // Carried so the ribbon's weight still scales with something real; the
+      // label does not print it, because it is a share of the burning.
+      share: c.frpSharePct,
+      color: TERM.tertiary,
+      entry: upwindEntry(c.fromDelhiDeg),
+      target: [NCR_CENTER[0], NCR_CENTER[1]],
+      curve: 0,
+      measured: true,
+      note: 'measured',
+      mapLabel:
+        c.transit.hours != null
+          ? `${c.stateApprox} · ${Math.round(c.distKm)} KM ${c.fromDelhiCompass} · +${Math.round(c.transit.hours)}H`
+          : `${c.stateApprox} · ${Math.round(c.distKm)} KM ${c.fromDelhiCompass}`,
+    }));
 }
 
 

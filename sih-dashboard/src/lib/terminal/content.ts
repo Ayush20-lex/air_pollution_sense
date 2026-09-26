@@ -58,13 +58,10 @@ export const CPCB_SCALE = AQI_RAMP.map((b) => ({
   to: b.to,
 }));
 
-/** Biometric impact meters in the advisory card. */
-export const BIOMETRIC_IMPACTS = [
-  { label: 'Respiratory', level: 'Elevated', pct: 72, color: SEVERITY.poor },
-  { label: 'Cardio', level: 'Moderate', pct: 54, color: SEVERITY.moderate },
-  { label: 'Eye Stress', level: 'High Dust', pct: 68, color: SEVERITY.poor },
-  { label: 'Outdoor Run', level: 'Restricted', pct: 84, color: SEVERITY.bad },
-] as const;
+/* BIOMETRIC_IMPACTS lived here: four hard-coded percentages behind the
+   advisory card's meters. They are computed from the selected station's own
+   sub-indices now - see lib/terminal/exposureRisk - so the constants are gone
+   rather than kept as a second, silently-wrong source. */
 
 export const ADVISORY_TEXT =
   'Sensitive individuals (children, elderly, asthmatics) should reduce prolonged outdoor exertion. Wear N95 masks outdoors, keep air purifiers active, and maintain sealed windows during morning peaks.';
