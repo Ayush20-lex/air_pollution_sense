@@ -27,9 +27,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import torch
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
@@ -58,6 +58,8 @@ import cpcb_live
 import live_history
 import firms_fire
 import fire_corridor
+import assistant
+import assistant_tools
 import coupled_feedback
 
 
@@ -1345,6 +1347,104 @@ def met_gfs(response: Response):
         response.status_code = 204
         return None
     return data
+
+
+# ── assistant ───────────────────────────────────────────────────────────────
+
+
+@app.get("/api/v1/assistant/status")
+def assistant_status():
+    """Whether the assistant can answer, so the widget can hide itself if not.
+
+    The key is deliberately absent from the repository; without it this reports
+    unavailable and the frontend renders nothing, which is the same rule the
+    meteorology panel follows for an expired cycle.
+    """
+    return {
+        "available": assistant.available() and not assistant.kill_switch_on(),
+        "model": assistant.MODEL if assistant.available() else None,
+        "tools": [d["name"] for d in assistant_tools.DECLARATIONS],
+        "limits": {
+            "per_minute": assistant.RATE_PER_MIN,
+            "per_day": assistant.RATE_PER_DAY,
+            "max_turns": assistant.MAX_TURNS,
+            "max_question_chars": assistant.MAX_QUESTION_CHARS,
+        },
+    }
+
+
+class AssistantAsk(BaseModel):
+    question: str
+    #: Prior turns in Gemini's own `contents` shape, echoed back by the client.
+    #: The server is stateless - see the note in the handler.
+    history: list[dict] = Field(default_factory=list)
+
+
+@app.post("/api/v1/assistant")
+# A plain `def`, not `async def`, for the reason given on /api/v1/status: this
+# handler blocks on an upstream HTTP call and never awaits.
+def assistant_ask(body: AssistantAsk, request: Request):
+    """
+    One question, answered from this system's own endpoints.
+
+    Server-sent events, because a turn has intermediate state worth showing:
+    each tool call is emitted as it runs so the UI can print a receipt, then
+    the answer, then a record of what was used. That receipt is the point -
+    it is the difference between claiming the answer is grounded and showing
+    which readings it came from.
+
+    Stateless by choice. The client holds the transcript and sends it back, so
+    nothing here has to expire sessions or hold conversations in memory on a
+    951 MB box. The cost is that history is untrusted input, which is why it is
+    length-capped below and why the system prompt is re-sent every turn rather
+    than assumed to still be in scope.
+    """
+    if not assistant.available():
+        raise HTTPException(status_code=503, detail="assistant is not configured")
+    if assistant.kill_switch_on():
+        raise HTTPException(status_code=503, detail="assistant is switched off")
+
+    client = request.client.host if request.client else "unknown"
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        # nginx sits in front, so the socket peer is always 127.0.0.1; the
+        # first hop in the chain is the reader. Spoofable, which is why the
+        # deployment-wide ceiling exists behind this.
+        client = forwarded.split(",")[0].strip()
+
+    denied = assistant.BUDGET.check(client)
+    if denied:
+        raise HTTPException(status_code=429, detail=denied)
+
+    history = body.history[-(assistant.MAX_TURNS * 2) :]
+    assistant.BUDGET.spend(client)
+
+    # One SSE frame. Defined once because the blank-line terminator is the
+    # part of the protocol that is easy to lose in an edit and impossible to
+    # see when it is missing - the stream simply never flushes a message.
+    def frame(event: dict) -> str:
+        return "data: " + json.dumps(event) + "\n\n"
+
+    def stream():
+        try:
+            for event in assistant.answer(body.question, history):
+                yield frame(event)
+        except Exception as exc:  # noqa: BLE001 - a dead turn must still close
+            _log.exception("assistant turn failed")
+            yield frame(
+                {"type": "error", "message": f"The turn failed ({type(exc).__name__})."}
+            )
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            # nginx buffers proxied responses by default, which would hold the
+            # whole turn back and deliver it in one lump.
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 def _corridor_wind(when: str | None) -> tuple[dict[str, Any] | None, str | None]:

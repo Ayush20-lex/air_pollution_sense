@@ -28,6 +28,7 @@ import { useTerminalStore } from '@/store/useTerminalStore';
 import { CommandPalette, openCommandPalette } from '@/components/ui/command-palette';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { toast } from 'sonner';
+import { AssistantLauncher } from './assistant/AssistantLauncher';
 
 /**
  * Sidebar + header + footer chrome shared by every terminal page.
@@ -74,6 +75,10 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
         </main>
         <TerminalFooter />
       </div>
+      {/* Outside the padded column so it anchors to the viewport, and last in
+          the tree so its overlay sits above the page without either of them
+          needing a z-index bigger than the map's floating controls. */}
+      <AssistantLauncher />
     </div>
   );
 }
