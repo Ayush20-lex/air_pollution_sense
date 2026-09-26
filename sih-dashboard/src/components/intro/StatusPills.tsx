@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { motion } from 'framer-motion';
 import { aqiBandColor } from '@/lib/aqi';
-import { useMesh } from '@/lib/terminal/useMesh';
+import { useLiveNow } from '@/lib/useLiveNow';
 
 /**
  * Floating sector pills scattered over the particle grid.
@@ -74,19 +74,18 @@ export function sectorForSlot(id: string): string | undefined {
 }
 
 export function StatusPills() {
-  const { stations } = useMesh();
+  // The same source the narrow-screen sector strip reads, which it did not
+  // used to be. This computed its own maximum over `useMesh().stations` - the
+  // whole mesh, archive included - while the strip averaged the live ones, so
+  // one page reported North as 182 and 24 at two widths. Worse, every value
+  // this produced came from a station stamped nine days earlier, under a
+  // header reading LIVE. See the note on `sectors` in useLiveNow.
+  const { sectors } = useLiveNow();
 
-  // The worst station per sector, recomputed only when the mesh changes. A
-  // single pass rather than a sort: only the maximum is wanted, and four
-  // sectors over eighty stations is not worth ordering all of.
-  const worstBySector = React.useMemo(() => {
-    const out: Record<string, (typeof stations)[number]> = {};
-    for (const s of stations) {
-      const held = out[s.zone];
-      if (!held || s.aqi > held.aqi) out[s.zone] = s;
-    }
-    return out;
-  }, [stations]);
+  const worstBySector = React.useMemo(
+    () => Object.fromEntries(sectors.map((s) => [s.zone, s])),
+    [sectors],
+  );
 
   return (
     <>
@@ -113,7 +112,7 @@ export function StatusPills() {
               transition={{ duration: 5 + slot.delay * 3, repeat: Infinity, ease: 'easeInOut' }}
               className="flex items-center gap-2 rounded-full border px-3 py-1.5 backdrop-blur-md"
               style={{ borderColor: `${color}55`, background: `${color}14` }}
-              title={`Highest in ${sectorLabel(slot.sector)}: ${station.name} — AQI ${station.aqi}`}
+              title={`Highest in ${sectorLabel(slot.sector)}: ${station.station} — AQI ${station.aqi}, of ${station.count} reporting`}
             >
               <span className="relative flex h-2 w-2">
                 <span
@@ -133,7 +132,7 @@ export function StatusPills() {
                     left the frame. Truncating costs the tail of a rare long
                     name; not truncating costs the pill. */}
                 <span className="inline-block max-w-[150px] truncate align-bottom">
-                  {station.name}
+                  {station.station}
                 </span>
               </span>
               <span className="text-faint">—</span>
@@ -142,7 +141,7 @@ export function StatusPills() {
                   worst takes the pill, instead of the number snapping under a
                   name that changed at the same moment. */}
               <motion.span
-                key={station.id}
+                key={station.station}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.35 }}
