@@ -6,6 +6,9 @@
  * reader reached anything else.
  */
 import { PollutantMatrix } from './overview/OverviewMetrics';
+import { ChannelStatus } from './matrices/ChannelStatus';
+import { ChannelCoverage } from './matrices/ChannelCoverage';
+import { IndexDrivers } from './matrices/IndexDrivers';
 
 export default function TerminalMatrices() {
   return (
@@ -19,6 +22,13 @@ export default function TerminalMatrices() {
         </p>
       </div>
       <PollutantMatrix />
+      {/* The grid answers "what is the reading". These answer the three
+          questions it provokes and never addressed: why half the cards are
+          empty, how much of the network is behind each number, and which
+          channel is actually deciding the index. */}
+      <ChannelStatus />
+      <IndexDrivers />
+      <ChannelCoverage />
     </div>
   );
 }
