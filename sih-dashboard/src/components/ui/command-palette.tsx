@@ -51,7 +51,7 @@ type Cmd = {
   dot?: string;
 };
 
-const RECENTS_KEY = 'airsense.palette.recents';
+const RECENTS_KEY = 'airlytics.palette.recents';
 const MAX_RECENTS = 5;
 
 function readRecents(): string[] {
@@ -78,7 +78,7 @@ function writeRecents(ids: string[]) {
  * provider. The terminal header folds its own search field and this palette
  * into a single control, so it needs a way in that isn't the built-in button.
  */
-const OPEN_EVENT = 'airsense:command-palette-open';
+const OPEN_EVENT = 'airlytics:command-palette-open';
 
 /** `seed` pre-fills the query, so a control can hand over the keystroke that
  *  opened it instead of swallowing the user's first character. */

@@ -298,7 +298,7 @@ export function IntroScreen() {
           </div>
           <div className="leading-tight">
             <div className="font-mono text-sm font-bold tracking-[0.2em] text-ink">
-              AIRSENSE <span className="text-accent">/ NCR</span>
+              AIRLYTICS <span className="text-accent">/ NCR</span>
             </div>
             <div className="hud-label">Coupled forecasting system v4.2</div>
           </div>

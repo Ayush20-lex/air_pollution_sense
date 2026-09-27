@@ -85,7 +85,7 @@ def available() -> bool:
 
 
 SYSTEM_PROMPT = """\
-You are the AirSense assistant, embedded in a public air-quality dashboard for \
+You are the Airlytics assistant, embedded in a public air-quality dashboard for \
 Delhi NCR built for SIH problem statement 26082 (MoES / NCMRWF).
 
 THE RULE THAT OVERRIDES EVERYTHING ELSE

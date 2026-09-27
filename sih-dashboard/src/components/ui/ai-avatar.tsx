@@ -34,7 +34,7 @@ export type AvatarColor =
   | 'turquoise'
   | 'violet'
   /** The assistant's own colour - see the PRESETS entry for why it is this. */
-  | 'airsense';
+  | 'airlytics';
 export type AvatarSize = 'sm' | 'md' | 'lg';
 export type AvatarShape = 'circle' | 'square' | 'squircle';
 
@@ -189,7 +189,7 @@ const PRESETS: Record<
    * as a glowing blank. Brightness belongs in the rim and the bloom, where it
    * makes the control visible, not in the centre, where it eats the eyes.
    */
-  airsense: {
+  airlytics: {
     gradient:
       'radial-gradient(circle at 50% 45%, #4a0b3d 0%, #c2188c 38%, #ff5ecf 66%, #e4c6ff 100%)',
     boxShadow:

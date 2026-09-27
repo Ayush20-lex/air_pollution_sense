@@ -232,9 +232,9 @@ export function AssistantLauncher() {
         aria-label={open ? 'Close the assistant' : 'Ask the assistant'}
         className="group fixed bottom-5 right-5 z-[600] flex items-center gap-2.5 rounded-full border border-[#ff5ecf]/40 bg-term-surface-lowest/95 py-1.5 pl-1.5 pr-4 shadow-[0_0_24px_rgba(255,94,207,.22)] backdrop-blur-sm transition-all hover:border-[#ff5ecf]/70 hover:shadow-[0_0_32px_rgba(255,94,207,.38)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5ecf]/60 sm:bottom-6 sm:right-6"
       >
-        <Avatar color="airsense" size="sm" shape="circle" blinking={!reduced} track halo={!reduced} />
+        <Avatar color="airlytics" size="sm" shape="circle" blinking={!reduced} track halo={!reduced} />
         <span className="hidden font-mono text-[11px] font-bold uppercase tracking-wider text-term-ink sm:inline">
-          Ask AirSense
+          Ask Airlytics
         </span>
       </button>
 
@@ -253,7 +253,7 @@ export function AssistantLauncher() {
 
             <motion.div
               role="dialog"
-              aria-label="AirSense assistant"
+              aria-label="Airlytics assistant"
               initial={reduced ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.97 }}
               animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
@@ -262,7 +262,7 @@ export function AssistantLauncher() {
             >
               <div className="flex items-start gap-3 border-b border-term-outline-variant/60 p-4">
                 <Avatar
-                  color="airsense"
+                  color="airlytics"
                   size="md"
                   shape="squircle"
                   blinking={!reduced}
@@ -272,7 +272,7 @@ export function AssistantLauncher() {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="font-display text-sm font-bold tracking-tight text-term-ink">
-                    AirSense Assistant
+                    Airlytics Assistant
                   </div>
                   <div className="mt-0.5 flex items-center gap-1.5">
                     <span
@@ -333,7 +333,7 @@ export function AssistantLauncher() {
                 {msgs.length === 0 && (
                   <>
                     <div className="flex gap-2.5">
-                      <Avatar color="airsense" size="sm" shape="circle" blinking={false} />
+                      <Avatar color="airlytics" size="sm" shape="circle" blinking={false} />
                       <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-term-outline-variant/60 bg-term-surface-low p-3">
                         {/* Two lines, not six. This sat above the suggested
                             questions and pushed them below the fold, so the
@@ -395,7 +395,7 @@ export function AssistantLauncher() {
                     </div>
                   ) : (
                     <div key={i} className="flex gap-2.5">
-                      <Avatar color="airsense" size="sm" shape="circle" blinking={false} />
+                      <Avatar color="airlytics" size="sm" shape="circle" blinking={false} />
                       <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-term-outline-variant/60 bg-term-surface-low p-3">
                         <p className="whitespace-pre-wrap font-body text-xs leading-relaxed text-term-ink">
                           {m.text}
@@ -408,7 +408,7 @@ export function AssistantLauncher() {
 
                 {running && (
                   <div className="flex gap-2.5">
-                    <Avatar color="airsense" size="sm" shape="circle" blinking={!reduced} />
+                    <Avatar color="airlytics" size="sm" shape="circle" blinking={!reduced} />
                     <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-term-outline-variant/60 bg-term-surface-low p-3">
                       <span className="font-mono text-[10px] uppercase tracking-wider text-term-ink-variant">
                         {liveTools.length
