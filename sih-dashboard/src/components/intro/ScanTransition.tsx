@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import { motion } from 'framer-motion';
-import { Radio } from 'lucide-react';
 import { useTermPalette, useTermTheme } from '@/lib/terminal/palette';
 
 /**
@@ -36,7 +35,8 @@ export function ScanTransition({ active }: { active: boolean }) {
   const [step, setStep] = React.useState(0);
   const reduced = usePrefersReducedMotion();
   const term = useTermPalette();
-  const ground = GROUND[useTermTheme()];
+  const theme = useTermTheme();
+  const ground = GROUND[theme];
 
   // Driven by timers, not by render. The step is a position in a timed
   // sequence, so there is nothing to derive from props.
@@ -92,40 +92,32 @@ export function ScanTransition({ active }: { active: boolean }) {
       )}
 
       <div className="relative flex flex-col items-center gap-5 px-6 text-center">
-        <div
-          className="relative flex size-14 items-center justify-center rounded-2xl border"
-          style={{
-            borderColor: `${term.primary}66`,
-            background: `${term.primary}1a`,
-            color: term.primary,
-          }}
-        >
-          <Radio className="size-6" />
-          {!reduced && (
-            <motion.span
-              initial={{ scale: 0.8, opacity: 0.8 }}
-              animate={{ scale: 1.9, opacity: 0 }}
-              transition={{ duration: 1.4, repeat: Infinity, ease: 'easeOut' }}
-              className="absolute inset-0 rounded-2xl border"
-              style={{ borderColor: term.primary }}
-            />
-          )}
-        </div>
+        {/* The brand mark, in place of the generic radio tile and the two
+            lines of type that stood in for it. One image rather than an icon
+            plus text, because the lockup already carries the name, the region
+            and the subtitle in the proportions it was drawn in - rebuilding
+            that out of a Lucide glyph and two <div>s only produced something
+            that had to be kept in step with it by hand.
 
-        <div className="space-y-1">
-          <div
-            className="font-mono text-sm font-bold uppercase tracking-[0.28em]"
-            style={{ color: term.primary }}
-          >
-            AirLytics - NCR
-          </div>
-          <div
-            className="font-mono text-[10px] uppercase tracking-[0.22em]"
-            style={{ color: term.outline }}
-          >
-            Public open environmental intelligence terminal
-          </div>
-        </div>
+            Two files, picked by theme. The wordmark's blue reads on either
+            ground, but the "NCR Region" line is rgb(49,70,91) and measures
+            1.99:1 on this curtain's near-black, which is not a subtitle so
+            much as a rumour of one. The dark variant lifts exactly those
+            pixels - selected by saturation, so the brand blue at S~0.97 and
+            every green are untouched - to slate-300, which measures 13:1.
+
+            Width-capped rather than sized in px: the lockup is wide, and on a
+            narrow phone a fixed width would either overflow the curtain or
+            leave the mark too small to read. */}
+        <motion.img
+          src={theme === 'dark' ? '/logo-airlytics-dark.png' : '/logo-airlytics.png'}
+          alt="AirLytics — NCR Region"
+          initial={reduced ? undefined : { opacity: 0, scale: 0.96 }}
+          animate={reduced ? undefined : { opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="h-auto w-[min(82vw,420px)] select-none"
+          draggable={false}
+        />
 
         {/* progress rail */}
         <div
