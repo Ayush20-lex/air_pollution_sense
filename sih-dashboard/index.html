@@ -2,7 +2,16 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- The mark, at the sizes each surface actually asks for. PNG rather than
+         the old favicon.svg: this artwork is a raster, and a browser handed an
+         SVG it cannot parse falls back to nothing. 32 is the tab, 180 is the
+         iOS home screen, 512 is the install prompt, and the .ico covers pinned
+         tabs and bookmark bars that still ask for one. Transparent throughout,
+         so it sits on a light or a dark tab strip without a white card. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <title>AirSense NCR — Coupled Forecasting System</title>
