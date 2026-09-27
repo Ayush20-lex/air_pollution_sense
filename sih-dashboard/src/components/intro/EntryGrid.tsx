@@ -70,10 +70,37 @@ function Tile({
   index: number;
   className?: string;
 }) {
+  const startScan = useAppStore((s) => s.startScan);
+
+  /**
+   * Hands off through the scan curtain instead of navigating straight there.
+   *
+   * These cards and the Scan NCR button below them go to the same place, and
+   * only the button played the hand-off - so entering by a card cut from the
+   * globe to the terminal in one frame, which reads as the page having
+   * reloaded rather than as one move. `startScan` already takes a
+   * destination; the command palette has been handing off to a station that
+   * way all along, so the cards need no new machinery, only to stop bypassing
+   * it.
+   *
+   * Still a real <Link>. The element has to stay an anchor with a live href
+   * so it can be opened in a new tab, copied, or followed by a screen reader
+   * as the link it is - and the modified clicks that mean "not here" are let
+   * through untouched, because a curtain over a tab the reader is not looking
+   * at is a curtain that never lifts.
+   */
+  const handoff = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (e.defaultPrevented) return;
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    startScan(to);
+  };
+
   return (
     <motion.div {...rise(index)} className={cn('min-w-0', className)}>
       <Link
         to={to}
+        onClick={handoff}
         className={cn(
           'glass glass-hover group flex h-full flex-col justify-between gap-6 p-5',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
