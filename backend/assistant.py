@@ -213,12 +213,23 @@ def _post(payload: dict[str, Any]) -> dict[str, Any]:
     # before branching: the first version of this logged every status except
     # 429, which was the one worth seeing. The key travels as a query
     # parameter, so scrub it out of anything echoed back.
-    reason = ""
+    reason, quota_ids = "", []
     try:
         err = r.json().get("error", {})
         reason = f'{err.get("status", "")}: {err.get("message", "")}'[:300]
+        # The prose message for a 429 says only "you exceeded your current
+        # quota" - which quota is in the QuotaFailure detail, as an id like
+        # GenerateRequestsPerDayPerProjectPerModel. Without reading this there
+        # is no way to tell a minute's pause from a lockout until tomorrow.
+        for d in err.get("details", []) or []:
+            for v in (d.get("violations") or []) if isinstance(d, dict) else []:
+                qid = str(v.get("quotaId", ""))
+                if qid:
+                    quota_ids.append(qid)
     except ValueError:
         reason = r.text[:300]
+    if quota_ids:
+        reason = f"{reason} [quota: {','.join(quota_ids)}]"[:400]
     reason = reason.replace(key, "<key>")
     log.warning("gemini HTTP %s %s (model=%s)", r.status_code, reason, MODEL)
 
@@ -226,7 +237,8 @@ def _post(payload: dict[str, Any]) -> dict[str, Any]:
         # Whose limit this is matters to whoever is reading the panel: ours is
         # a pause of seconds, Google's daily free-tier quota is a pause until
         # midnight Pacific, and the two deserve different expectations.
-        daily = "per day" in reason.lower() or "perday" in reason.lower()
+        blob = " ".join(quota_ids).lower() or reason.lower()
+        daily = "perday" in blob.replace(" ", "")
         raise RuntimeError(
             "the daily free quota for this model is spent; it resets at "
             "midnight US Pacific"
