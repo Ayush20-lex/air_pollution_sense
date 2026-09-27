@@ -4,7 +4,7 @@
 
 Built for Smart India Hackathon 2026, problem statement **SIH26082** (Ministry of Earth Sciences / NCMRWF).
 
-Live: *(add your Vercel URL here)* · API: `https://80.225.229.208/api/v1/status`
+**[air-pollution-sense.vercel.app](https://air-pollution-sense.vercel.app/)** · API: [`/api/v1/status`](https://air-pollution-sense.vercel.app/api/v1/status)
 
 ---
 
