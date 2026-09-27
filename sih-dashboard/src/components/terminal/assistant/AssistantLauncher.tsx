@@ -234,7 +234,7 @@ export function AssistantLauncher() {
       >
         <Avatar color="airlytics" size="sm" shape="circle" blinking={!reduced} track halo={!reduced} />
         <span className="hidden font-mono text-[11px] font-bold uppercase tracking-wider text-term-ink sm:inline">
-          Ask Airlytics
+          Ask AirLytics
         </span>
       </button>
 
@@ -253,7 +253,7 @@ export function AssistantLauncher() {
 
             <motion.div
               role="dialog"
-              aria-label="Airlytics assistant"
+              aria-label="AirLytics assistant"
               initial={reduced ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.97 }}
               animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
@@ -272,7 +272,7 @@ export function AssistantLauncher() {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="font-display text-sm font-bold tracking-tight text-term-ink">
-                    Airlytics Assistant
+                    AirLytics Assistant
                   </div>
                   <div className="mt-0.5 flex items-center gap-1.5">
                     <span

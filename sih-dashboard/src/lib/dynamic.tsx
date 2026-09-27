@@ -1,7 +1,7 @@
 /**
  * A `next/dynamic` stand-in for this Vite app.
  *
- * The Airlytics components were written for Next.js and lazy-load three things
+ * The AirLytics components were written for Next.js and lazy-load three things
  * that must not run during SSR: the r3f particle canvas, the Leaflet map, and
  * the dashboard itself. Vite has no SSR pass here, so `ssr: false` is a no-op —
  * but keeping the same signature means the call sites port over untouched

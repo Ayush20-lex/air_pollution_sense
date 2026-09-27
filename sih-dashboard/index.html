@@ -2,15 +2,41 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- The mark, at the sizes each surface actually asks for. PNG rather than
+         the old favicon.svg: this artwork is a raster, and a browser handed an
+         SVG it cannot parse falls back to nothing. 32 is the tab, 180 is the
+         iOS home screen, 512 is the install prompt, and the .ico covers pinned
+         tabs and bookmark bars that still ask for one.
+
+         No margin on any of these: a browser adds none of its own, so every
+         padded pixel is the mark drawn smaller than the box it was given, and
+         at 32px there is nothing to spare.
+
+         The source needs cropping to the mark rather than to its alpha. The
+         file carries a halo of near-zero alpha - under 3% opacity, which no
+         screen renders - so a plain `alpha > 0` crop squares the icon on the
+         halo's 1240px instead of the mark's 981px and draws it at 79% of the
+         width it has. Cropping above a small threshold discards nothing
+         visible and buys back that 21%. What remains above and below is the
+         artwork's own aspect ratio, since it is wider than it is tall; that
+         is not padding, and taking it would cut the cloud.
+
+         The tab sizes are transparent, so they sit on a light or a dark tab
+         strip without a white card. The 180 is the exception and carries a
+         white plate: iOS ignores transparency on an apple-touch-icon and
+         composites it on black, which swallows the dark half of the cloud. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <title>Airlytics NCR — Coupled Forecasting System</title>
+    <title>AirLytics - NCR Region | Coupled Framework ForeCasting System</title>
     <meta
       name="description"
       content="Two-way coupled meteorology-chemistry air quality forecasting console for the Delhi NCR region. Problem Statement ID26082 — NCMRWF / Ministry of Earth Sciences."
     />
-    <meta name="application-name" content="Airlytics NCR" />
+    <meta name="application-name" content="AirLytics - NCR Region" />
     <meta name="keywords" content="AQI, PM2.5, WRF-Chem, NCMRWF, Delhi NCR, forecasting" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F8FAFC" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0B0F17" />
