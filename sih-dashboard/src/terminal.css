@@ -1,5 +1,5 @@
 /**
- * AIR AQI Sense — public terminal surface.
+ * AirLytics - NCR — public terminal surface.
  *
  * Everything here is scoped under `.terminal-root` (or `.term-map` for the
  * Leaflet instance). The terminal now follows the app-wide ThemeProvider

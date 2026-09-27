@@ -26,7 +26,7 @@ const config: Config = {
         emergency: '#FF3B30',
         severe: '#A855F7',
         /**
-         * AIR AQI Sense public terminal (`/terminal`). Now driven by CSS
+         * AirLytics - NCR public terminal (`/terminal`). Now driven by CSS
          * custom properties set in terminal.css so the terminal follows the
          * app-wide light/dark swap.
          */

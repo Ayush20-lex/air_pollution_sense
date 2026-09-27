@@ -117,7 +117,7 @@ export function ScanTransition({ active }: { active: boolean }) {
             className="font-mono text-sm font-bold uppercase tracking-[0.28em]"
             style={{ color: term.primary }}
           >
-            AIR AQI Sense
+            AirLytics - NCR
           </div>
           <div
             className="font-mono text-[10px] uppercase tracking-[0.22em]"
