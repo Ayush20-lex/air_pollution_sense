@@ -89,8 +89,9 @@ ml_pipeline/data/processed/baseline_corrections.json
 # Screen recordings / large media
 *.mp4
 
-# Third-party skills installed by `npx skills add` — per-machine, not project code
-.claude/skills/
+# Local editor and tooling config — per-machine, not project code
+.claude/
+skills-lock.json
 
 # Training output: checkpoints are 13 MB each and regenerable from script 16.
 backend/weights/
@@ -151,8 +152,6 @@ ml_pipeline/data/raw/gfs/*
 !ml_pipeline/data/raw/gfs/gfs_ncr.parquet
 !ml_pipeline/data/raw/gfs/gfs_ncr_forecast.parquet
 
-# Third-party subagents fetched with the caveman pack — per-machine, not project code
-.claude/agents/cavecrew-*.md
 
 # FIRMS fire pixels are cached per origin date; refetchable from NASA with a key.
 ml_pipeline/data/cache/
