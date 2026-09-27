@@ -1,4 +1,4 @@
-# Airlytics NCR
+# AirLytics NCR
 
 **A 72-hour air quality forecast for Delhi NCR that can show you where every number came from.**
 
@@ -14,7 +14,7 @@ Most of them will tell you Delhi's AQI is 312. Almost none will tell you which s
 
 That gap matters. CPCB's National AQI is not a measurement, it is an arithmetic result with rules: a 24-hour rolling average per pollutant, at least 16 valid hours in that window, at least three pollutants with one of them particulate, and the index is the **worst** sub-index rather than the average. A dashboard that silently fills gaps or averages across stations produces a number that looks authoritative and is not.
 
-Airlytics is built the other way around. Every figure is traceable to a station and an hour, every gap is stated rather than filled, and where the system cannot know something it says so.
+AirLytics is built the other way around. Every figure is traceable to a station and an hour, every gap is stated rather than filled, and where the system cannot know something it says so.
 
 ## What it does
 
