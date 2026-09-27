@@ -4,7 +4,7 @@
 
 Built for Smart India Hackathon 2026, problem statement **SIH26082** (Ministry of Earth Sciences / NCMRWF).
 
-**[air-pollution-sense.vercel.app](https://air-pollution-sense.vercel.app/)** · API: [`/api/v1/status`](https://air-pollution-sense.vercel.app/api/v1/status)
+**[airlytics-ncr.vercel.app](https://airlytics-ncr.vercel.app/)** · API: [`/api/v1/status`](https://airlytics-ncr.vercel.app/api/v1/status)
 
 ![The landing view: the NCR mesh, with live station readings on the globe](docs/screenshots/hero.png)
 
