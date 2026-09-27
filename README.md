@@ -171,7 +171,7 @@ Stated here rather than left to be discovered:
 ## Repository layout
 
 ```
-air_pollution_sense
+airlytics-ncr
 │
 ├── backend/                      FastAPI service: indexing, forecast, assistant
 │   ├── api_server.py             the eleven endpoints
