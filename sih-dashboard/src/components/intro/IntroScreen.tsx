@@ -337,8 +337,24 @@ export function IntroScreen() {
 
       {/* --- left telemetry rail ------------------------------------------ */}
       <div className="absolute left-5 top-1/2 z-20 hidden -translate-y-1/2 flex-col gap-4 sm:left-8 lg:flex">
+        {/* Says where, which the rail never did. Every figure below is the
+            region as a whole - PM2.5 is the mean across all reporting
+            stations, and the boundary layer and inversion index are NCR-wide
+            model fields - so a reader could see "17 µg/m³" and reasonably ask
+            which station that was. None of them: it is all of them.
+
+            Once above the three rather than repeated on each, because it is
+            one fact about all of them, and the sector pills beside the globe
+            are where the per-zone breakdown already lives.
+
+            The station count stays on the PM2.5 row rather than joining it up
+            here: only that figure is built from stations. The boundary layer
+            and the inversion index are model fields, and "24 stations
+            reporting" written across all three would claim instruments behind
+            two numbers that have none. */}
+        <div className="hud-label pl-3">Delhi NCR</div>
         <TelemetryStat
-          label={now.live ? `PM2.5 · ${now.stations} STATIONS` : 'PM2.5 AVG'}
+          label={now.live ? `PM2.5 · mean of ${now.stations}` : 'PM2.5 AVG'}
           value={(now.pm25 ?? frame.avgPm25).toFixed(0)}
           unit="µg/m³"
           accent={aqiColor(now.pm25 ?? frame.avgPm25)}
