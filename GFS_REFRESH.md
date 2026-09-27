@@ -113,12 +113,31 @@ repo while Ayush's is the `ayush` remote — so pushing to the wrong one deploys
 nothing:
 
 ```bash
-ssh -i /path/to/ssh-key-2026-09-20.key ubuntu@140.238.241.77   "cd /root/airsense && sudo git fetch ayush && sudo git merge --ff-only ayush/main && sudo systemctl restart airsense"
+ssh -i /path/to/ssh-key-2026-09-26.key ubuntu@80.225.229.208   "cd /home/ubuntu/air_pollution_sense && sudo git fetch origin && sudo git merge --ff-only origin/main && sudo systemctl restart uvicorn"
 ```
 
-`ssh-key-2026-09-18.key` was rotated out on 20 September after being exposed and
-is rejected by the box; use the 09-20 key. Confirm afterwards with:
+Everything about that line changed when the host was rebuilt on 26 September,
+and an older copy of it is wrong in five ways. The address is
+`80.225.229.208`. The key is the 09-26 one. The checkout is at
+`/home/ubuntu/air_pollution_sense`, not `/root/airsense`. The unit is
+`uvicorn`, not `airsense`.
+
+And the remotes are the other way round: the rebuilt box has exactly one
+remote, `origin`, and it points at Ayush's repository — so the old advice to
+fetch `ayush` and avoid `origin` now fails with "'ayush' does not appear to be
+a git repository", and `origin` is the one to pull. Run `sudo git remote -v`
+before trusting either.
+
+`sudo` on every git command, not just the restart: the checkout is root-owned,
+so git run as `ubuntu` stops at "detected dubious ownership" and does nothing.
+
+Keys have been rotated twice after exposure — `ssh-key-2026-09-18.key` on 20
+September, and the 09-20 key with the rebuild — so an old key failing is the
+expected result, not a broken box.
+
+The service takes about 25 seconds to answer after a restart, because it reads
+the archive parquets on startup. Confirm with:
 
 ```bash
-curl -s https://140.238.241.77/api/v1/met/gfs | grep -o '"status":"[a-z]*"'
+curl -s https://80.225.229.208/api/v1/met/gfs | grep -o '"status":"[a-z]*"'
 ```
