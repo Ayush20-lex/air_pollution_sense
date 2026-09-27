@@ -13,7 +13,7 @@ source's. Anyone checking a public AQI site during a demo sees the difference.
 
 WAQI publishes the same CPCB stations within the hour. This reads it for the
 *mesh* - what the air is doing now. The forecast keeps running on the archive,
-because its 62.23 ug/m3 was scored there and swapping the source underneath it
+because its 61.62 ug/m3 was scored there and swapping the source underneath it
 would invalidate the one validated number in the project.
 
 The units problem, and what is done about it

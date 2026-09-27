@@ -15,16 +15,16 @@ same tensor contract, so no endpoint or frontend code has to change.
 
 The method
 ----------
-Scored by ml_pipeline/scripts/14_baselines.py over 3,891,185 comparisons from
+Scored by ml_pipeline/scripts/14_baselines.py over 3,993,801 comparisons from
 1,157 origins across 68 CPCB stations, fitted on everything to 30 November 2025
 and tested on December 2025 through September 2026 - a full annual cycle rather
 than one winter month:
 
-    mean(diurnal_persistence, bias-corrected CAMS)   RMSE  62.23 ug/m3   <- this
-    diurnal persistence alone                        RMSE  67.15
-    persistence                                      RMSE  82.65
-    bias-corrected CAMS alone                        RMSE  83.41
-    raw CAMS                                         RMSE  85.61
+    mean(diurnal_persistence, bias-corrected CAMS)   RMSE  61.62 ug/m3   <- this
+    diurnal persistence alone                        RMSE  66.54
+    persistence                                      RMSE  81.84
+    bias-corrected CAMS alone                        RMSE  82.49
+    raw CAMS                                         RMSE  84.67
 
 CAMS reproduces Delhi's diurnal shape but is biased, so it is rescaled by a
 single factor fitted on the training window alone. The direction of that bias is
@@ -115,18 +115,18 @@ CHANNEL_SOURCE: dict[int, str] = {
 #: which is every lead once a forecast runs past the newest observation.
 #:
 #: Reporting one number for both would be the easy lie. A forecast anchored on
-#: today is mostly CAMS, and calling that 62.23 claims an accuracy measured
+#: today is mostly CAMS, and calling that 61.62 claims an accuracy measured
 #: with real observations behind every hour.
 LEAD_RMSE = {
-    "blend": 62.23,        # mean(diurnal_persistence, bias-corrected CAMS)
+    "blend": 61.62,        # mean(diurnal_persistence, bias-corrected CAMS)
     # Same method and so the same figure; what differs is where the diurnal
     # parent came from. The archive's own observations end about two days back,
     # so a forecast issued today can only get "same hour yesterday" from the
     # live feed. It is a measurement either way - recorded hour by hour rather
     # than replayed - and the blend was scored on the method, not on the
     # provenance of one parent.
-    "blend_live": 62.23,
-    "cams_only": 83.41,    # bias-corrected CAMS alone
+    "blend_live": 61.62,
+    "cams_only": 82.49,    # bias-corrected CAMS alone
 }
 
 VALIDATED: dict[int, dict[str, object]] = {
@@ -137,19 +137,20 @@ VALIDATED: dict[int, dict[str, object]] = {
         "scored_comparisons": 3_891_185,
     },
     2026: {
-        "validated_rmse_ugm3": 62.23,
+        "validated_rmse_ugm3": 61.62,
         "beats_raw_cams_by": "27%",
         # A full annual cycle rather than one winter month, which is the
         # stronger claim even though the number is lower: part of the drop is
         # simply that monsoon months are cleaner, not that the method improved.
         #
         # 66.35 before observation QC, 63.35 after, 62.23 once the archive was
-        # topped up to 17 September. The QC step is the interesting one: dropping
-        # 394 network-contradicted readings out of 925,344 moved it three points,
+        # topped up to 17 September, 61.62 once it reached 27 September. The QC
+        # step is the interesting one: dropping 427 network-contradicted readings
+        # out of 767,957 station-hours moved it three points,
         # a reminder that a handful of faults can carry an error metric and that
         # the score has to be recomputed on the data actually served.
         "scored_window": "December 2025 - September 2026",
-        "scored_comparisons": 3_891_185,
+        "scored_comparisons": 3_993_801,
     },
 }
 

@@ -42,7 +42,7 @@ computed and reported, because none of it is double-counted: the archived
 meteorology carries CAMS/ERA5 fields that do not see today's forecast aerosol.
 Turning the PM2.5 response on is a scoring question, not a taste one, and
 `ml_pipeline/scripts/20_score_coupling.py` answers it against the same held-out
-window and the same 3.9 million comparisons that produced RMSE 62.23.
+window and the same 4.0 million comparisons that produced RMSE 61.62.
 
 A diagnostic that reports the feedback honestly is worth more than a correction
 that improves nothing and inflates the number the page is judged on.
