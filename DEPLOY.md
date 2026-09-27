@@ -145,8 +145,19 @@ through `EnvironmentFile=` — `assistant.py` reads `os.environ`, so a
 | variable | without it |
 |---|---|
 | `GEMINI_API_KEY` | `/api/v1/assistant` reports unavailable and the widget does not render |
-| `AQICN_TOKEN` | the station mesh falls back to the archive, ~42 hours behind |
+| `WAQI_TOKEN` | the station mesh falls back to the archive, ~42 hours behind |
+| `CPCB_API_KEY` | CPCB's own hourly bulletin is skipped; the mesh runs on WAQI alone |
 | `NASA_FIRMS_KEY` | the fire channels stay zero rather than mocked |
+| `AQICN_TOKEN` | read by pydantic `Settings`, not by the mesh — `data_mode` cannot reach `live` |
+
+`WAQI_TOKEN` and `AQICN_TOKEN` are not the same switch and are easy to confuse.
+The live station feed reads `WAQI_TOKEN` off the environment; `Settings.aqicn_token`
+is a separate field that gates `data_mode`, so setting one and not the other
+leaves the mesh live while `/api/v1/status` still says `archive_replay`.
+
+Each entry belongs on exactly one line. `EnvironmentFile` takes the last
+occurrence of a duplicate, so a repeated name works only by the order it
+happens to sit in.
 
 `backend/set-assistant-key.sh` writes one of them and restarts the API. It
 prompts for the value instead of taking it as an argument, so the secret stays
