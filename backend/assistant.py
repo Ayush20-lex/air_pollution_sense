@@ -204,23 +204,36 @@ def _post(payload: dict[str, Any]) -> dict[str, Any]:
             break
         time.sleep(RETRY_BACKOFF_S * (attempt + 1))
 
+    if r.ok:
+        return r.json()
+
+    # Google's error envelope carries the reason - a 404 here means the model
+    # name is not served to this key, which is indistinguishable from a dead
+    # endpoint unless you read it, and a 429 names which quota ran out. Read it
+    # before branching: the first version of this logged every status except
+    # 429, which was the one worth seeing. The key travels as a query
+    # parameter, so scrub it out of anything echoed back.
+    reason = ""
+    try:
+        err = r.json().get("error", {})
+        reason = f'{err.get("status", "")}: {err.get("message", "")}'[:300]
+    except ValueError:
+        reason = r.text[:300]
+    reason = reason.replace(key, "<key>")
+    log.warning("gemini HTTP %s %s (model=%s)", r.status_code, reason, MODEL)
+
     if r.status_code == 429:
-        raise RuntimeError("rate limited upstream")
-    if not r.ok:
-        # Google's error envelope carries the reason - a 404 here means the
-        # model name is not served to this key, which is indistinguishable
-        # from a dead endpoint unless you read it. The key travels as a query
-        # parameter, so scrub it out of anything echoed back before logging.
-        reason = ""
-        try:
-            err = r.json().get("error", {})
-            reason = f'{err.get("status", "")}: {err.get("message", "")}'[:300]
-        except ValueError:
-            reason = r.text[:300]
-        reason = reason.replace(key, "<key>")
-        log.warning("gemini HTTP %s %s (model=%s)", r.status_code, reason, MODEL)
-        raise RuntimeError(f"upstream returned HTTP {r.status_code}")
-    return r.json()
+        # Whose limit this is matters to whoever is reading the panel: ours is
+        # a pause of seconds, Google's daily free-tier quota is a pause until
+        # midnight Pacific, and the two deserve different expectations.
+        daily = "per day" in reason.lower() or "perday" in reason.lower()
+        raise RuntimeError(
+            "the daily free quota for this model is spent; it resets at "
+            "midnight US Pacific"
+            if daily
+            else "too many questions in the last minute, give it a moment"
+        )
+    raise RuntimeError(f"upstream returned HTTP {r.status_code}")
 
 
 def _parts_text(parts: list[dict[str, Any]]) -> str:
