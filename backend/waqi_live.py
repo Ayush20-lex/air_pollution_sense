@@ -115,9 +115,16 @@ EXCLUDED: dict[str, str] = {
 
 def token() -> str | None:
     """WAQI token from the environment, or the partner pipeline's .env."""
-    t = os.getenv("WAQI_TOKEN", "").strip()
-    if t:
-        return t
+    # Two names for one credential. The service is aqicn.org and the feed is
+    # api.waqi.info, so deployments have been configured under both spellings -
+    # and api_server's own warning tells the operator to set AQICN_TOKEN while
+    # this read only ever looked for WAQI_TOKEN. A box can therefore look
+    # configured, log nothing useful, and still serve the archive. Accept
+    # either rather than make the operator guess which half is authoritative.
+    for name in ("WAQI_TOKEN", "AQICN_TOKEN"):
+        t = os.getenv(name, "").strip()
+        if t:
+            return t
     from pathlib import Path
     env = Path(__file__).resolve().parents[1] / "external_data_pipeline" / ".env"
     if env.exists():
