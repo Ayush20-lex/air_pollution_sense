@@ -53,6 +53,11 @@ MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 
 BASE = "https://generativelanguage.googleapis.com/v1beta"
 
+#: Upstream capacity blips, retried with a widening gap. Kept small: the caller
+#: is a person waiting on a stream, not a batch job.
+RETRY_ON_503 = 2
+RETRY_BACKOFF_S = 2.0
+
 #: Hard ceilings. `MAX_TURNS` bounds one conversation; `MAX_TOOL_ROUNDS` bounds
 #: one answer, so a model that loops on tools cannot bill forever.
 MAX_OUTPUT_TOKENS = 900
@@ -181,13 +186,24 @@ def _post(payload: dict[str, Any]) -> dict[str, Any]:
     key = api_key()
     if key is None:
         raise RuntimeError("no API key")
-    r = requests.post(
-        f"{BASE}/models/{MODEL}:generateContent",
-        params={"key": key},
-        json=payload,
-        timeout=REQUEST_TIMEOUT_S,
-        headers={"Content-Type": "application/json"},
-    )
+    # 503 from this API means the model is momentarily out of capacity, not
+    # that anything is wrong with the request - the same payload succeeds
+    # seconds later. Retrying briefly is the difference between a widget that
+    # looks broken and one that is a beat slow. 429 is not retried: that one is
+    # a budget, and hammering it makes it worse.
+    r = None
+    for attempt in range(RETRY_ON_503 + 1):
+        r = requests.post(
+            f"{BASE}/models/{MODEL}:generateContent",
+            params={"key": key},
+            json=payload,
+            timeout=REQUEST_TIMEOUT_S,
+            headers={"Content-Type": "application/json"},
+        )
+        if r.status_code != 503 or attempt == RETRY_ON_503:
+            break
+        time.sleep(RETRY_BACKOFF_S * (attempt + 1))
+
     if r.status_code == 429:
         raise RuntimeError("rate limited upstream")
     if not r.ok:
