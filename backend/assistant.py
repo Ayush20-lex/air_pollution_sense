@@ -44,7 +44,12 @@ API_KEY_ENV = "GEMINI_API_KEY"
 
 #: Flash: the cheap, fast tier, which is the right one for a public widget
 #: answering from tool output rather than from its own reasoning.
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+# Overridable because model names expire faster than this codebase does. The
+# original default was gemini-2.5-flash, which a newly issued key cannot call:
+# "no longer available to new users". It still appears in ListModels, so only
+# generateContent reveals it, and the refusal arrives as 404 model-not-found
+# rather than a permission error - which reads exactly like a dead endpoint.
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 
 BASE = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -186,8 +191,18 @@ def _post(payload: dict[str, Any]) -> dict[str, Any]:
     if r.status_code == 429:
         raise RuntimeError("rate limited upstream")
     if not r.ok:
-        # The body can echo the key in an error envelope; log the status only.
-        log.warning("gemini HTTP %s", r.status_code)
+        # Google's error envelope carries the reason - a 404 here means the
+        # model name is not served to this key, which is indistinguishable
+        # from a dead endpoint unless you read it. The key travels as a query
+        # parameter, so scrub it out of anything echoed back before logging.
+        reason = ""
+        try:
+            err = r.json().get("error", {})
+            reason = f'{err.get("status", "")}: {err.get("message", "")}'[:300]
+        except ValueError:
+            reason = r.text[:300]
+        reason = reason.replace(key, "<key>")
+        log.warning("gemini HTTP %s %s (model=%s)", r.status_code, reason, MODEL)
         raise RuntimeError(f"upstream returned HTTP {r.status_code}")
     return r.json()
 
