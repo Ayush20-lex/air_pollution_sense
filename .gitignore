@@ -159,3 +159,9 @@ ml_pipeline/data/cache/
 
 # Derived archive state, rebuilt from ml_pipeline/data - see backend/archive_cache.py
 .cache/
+
+# Node backups taken before a rebuild. Data, not code, and large: kept on
+# disk rather than in the history. This rule was in the working tree before
+# the 27 September merge and did not survive it, and `git add -A` then swept
+# 1.2MB of it into a commit.
+backups/
