@@ -171,8 +171,18 @@ function TerminalSidebar({ open, onClose }: { open: boolean; onClose: () => void
 
         {/* brand */}
         <div className="flex items-center gap-3 px-2 py-1">
-          <div className="relative flex size-10 items-center justify-center rounded-xl border border-term-primary/40 bg-term-surface-high text-term-primary shadow-[0_0_20px_rgba(78,222,163,0.3)]">
-            <Radio className="size-5" />
+          {/* The mark, in the tile the radio glyph used to sit in. The tile,
+              its glow and the badge stay: the badge is the only thing on this
+              rail that says the mesh is reporting, and it is anchored to this
+              corner. Only the glyph was generic. */}
+          <div className="relative flex size-10 items-center justify-center rounded-xl border border-term-primary/40 bg-term-surface-high shadow-[0_0_20px_rgba(78,222,163,0.3)]">
+            <img
+              src="/mark-airlytics.png"
+              alt=""
+              aria-hidden="true"
+              className="size-7 select-none"
+              draggable={false}
+            />
             <span className="absolute -right-1 -top-1 flex size-2.5">
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-term-primary opacity-75" />
               <span className="relative inline-flex size-2.5 rounded-full bg-term-primary" />
