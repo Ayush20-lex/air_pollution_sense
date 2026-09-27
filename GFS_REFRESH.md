@@ -25,7 +25,7 @@ opening the status page sees.
 
 ---
 
-## Paste this into Claude Code
+## The refresh request
 
 > Re-run our GFS fetcher and export a fresh cycle to `exports/gfs_ncr_forecast.parquet`.
 >
