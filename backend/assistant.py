@@ -44,9 +44,19 @@ API_KEY_ENV = "GEMINI_API_KEY"
 
 #: Flash: the cheap, fast tier, which is the right one for a public widget
 #: answering from tool output rather than from its own reasoning.
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+# Overridable because model names expire faster than this codebase does. The
+# original default was gemini-2.5-flash, which a newly issued key cannot call:
+# "no longer available to new users". It still appears in ListModels, so only
+# generateContent reveals it, and the refusal arrives as 404 model-not-found
+# rather than a permission error - which reads exactly like a dead endpoint.
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 
 BASE = "https://generativelanguage.googleapis.com/v1beta"
+
+#: Upstream capacity blips, retried with a widening gap. Kept small: the caller
+#: is a person waiting on a stream, not a batch job.
+RETRY_ON_503 = 2
+RETRY_BACKOFF_S = 2.0
 
 #: Hard ceilings. `MAX_TURNS` bounds one conversation; `MAX_TOOL_ROUNDS` bounds
 #: one answer, so a model that loops on tools cannot bill forever.
@@ -75,7 +85,7 @@ def available() -> bool:
 
 
 SYSTEM_PROMPT = """\
-You are the AirSense assistant, embedded in a public air-quality dashboard for \
+You are the Airlytics assistant, embedded in a public air-quality dashboard for \
 Delhi NCR built for SIH problem statement 26082 (MoES / NCMRWF).
 
 THE RULE THAT OVERRIDES EVERYTHING ELSE
@@ -176,20 +186,66 @@ def _post(payload: dict[str, Any]) -> dict[str, Any]:
     key = api_key()
     if key is None:
         raise RuntimeError("no API key")
-    r = requests.post(
-        f"{BASE}/models/{MODEL}:generateContent",
-        params={"key": key},
-        json=payload,
-        timeout=REQUEST_TIMEOUT_S,
-        headers={"Content-Type": "application/json"},
-    )
+    # 503 from this API means the model is momentarily out of capacity, not
+    # that anything is wrong with the request - the same payload succeeds
+    # seconds later. Retrying briefly is the difference between a widget that
+    # looks broken and one that is a beat slow. 429 is not retried: that one is
+    # a budget, and hammering it makes it worse.
+    r = None
+    for attempt in range(RETRY_ON_503 + 1):
+        r = requests.post(
+            f"{BASE}/models/{MODEL}:generateContent",
+            params={"key": key},
+            json=payload,
+            timeout=REQUEST_TIMEOUT_S,
+            headers={"Content-Type": "application/json"},
+        )
+        if r.status_code != 503 or attempt == RETRY_ON_503:
+            break
+        time.sleep(RETRY_BACKOFF_S * (attempt + 1))
+
+    if r.ok:
+        return r.json()
+
+    # Google's error envelope carries the reason - a 404 here means the model
+    # name is not served to this key, which is indistinguishable from a dead
+    # endpoint unless you read it, and a 429 names which quota ran out. Read it
+    # before branching: the first version of this logged every status except
+    # 429, which was the one worth seeing. The key travels as a query
+    # parameter, so scrub it out of anything echoed back.
+    reason, quota_ids = "", []
+    try:
+        err = r.json().get("error", {})
+        reason = f'{err.get("status", "")}: {err.get("message", "")}'[:300]
+        # The prose message for a 429 says only "you exceeded your current
+        # quota" - which quota is in the QuotaFailure detail, as an id like
+        # GenerateRequestsPerDayPerProjectPerModel. Without reading this there
+        # is no way to tell a minute's pause from a lockout until tomorrow.
+        for d in err.get("details", []) or []:
+            for v in (d.get("violations") or []) if isinstance(d, dict) else []:
+                qid = str(v.get("quotaId", ""))
+                if qid:
+                    quota_ids.append(qid)
+    except ValueError:
+        reason = r.text[:300]
+    if quota_ids:
+        reason = f"{reason} [quota: {','.join(quota_ids)}]"[:400]
+    reason = reason.replace(key, "<key>")
+    log.warning("gemini HTTP %s %s (model=%s)", r.status_code, reason, MODEL)
+
     if r.status_code == 429:
-        raise RuntimeError("rate limited upstream")
-    if not r.ok:
-        # The body can echo the key in an error envelope; log the status only.
-        log.warning("gemini HTTP %s", r.status_code)
-        raise RuntimeError(f"upstream returned HTTP {r.status_code}")
-    return r.json()
+        # Whose limit this is matters to whoever is reading the panel: ours is
+        # a pause of seconds, Google's daily free-tier quota is a pause until
+        # midnight Pacific, and the two deserve different expectations.
+        blob = " ".join(quota_ids).lower() or reason.lower()
+        daily = "perday" in blob.replace(" ", "")
+        raise RuntimeError(
+            "the daily free quota for this model is spent; it resets at "
+            "midnight US Pacific"
+            if daily
+            else "too many questions in the last minute, give it a moment"
+        )
+    raise RuntimeError(f"upstream returned HTTP {r.status_code}")
 
 
 def _parts_text(parts: list[dict[str, Any]]) -> str:

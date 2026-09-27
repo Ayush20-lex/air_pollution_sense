@@ -1,5 +1,5 @@
 /**
- * AirSense NCR — application shell.
+ * Airlytics NCR — application shell.
  *
  * Folds the Next.js `app/layout.tsx` + `app/providers.tsx` + the route tree
  * into a single Vite entry. The provider stack is carried over unchanged; only
@@ -96,7 +96,7 @@ let cameThroughLanding = false;
  * through the landing page, which is the fallback anyway.
  */
 const RETURN_WINDOW_MS = 30 * 60 * 1000;
-const LAST_SEEN_KEY = 'airsense:terminal-last-seen';
+const LAST_SEEN_KEY = 'airlytics:terminal-last-seen';
 
 /**
  * When this browser was last on the terminal.

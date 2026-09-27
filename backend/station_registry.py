@@ -280,6 +280,11 @@ def build(season: int = 2025, as_of: str | None = None) -> dict[str, Any]:
         return _build(season, as_of)
 
 
+#: The lock wrapper hid the cache it guards: callers that had been clearing the
+#: memo through `build.cache_clear()` - the archive refresh among them - started
+#: raising AttributeError instead, and did so at the step that rewrites the
+#: dashboard's offline snapshot. Hand the handle back rather than make every
+#: caller reach for the private name. Assigned below `_build`, where it exists.
 @lru_cache(maxsize=4)
 def _build(season: int = 2025, as_of: str | None = None) -> dict[str, Any]:
     """The whole mesh at one instant, ready to serve.
@@ -388,6 +393,9 @@ def _build(season: int = 2025, as_of: str | None = None) -> dict[str, Any]:
         ),
         "stations": stations,
     }
+
+
+build.cache_clear = _build.cache_clear  # type: ignore[attr-defined]
 
 
 def describe(season: int = 2025, as_of: str | None = None) -> dict[str, Any]:

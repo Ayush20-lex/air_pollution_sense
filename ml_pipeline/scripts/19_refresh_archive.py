@@ -381,15 +381,37 @@ def main() -> int:
     log.info("  RMSE %.2f over %d comparisons, %s better than raw CAMS",
              s["rmse"], s["n"], s["beats"])
 
+    # Scoped to THIS season's entry in VALIDATED, not the whole file. A bare
+    # search takes whichever season appears first: when two seasons happen to
+    # hold the same figure, patch() then sees two matches and stops the refresh
+    # at step 6, leaving the archive newer than the number published about it.
+    # Once they differ it is worse - the search points silently at the season
+    # that was not rescored. VALIDATED gains a block a year, so neither case is
+    # hypothetical; this one stopped the 27 September refresh.
     fwd = BACKEND / "baseline_forecaster.py"
-    cur_rmse = re.search(r'"validated_rmse_ugm3": ([\d.]+)', fwd.read_text(encoding="utf-8"))
-    cur_n = re.search(r'"scored_comparisons": ([\d_]+)', fwd.read_text(encoding="utf-8"))
-    cur_beats = re.search(r'"beats_raw_cams_by": "(\d+%)"', fwd.read_text(encoding="utf-8"))
-    patch(fwd, [
+    text = fwd.read_text(encoding="utf-8")
+    block = re.search(r"    %d: \{\n(.*?)\n    \}," % season, text, re.S)
+    if block is None:
+        raise SystemExit(f"backend/baseline_forecaster.py: no VALIDATED entry for {season}")
+    cur = block.group(1)
+    cur_rmse = re.search(r'"validated_rmse_ugm3": ([\d.]+)', cur)
+    cur_n = re.search(r'"scored_comparisons": ([\d_]+)', cur)
+    cur_beats = re.search(r'"beats_raw_cams_by": "(\d+%)"', cur)
+    fresh = cur
+    for old, new in (
         (f'"validated_rmse_ugm3": {cur_rmse.group(1)}', f'"validated_rmse_ugm3": {s["rmse"]}'),
         (f'"scored_comparisons": {cur_n.group(1)}', f'"scored_comparisons": {s["n"]:_}'),
         (f'"beats_raw_cams_by": "{cur_beats.group(1)}"', f'"beats_raw_cams_by": "{s["beats"]}"'),
-    ], "backend/baseline_forecaster.py")
+    ):
+        if old == new:
+            continue
+        if fresh.count(old) != 1:
+            raise SystemExit(f"backend/baseline_forecaster.py {season}: expected one {old!r}")
+        fresh = fresh.replace(old, new)
+    if fresh != cur:
+        fwd.write_text(text[:block.start(1)] + fresh + text[block.end(1):],
+                       encoding="utf-8", newline="\n")
+        log.info("  updated backend/baseline_forecaster.py (season %s)", season)
 
     sys.path.insert(0, str(BACKEND))
     import baseline_forecaster as bf  # noqa: PLC0415

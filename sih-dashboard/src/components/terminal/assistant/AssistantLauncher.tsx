@@ -34,11 +34,18 @@ import { useMesh } from '@/lib/terminal/useMesh';
 import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import { cn } from '@/lib/utils';
 
+/**
+ * Four topics, one word each.
+ *
+ * "Health & exposure" / "Atmospheric science" ran past the panel's right edge
+ * in a horizontally scrolling row, so the fourth was clipped mid-word with
+ * nothing to say it continued. A label a reader cannot finish is not a label.
+ */
 const TOPICS = [
-  { id: 'health', label: 'Health & exposure' },
-  { id: 'science', label: 'Atmospheric science' },
-  { id: 'policy', label: 'Policy & GRAP' },
-  { id: 'fires', label: 'Stubble & plumes' },
+  { id: 'health', label: 'Health' },
+  { id: 'science', label: 'Science' },
+  { id: 'policy', label: 'Policy' },
+  { id: 'fires', label: 'Fires' },
 ] as const;
 
 type TopicId = (typeof TOPICS)[number]['id'];
@@ -88,7 +95,7 @@ function formatHour(iso: string | null): string | null {
 function useGrounding(): { tone: 'live' | 'offline' | 'loading'; text: string } {
   const mesh = useMesh();
   if (mesh.status === 'loading') return { tone: 'loading', text: 'Connecting to the mesh' };
-  if (!mesh.live) return { tone: 'offline', text: 'Offline snapshot — not this hour' };
+  if (!mesh.live) return { tone: 'offline', text: 'Offline snapshot, not this hour' };
   const hour = formatHour(mesh.asOf);
   return {
     tone: 'live',
@@ -225,9 +232,9 @@ export function AssistantLauncher() {
         aria-label={open ? 'Close the assistant' : 'Ask the assistant'}
         className="group fixed bottom-5 right-5 z-[600] flex items-center gap-2.5 rounded-full border border-[#ff5ecf]/40 bg-term-surface-lowest/95 py-1.5 pl-1.5 pr-4 shadow-[0_0_24px_rgba(255,94,207,.22)] backdrop-blur-sm transition-all hover:border-[#ff5ecf]/70 hover:shadow-[0_0_32px_rgba(255,94,207,.38)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5ecf]/60 sm:bottom-6 sm:right-6"
       >
-        <Avatar color="airsense" size="sm" shape="circle" blinking={!reduced} track halo={!reduced} />
+        <Avatar color="airlytics" size="sm" shape="circle" blinking={!reduced} track halo={!reduced} />
         <span className="hidden font-mono text-[11px] font-bold uppercase tracking-wider text-term-ink sm:inline">
-          Ask AirSense
+          Ask Airlytics
         </span>
       </button>
 
@@ -246,7 +253,7 @@ export function AssistantLauncher() {
 
             <motion.div
               role="dialog"
-              aria-label="AirSense assistant"
+              aria-label="Airlytics assistant"
               initial={reduced ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.97 }}
               animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
@@ -255,7 +262,7 @@ export function AssistantLauncher() {
             >
               <div className="flex items-start gap-3 border-b border-term-outline-variant/60 p-4">
                 <Avatar
-                  color="airsense"
+                  color="airlytics"
                   size="md"
                   shape="squircle"
                   blinking={!reduced}
@@ -265,7 +272,7 @@ export function AssistantLauncher() {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="font-display text-sm font-bold tracking-tight text-term-ink">
-                    AirSense Assistant
+                    Airlytics Assistant
                   </div>
                   <div className="mt-0.5 flex items-center gap-1.5">
                     <span
@@ -284,7 +291,7 @@ export function AssistantLauncher() {
                           : 'text-term-ink-variant',
                       )}
                     >
-                      {unconfigured ? 'No API key — dev preview' : grounding.text}
+                      {unconfigured ? 'Dev preview: no API key' : grounding.text}
                     </span>
                   </div>
                 </div>
@@ -298,8 +305,11 @@ export function AssistantLauncher() {
                 </button>
               </div>
 
+              {/* Wraps rather than scrolls. A clipped row hides values behind a
+                  gesture with no affordance; four short pills fit one line at
+                  panel width and fall to two if the text scales. */}
               {msgs.length === 0 && (
-                <div className="flex gap-1.5 overflow-x-auto border-b border-term-outline-variant/40 px-4 py-2.5">
+                <div className="flex flex-wrap gap-1.5 border-b border-term-outline-variant/40 px-4 py-2.5">
                   {TOPICS.map((t) => (
                     <button
                       key={t.id}
@@ -323,14 +333,16 @@ export function AssistantLauncher() {
                 {msgs.length === 0 && (
                   <>
                     <div className="flex gap-2.5">
-                      <Avatar color="airsense" size="sm" shape="circle" blinking={false} />
+                      <Avatar color="airlytics" size="sm" shape="circle" blinking={false} />
                       <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-term-outline-variant/60 bg-term-surface-low p-3">
+                        {/* Two lines, not six. This sat above the suggested
+                            questions and pushed them below the fold, so the
+                            first thing a reader met was a paragraph about
+                            method rather than something to click. The method
+                            is proved by the receipts under each answer. */}
                         <p className="font-body text-xs leading-relaxed text-term-ink-variant">
-                          I answer from this system&rsquo;s own measurements — the CPCB station
-                          mesh, the 72-hour forecast and its scored error, the GRAP engine, and
-                          the VIIRS fire corridor. Every figure names the station and the hour it
-                          came from, and where a channel is not measured I say that instead of
-                          estimating it.
+                          I answer only from this dashboard&rsquo;s own readings, and every figure
+                          names the station and hour it came from.
                         </p>
                       </div>
                     </div>
@@ -338,25 +350,26 @@ export function AssistantLauncher() {
                     {unconfigured && (
                       <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
                         <p className="font-body text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
-                          <span className="font-semibold">Dev preview.</span> The server has no{' '}
-                          <code className="font-mono">GEMINI_API_KEY</code>, so nothing here will
-                          answer. This panel is hidden entirely on the deployed site rather than
-                          shown broken — set the key and it appears on its own.
+                          <span className="font-semibold">Dev preview.</span> No{' '}
+                          <code className="font-mono">GEMINI_API_KEY</code> on the server, so
+                          nothing here will answer. Hidden entirely on the deployed site.
                         </p>
                       </div>
                     )}
 
+                    {/* No "TRY ASKING" label above these. The panel already
+                        carried a status badge, a section label and a footer
+                        caption in the same mono caps; a fourth made the caps
+                        the loudest thing in a 400px column. A row of buttons
+                        with an affordance icon does not need announcing. */}
                     <div className="space-y-1.5">
-                      <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-term-ink-variant">
-                        Try asking
-                      </span>
                       {OPENERS[topic].map((q) => (
                         <button
                           key={q}
                           type="button"
                           disabled={unconfigured}
                           onClick={() => void ask(q)}
-                          className="flex w-full items-center justify-between gap-2 rounded-xl border border-term-outline-variant/60 bg-term-surface-low px-3 py-2.5 text-left font-body text-xs text-term-ink transition-colors hover:border-[#ff5ecf]/40"
+                          className="flex w-full items-center justify-between gap-2 rounded-xl border border-term-outline-variant/60 bg-term-surface-low px-3 py-3 text-left font-body text-xs text-term-ink transition-colors hover:border-[#ff5ecf]/40 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {q}
                           <Sparkles className="size-3.5 shrink-0 text-term-secondary" />
@@ -382,7 +395,7 @@ export function AssistantLauncher() {
                     </div>
                   ) : (
                     <div key={i} className="flex gap-2.5">
-                      <Avatar color="airsense" size="sm" shape="circle" blinking={false} />
+                      <Avatar color="airlytics" size="sm" shape="circle" blinking={false} />
                       <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-term-outline-variant/60 bg-term-surface-low p-3">
                         <p className="whitespace-pre-wrap font-body text-xs leading-relaxed text-term-ink">
                           {m.text}
@@ -395,7 +408,7 @@ export function AssistantLauncher() {
 
                 {running && (
                   <div className="flex gap-2.5">
-                    <Avatar color="airsense" size="sm" shape="circle" blinking={!reduced} />
+                    <Avatar color="airlytics" size="sm" shape="circle" blinking={!reduced} />
                     <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-term-outline-variant/60 bg-term-surface-low p-3">
                       <span className="font-mono text-[10px] uppercase tracking-wider text-term-ink-variant">
                         {liveTools.length
@@ -447,8 +460,10 @@ export function AssistantLauncher() {
                     <CornerDownLeft className="size-3.5" />
                   </button>
                 </div>
+                {/* One line at panel width. The previous caption wrapped to
+                    two and leaned on a middle dot to join two unrelated claims. */}
                 <span className="mt-1.5 block font-mono text-[9px] uppercase tracking-wider text-term-outline">
-                  Answers cite the station and hour they came from · not medical advice
+                  Sources cited. Not medical advice.
                 </span>
               </form>
             </motion.div>

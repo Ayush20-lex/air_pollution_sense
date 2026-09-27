@@ -13,7 +13,7 @@ source's. Anyone checking a public AQI site during a demo sees the difference.
 
 WAQI publishes the same CPCB stations within the hour. This reads it for the
 *mesh* - what the air is doing now. The forecast keeps running on the archive,
-because its 62.23 ug/m3 was scored there and swapping the source underneath it
+because its 61.62 ug/m3 was scored there and swapping the source underneath it
 would invalidate the one validated number in the project.
 
 The units problem, and what is done about it
@@ -115,9 +115,16 @@ EXCLUDED: dict[str, str] = {
 
 def token() -> str | None:
     """WAQI token from the environment, or the partner pipeline's .env."""
-    t = os.getenv("WAQI_TOKEN", "").strip()
-    if t:
-        return t
+    # Two names for one credential. The service is aqicn.org and the feed is
+    # api.waqi.info, so deployments have been configured under both spellings -
+    # and api_server's own warning tells the operator to set AQICN_TOKEN while
+    # this read only ever looked for WAQI_TOKEN. A box can therefore look
+    # configured, log nothing useful, and still serve the archive. Accept
+    # either rather than make the operator guess which half is authoritative.
+    for name in ("WAQI_TOKEN", "AQICN_TOKEN"):
+        t = os.getenv(name, "").strip()
+        if t:
+            return t
     from pathlib import Path
     env = Path(__file__).resolve().parents[1] / "external_data_pipeline" / ".env"
     if env.exists():
