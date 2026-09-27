@@ -15,7 +15,7 @@
  */
 import * as React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { TerminalShell } from './TerminalShell';
+import { NAV, TerminalShell } from './TerminalShell';
 import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import '@/terminal.css';
 
@@ -71,20 +71,39 @@ function useHashScroll() {
   }, [hash, key, reduced]);
 }
 
-const TITLE = 'AIR AQI Sense — Public Open Environmental Intelligence Terminal';
+const BRAND = 'AirLytics - NCR';
+
+/**
+ * The tab, named for the section being read.
+ *
+ * Built from the rail's own NAV rather than a second list beside it: the two
+ * would answer "what is this page called" differently the first time a route
+ * was renamed, and the rail is the copy a reader has actually seen. A route
+ * with no entry - a deep link that outlived its nav item - falls back to the
+ * brand alone rather than to a stale label.
+ */
+function titleFor(pathname: string): string {
+  // Longest match, so /terminal/geo-map is not claimed by /terminal.
+  const item = [...NAV]
+    .sort((a, b) => b.href.length - a.href.length)
+    .find((n) => pathname === n.href || pathname.startsWith(`${n.href}/`));
+  return item ? `${BRAND} | ${item.label}` : BRAND;
+}
 
 export default function TerminalLayout() {
   useHashScroll();
+  const { pathname } = useLocation();
 
   // Restore the console's title on the way out, so a back-navigation does not
-  // leave the tab labelled with the terminal.
+  // leave the tab labelled with the terminal. Re-runs per route, so moving
+  // between sections renames the tab with them.
   React.useEffect(() => {
     const previous = document.title;
-    document.title = TITLE;
+    document.title = titleFor(pathname);
     return () => {
       document.title = previous;
     };
-  }, []);
+  }, [pathname]);
 
   return (
     <TerminalShell>

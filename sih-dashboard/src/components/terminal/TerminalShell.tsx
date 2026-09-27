@@ -46,7 +46,7 @@ type NavItem = {
   badge?: string;
 };
 
-const NAV: NavItem[] = [
+export const NAV: NavItem[] = [
   { href: '/terminal', label: 'Live Telemetry', icon: <Radio className="size-4" /> },
   { href: '/terminal/geo-map', label: 'Geo Map', icon: <MapIcon className="size-4" /> },
   // Was '/terminal#analytics', a hash into the middle of Live Telemetry. The
@@ -180,7 +180,7 @@ function TerminalSidebar({ open, onClose }: { open: boolean; onClose: () => void
           </div>
           <div className="overflow-hidden">
             <div className="font-display text-lg font-bold leading-tight tracking-tight text-term-ink">
-              AIR AQI Sense
+              AirLytics - NCR
             </div>
             <div className="font-mono text-[11px] font-semibold uppercase tracking-wider text-term-primary">
               Public Station #04
@@ -622,7 +622,7 @@ function TerminalFooter() {
       <div className="flex items-center gap-2">
         <span className="size-2.5 rounded-full bg-term-primary shadow-[0_0_8px_rgba(78,222,163,0.7)]" />
         <span className="font-medium text-term-ink">
-          AIR AQI Sense Mission-Critical Environmental Telemetry System • Public Open Station Terminal
+          AirLytics - NCR Region • Mission-Critical Environmental Telemetry • Public Open Station Terminal
         </span>
       </div>
       <div className="flex items-center gap-4 font-mono text-xs text-term-ink-variant">
