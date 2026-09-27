@@ -4,7 +4,9 @@
 
 Built for Smart India Hackathon 2026, problem statement **SIH26082** (Ministry of Earth Sciences / NCMRWF).
 
-**[air-pollution-sense.vercel.app](https://air-pollution-sense.vercel.app/)** · API: [`/api/v1/status`](https://air-pollution-sense.vercel.app/api/v1/status)
+**[airlytics-ncr.vercel.app](https://airlytics-ncr.vercel.app/)** · API: [`/api/v1/status`](https://airlytics-ncr.vercel.app/api/v1/status)
+
+![The landing view: the NCR mesh, with live station readings on the globe](docs/screenshots/hero.png)
 
 ---
 
@@ -27,6 +29,18 @@ AirLytics is built the other way around. Every figure is traceable to a station 
 | **Inversion alerts** | Night-time boundary layer collapse, which is why the air gets worse after dark. |
 | **Grounded AI assistant** | Answers questions about the air, but only from this system's own endpoints. Every answer prints the tool calls behind it. |
 
+![Live telemetry: one station's CPCB index, the band it falls in, and who the air is hurting](docs/screenshots/overview.png)
+
+*Live telemetry. The index names the pollutant that set it, the window coverage it was computed over, and the mesh low and high beside it, so a single number is never the whole claim.*
+
+![Geospatial plume map: interpolated PM2.5 across the NCR mesh with wind flow and source attribution](docs/screenshots/geo-map.png)
+
+*The plume map. Source attribution reports only what it can measure: 2.1% from stubble transport, with the rest named as local emission that no feed here quantifies, rather than split into invented percentages.*
+
+![72-hour forecast track with CPCB category bands](docs/screenshots/forecast.png)
+
+*The 72-hour track. The line is dashed for every hour with no measured day behind it, and the caption says why: those hours come from the CAMS model alone and are less accurate than an anchored hour.*
+
 ## What makes it different
 
 **The index refuses to lie.** A station that cannot meet CPCB's rules reports `valid: false` and the reasons why, not a number. Carbon monoxide is excluded entirely, because the catalogue labels it `ppb` while the values are magnitudes that can only be mg/m³ or ppm. Read as ppb, CO's sub-index collapses to roughly zero and would silently contribute nothing. mg/m³ and ppm differ by 15% and the label cannot be trusted to choose between them, so CO is withheld rather than guessed at.
@@ -34,6 +48,23 @@ AirLytics is built the other way around. Every figure is traceable to a station 
 **The forecast refuses to run ahead of its data.** The origin is capped at the last *observed* hour. Bounding it by the forecast index instead let a run start ahead of the newest measurement, and since gaps are forward-filled it still produced output, seeded by a "current" state that was in places nineteen hours stale and silently repeated.
 
 **The assistant cannot invent a figure.** It has eight read-only tools over this system's own API and a prompt that forbids stating any number a tool did not return. Ask it what share of Delhi's PM2.5 comes from vehicles and it declines, because there is no emissions inventory behind it. Every answer carries receipts: which endpoint, which hour, how long it took.
+
+One real turn, streamed from `POST /api/v1/assistant`:
+
+```
+> Is it safe to run outside right now?
+
+  tool  city_now     74ms  ok  /api/v1/stations     as_of 2026-09-27T16:00 IST
+  tool  grap_stage   26ms  ok  /api/v1/policy/grap  as_of 2026-09-27T10:47Z
+
+  "the city mean AQI is 105 (Moderate), and there are no active GRAP
+   restrictions. However, conditions range from a very clean AQI of 22 (Good)
+   at Major Dhyan Chand National Stadium to a heavily polluted 327 (Very Poor)
+   at Vikas Sadan, Gurugram. [...] If you have any pre-existing health
+   conditions, please consult your doctor before exercising outdoors."
+```
+
+Two tools for one question, the spread rather than a city average that would hide a 300-point difference across 30 km, and a referral to a clinician instead of an invented safety threshold.
 
 **The accuracy claim is re-measured, not remembered.** `19_refresh_archive.py` re-scores the baselines whenever the archive moves and rewrites the published RMSE in source. A figure measured on a window the product no longer serves is a stale claim, and the script exists so that it cannot quietly become one.
 
@@ -140,15 +171,33 @@ Stated here rather than left to be discovered:
 ## Repository layout
 
 ```
-backend/              FastAPI service, CPCB indexing, baselines, assistant
-  api_server.py         endpoints
-  station_registry.py   the mesh, per-station AQI under CPCB rules
-  baseline_forecaster.py  the validated blend, and its published score
-  assistant.py          the grounded assistant and its guardrails
-  assistant_tools.py    its eight read-only tools
-sih-dashboard/        React + Vite frontend (Deck.gl, MapLibre, Tailwind)
-ml_pipeline/          fetch, build, train, score, refresh
-external_data_pipeline/  ingestion for satellite and sensor feeds
+airlytics-ncr
+│
+├── backend/                      FastAPI service: indexing, forecast, assistant
+│   ├── api_server.py             the eleven endpoints
+│   ├── station_registry.py       the mesh, per-station AQI under CPCB rules
+│   ├── aqi_cpcb.py               the 2014 index itself: breakpoints and windows
+│   ├── baseline_forecaster.py    the validated blend and its published score
+│   ├── firms_fire.py             VIIRS fire pixels, cached per origin date
+│   ├── fire_corridor.py          clustering, transport alignment, arrival times
+│   ├── assistant.py              the grounded assistant and its guardrails
+│   ├── assistant_tools.py        its eight read-only tools
+│   └── test_*.py                 CPCB rules, observation QC, fire parsing
+│
+├── sih-dashboard/                React + Vite frontend
+│   └── src/
+│       ├── components/terminal/  the dashboard proper
+│       ├── components/intro/     the entry sequence
+│       └── lib/terminal/         API clients and index maths
+│
+├── ml_pipeline/
+│   ├── scripts/                  fetch, build, train, score, refresh
+│   │   ├── 14_baselines.py       scores every method, sets the published RMSE
+│   │   ├── 16_train_coupled.py   ConvLSTM training harness
+│   │   └── 19_refresh_archive.py one command to bring the archive current
+│   └── data/                     the served archive
+│
+└── external_data_pipeline/       ingestion for satellite and sensor feeds
 ```
 
 ## Team
