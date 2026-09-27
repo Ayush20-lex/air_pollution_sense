@@ -1,5 +1,5 @@
 /**
- * Airlytics NCR — application shell.
+ * AirLytics NCR — application shell.
  *
  * Folds the Next.js `app/layout.tsx` + `app/providers.tsx` + the route tree
  * into a single Vite entry. The provider stack is carried over unchanged; only

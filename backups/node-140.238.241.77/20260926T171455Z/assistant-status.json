@@ -1,0 +1,1 @@
+{"available":false,"model":null,"tools":["city_now","station_detail","forecast","fire_corridor","grap_stage","inversion","city_history","index_rules"],"limits":{"per_minute":6,"per_day":120,"max_turns":12,"max_question_chars":600}}
