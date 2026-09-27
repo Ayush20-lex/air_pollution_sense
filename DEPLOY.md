@@ -135,6 +135,31 @@ Expect `"engine": "blend_baseline"`, `"is_synthetic": false`,
 
 ---
 
+## Secrets, on a self-hosted box
+
+Three feeds need a key, and none of them is in the repository. They go in
+`/etc/airsense.env`, root-owned and `0600`, which systemd hands to the service
+through `EnvironmentFile=` — `assistant.py` reads `os.environ`, so a
+`backend/.env` would reach pydantic's `Settings` and never reach it.
+
+| variable | without it |
+|---|---|
+| `GEMINI_API_KEY` | `/api/v1/assistant` reports unavailable and the widget does not render |
+| `AQICN_TOKEN` | the station mesh falls back to the archive, ~42 hours behind |
+| `NASA_FIRMS_KEY` | the fire channels stay zero rather than mocked |
+
+`backend/set-assistant-key.sh` writes one of them and restarts the API. It
+prompts for the value instead of taking it as an argument, so the secret stays
+out of the shell history and out of `ps`:
+
+```bash
+sudo ./set-assistant-key.sh GEMINI_API_KEY
+```
+
+The service starts fine with any of them unset — each feed reports its own
+absence rather than inventing a number, which is the same rule the rest of the
+system follows.
+
 # Step 2 · Dashboard on Vercel
 
 ### 2.1 Create the project
