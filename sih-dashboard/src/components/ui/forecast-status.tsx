@@ -118,14 +118,19 @@ export function ForecastStatus() {
     if (liveStatus === 'offline') {
       if (announcedOffline.current) return;
       announcedOffline.current = true;
-      toast.warning('Backend unreachable', {
+      // "Live data unavailable" rather than "Backend unreachable": the reader
+      // is not holding the server, so the fault is not the useful part. The
+      // redesign also reworded the body to "modelled, not live observations",
+      // which reads as though the figures are archived measurements. They are
+      // generated, so "not measured" stays.
+      toast.warning('Live data unavailable', {
         id: OFFLINE_ID,
         // Which frames are on screen depends on whether a fetch ever landed.
         // Saying "synthetic" when real backend figures are still displayed
         // would discredit measurements that are genuine.
         description: source
           ? 'Showing the last forecast it sent. These figures are real but no longer current.'
-          : 'Showing the synthetic 72-hour forecast. Readings are modelled, not measured.',
+          : 'Showing the synthetic 72-hour forecast. These readings are modelled, not measured.',
         duration: 8000,
       });
       return;

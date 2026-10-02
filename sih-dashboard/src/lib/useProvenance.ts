@@ -141,10 +141,15 @@ export function useProvenance(): Provenance {
       };
     }
     return {
-      label: 'Demo / Synthetic',
-      short: 'Demo',
+      // The redesign's wording, which states the condition rather than blaming
+      // a server the reader cannot see. Its body said "modelled, not live
+      // observations", which a reader can take as archived measurements; these
+      // readings were generated, so "not measured" is the honest half and it
+      // stays.
+      label: 'DEMO · SYNTHETIC DATA',
+      short: 'DEMO',
       detail:
-        'Backend unreachable — these readings are modelled by the built-in ' +
+        'Live data unavailable. These readings are modelled by the built-in ' +
         'generator, not measured.',
       tone: 'bad',
     };

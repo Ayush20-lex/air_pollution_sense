@@ -395,7 +395,7 @@ export function autoAnalysis(frame: Frame, iv: Interventions): Analysis[] {
   const daylight = clear > 40;
 
   out.push({
-    title: 'TWO-WAY COUPLING',
+    title: 'WHY CONDITIONS CHANGE',
     tone: frame.avgPm25 > 120 ? 'danger' : 'info',
     body: daylight
       ? `Aerosol load suppresses solar irradiance by ${dimming}%, lowering the PBL to ${frame.avgPbl} m and trapping more pollution in a shrinking mixing volume.`
