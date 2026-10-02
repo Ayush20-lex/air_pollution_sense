@@ -1,24 +1,5 @@
-/**
- * The assistant's face: a glossy orb that blinks.
- *
- * Dropped in from a component library, with three changes for this stack:
- *
- *   - `motion/react` -> `framer-motion`. They are the same library; `motion` is
- *     the rebrand and this project already carries framer-motion 12. Installing
- *     `motion` alongside it would ship two copies of the same animation runtime.
- *   - `"use client"` removed. That directive is a React Server Components
- *     marker; this is a Vite SPA where every component is already a client one,
- *     and leaving it in implies a boundary that does not exist here.
- *   - `blur-xs` -> `blur-[2px]`. `blur-xs` is a Tailwind v4 class and this
- *     project is on 3.4, where it silently resolves to nothing - the shadow
- *     under the orb would simply not have been blurred.
- *
- * The eyes blink on a CSS keyframe rather than a React timer: it runs on the
- * compositor, costs no re-renders, and keeps working on a phone that is
- * throttling JavaScript - which is most of the devices this site is tuned for.
- */
-import { useEffect, useId, useRef } from 'react';
-import { motion, useMotionValue, useSpring } from 'framer-motion';
+import * as React from 'react';
+import { cn } from '@/lib/utils';
 
 export type AvatarColor =
   | 'blue'
@@ -33,7 +14,6 @@ export type AvatarColor =
   | 'lime'
   | 'turquoise'
   | 'violet'
-  /** The assistant's own colour - see the PRESETS entry for why it is this. */
   | 'airlytics';
 export type AvatarSize = 'sm' | 'md' | 'lg';
 export type AvatarShape = 'circle' | 'square' | 'squircle';
@@ -44,394 +24,142 @@ export interface AvatarProps {
   size?: AvatarSize;
   shape?: AvatarShape;
   className?: string;
-  /**
-   * Eyes follow the pointer. Desktop only and off under reduced motion - a
-   * touch device has no cursor to follow, and running a pointermove listener
-   * there costs battery for nothing.
-   */
   track?: boolean;
-  /**
-   * `listening` is what the orb does while someone is typing to it: it opens
-   * its eyes wider, brightens, and drops its gaze toward the composer. It is
-   * feedback that the input is live, not decoration.
-   */
   state?: 'idle' | 'listening';
-  /** A slow iridescent ring behind the orb. Compositor-only; see av-spin. */
   halo?: boolean;
 }
 
-const BLINK_KEYFRAMES = `
-@keyframes av-blink {
-  0%, 88%, 100% { transform: scaleY(1); }
-  93%            { transform: scaleY(0.07); }
-  97%            { transform: scaleY(0.07); }
-}
-@keyframes av-spin { to { transform: rotate(360deg); } }
-`;
-
-const PRESETS: Record<
-  AvatarColor,
-  { gradient: string; boxShadow: string; iris: string; shine: string }
-> = {
-  blue: {
-    gradient:
-      'radial-gradient(circle at 50% 45%, #0d4d9a 0%, #3d7dd8 40%, #6fb3ff 68%, #e0eeff 100%)',
-    boxShadow:
-      '0 0 4px 0px rgba(20,102,216,.35), 0 0 16px 6px rgba(20,102,216,.18), inset 0 0 0 1px rgba(255,255,255,.05)',
-    iris: 'linear-gradient(135deg, #ffffff 0%, #d4ecff 100%)',
-    shine:
-      'radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.75) 0%, rgba(255,255,255,.1) 50%, transparent 70%)',
-  },
-  orange: {
-    gradient:
-      'radial-gradient(circle at 50% 45%, #a63e10 0%, #e27a2a 40%, #ffb46a 68%, #ffe8cc 100%)',
-    boxShadow:
-      '0 0 4px 0px rgba(232,100,0,.35), 0 0 16px 6px rgba(232,100,0,.18), inset 0 0 0 1px rgba(255,255,255,.05)',
-    iris: 'linear-gradient(135deg, #ffffff 0%, #ffd9b8 100%)',
-    shine:
-      'radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.75) 0%, rgba(255,255,255,.1) 50%, transparent 70%)',
-  },
-  red: {
-    gradient:
-      'radial-gradient(circle at 50% 45%, #a60033 0%, #e74668 40%, #ff8aaa 68%, #ffd6e8 100%)',
-    boxShadow:
-      '0 0 4px 0px rgba(223,24,92,.35), 0 0 16px 6px rgba(223,24,92,.18), inset 0 0 0 1px rgba(255,255,255,.05)',
-    iris: 'linear-gradient(135deg, #ffffff 0%, #ffcde4 100%)',
-    shine:
-      'radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.75) 0%, rgba(255,255,255,.1) 50%, transparent 70%)',
-  },
-  green: {
-    gradient:
-      'radial-gradient(circle at 50% 45%, #0d6632 0%, #2a9d5f 40%, #6dd187 68%, #d1fadd 100%)',
-    boxShadow:
-      '0 0 4px 0px rgba(12,168,82,.35), 0 0 16px 6px rgba(12,168,82,.18), inset 0 0 0 1px rgba(255,255,255,.05)',
-    iris: 'linear-gradient(135deg, #ffffff 0%, #c5f5d8 100%)',
-    shine:
-      'radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.75) 0%, rgba(255,255,255,.1) 50%, transparent 70%)',
-  },
-  purple: {
-    gradient:
-      'radial-gradient(circle at 50% 45%, #4a0080 0%, #8b3fd1 40%, #c896ff 68%, #e8d4ff 100%)',
-    boxShadow:
-      '0 0 4px 0px rgba(110,46,224,.35), 0 0 16px 6px rgba(110,46,224,.18), inset 0 0 0 1px rgba(255,255,255,.05)',
-    iris: 'linear-gradient(135deg, #ffffff 0%, #e0c9ff 100%)',
-    shine:
-      'radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.75) 0%, rgba(255,255,255,.1) 50%, transparent 70%)',
-  },
-  yellow: {
-    gradient:
-      'radial-gradient(circle at 50% 45%, #8a5500 0%, #d4a000 40%, #ffc93a 68%, #fff5cc 100%)',
-    boxShadow:
-      '0 0 4px 0px rgba(214,142,0,.35), 0 0 16px 6px rgba(214,142,0,.18), inset 0 0 0 1px rgba(255,255,255,.05)',
-    iris: 'linear-gradient(135deg, #ffffff 0%, #fff0a8 100%)',
-    shine:
-      'radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.75) 0%, rgba(255,255,255,.1) 50%, transparent 70%)',
-  },
-  cyan: {
-    gradient:
-      'radial-gradient(circle at 50% 45%, #003d66 0%, #0a8fb5 40%, #5dd4ff 68%, #cdf5ff 100%)',
-    boxShadow:
-      '0 0 4px 0px rgba(10,143,181,.35), 0 0 16px 6px rgba(10,143,181,.18), inset 0 0 0 1px rgba(255,255,255,.05)',
-    iris: 'linear-gradient(135deg, #ffffff 0%, #d0f0ff 100%)',
-    shine:
-      'radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.75) 0%, rgba(255,255,255,.1) 50%, transparent 70%)',
-  },
-  pink: {
-    gradient:
-      'radial-gradient(circle at 50% 45%, #7a0055 0%, #d63384 40%, #ff6bb3 68%, #ffe5f5 100%)',
-    boxShadow:
-      '0 0 4px 0px rgba(214,51,132,.35), 0 0 16px 6px rgba(214,51,132,.18), inset 0 0 0 1px rgba(255,255,255,.05)',
-    iris: 'linear-gradient(135deg, #ffffff 0%, #ffd6ed 100%)',
-    shine:
-      'radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.75) 0%, rgba(255,255,255,.1) 50%, transparent 70%)',
-  },
-  indigo: {
-    gradient:
-      'radial-gradient(circle at 50% 45%, #2d157a 0%, #4f46e5 40%, #8b7eff 68%, #ddd6ff 100%)',
-    boxShadow:
-      '0 0 4px 0px rgba(79,70,229,.35), 0 0 16px 6px rgba(79,70,229,.18), inset 0 0 0 1px rgba(255,255,255,.05)',
-    iris: 'linear-gradient(135deg, #ffffff 0%, #e0d9ff 100%)',
-    shine:
-      'radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.75) 0%, rgba(255,255,255,.1) 50%, transparent 70%)',
-  },
-  lime: {
-    gradient:
-      'radial-gradient(circle at 50% 45%, #4a5910 0%, #84cc16 40%, #bef264 68%, #ecfccf 100%)',
-    boxShadow:
-      '0 0 4px 0px rgba(132,204,22,.35), 0 0 16px 6px rgba(132,204,22,.18), inset 0 0 0 1px rgba(255,255,255,.05)',
-    iris: 'linear-gradient(135deg, #ffffff 0%, #f7fee8 100%)',
-    shine:
-      'radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.75) 0%, rgba(255,255,255,.1) 50%, transparent 70%)',
-  },
-  turquoise: {
-    gradient:
-      'radial-gradient(circle at 50% 45%, #1a5555 0%, #0d9488 40%, #2dd4bf 68%, #ccfbf1 100%)',
-    boxShadow:
-      '0 0 4px 0px rgba(13,148,136,.35), 0 0 16px 6px rgba(13,148,136,.18), inset 0 0 0 1px rgba(255,255,255,.05)',
-    iris: 'linear-gradient(135deg, #ffffff 0%, #c0fdf5 100%)',
-    shine:
-      'radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.75) 0%, rgba(255,255,255,.1) 50%, transparent 70%)',
-  },
-  /**
-   * The assistant's own colour, and the only preset written for this site.
-   *
-   * Magenta is the one hue with no meaning in this dashboard's palette:
-   * severity runs green / lime / yellow / orange / red / purple, and the
-   * measurement series take cyan and violet. An orb in any of those reads as a
-   * value - a green assistant beside a green Good band is a reading, not a
-   * button. This one cannot be mistaken for data, which is exactly what UI
-   * chrome should be.
-   *
-   * It keeps the dark-core, light-rim shape every other preset uses, and that
-   * is not a stylistic choice - the irises are white, so the core is their
-   * background. A first pass lit this one from the middle instead, to carry
-   * better on a near-black page; it did, and it erased the face. The orb read
-   * as a glowing blank. Brightness belongs in the rim and the bloom, where it
-   * makes the control visible, not in the centre, where it eats the eyes.
-   */
-  airlytics: {
-    gradient:
-      'radial-gradient(circle at 50% 45%, #4a0b3d 0%, #c2188c 38%, #ff5ecf 66%, #e4c6ff 100%)',
-    boxShadow:
-      '0 0 8px 0px rgba(255,94,207,.45), 0 0 24px 8px rgba(177,76,255,.24), 0 0 46px 16px rgba(76,125,255,.10), inset 0 0 0 1px rgba(255,255,255,.08)',
-    iris: 'linear-gradient(135deg, #ffffff 0%, #ffe9fb 100%)',
-    shine:
-      'radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.72) 0%, rgba(255,255,255,.1) 50%, transparent 70%)',
-  },
-  violet: {
-    gradient:
-      'radial-gradient(circle at 50% 45%, #4a2a7a 0%, #a855f7 40%, #d8b4fe 68%, #f3e8ff 100%)',
-    boxShadow:
-      '0 0 4px 0px rgba(168,85,247,.35), 0 0 16px 6px rgba(168,85,247,.18), inset 0 0 0 1px rgba(255,255,255,.05)',
-    iris: 'linear-gradient(135deg, #ffffff 0%, #ede9fe 100%)',
-    shine:
-      'radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.75) 0%, rgba(255,255,255,.1) 50%, transparent 70%)',
-  },
-};
-
-const SIZE: Record<AvatarSize, { orb: string; eye: string; eyeGap: string; eyeY: string }> = {
-  sm: { orb: 'size-8', eye: 'w-1 h-1.5', eyeGap: 'gap-1.5', eyeY: '-translate-y-0.5' },
-  md: { orb: 'size-12', eye: 'w-1.5 h-2.5', eyeGap: 'gap-2.5', eyeY: '-translate-y-0.5' },
-  lg: { orb: 'size-16', eye: 'w-2 h-3', eyeGap: 'gap-3.5', eyeY: '-translate-y-1' },
-};
-
-const SHAPE_RADIUS: Record<AvatarShape, string> = {
-  circle: 'rounded-full',
-  square: 'rounded-[0%]',
-  squircle: 'rounded-[40%]',
-};
-
-interface EyeProps {
-  blinking: boolean;
-  delayMs?: number;
-  irisGradient: string;
-  sizeClass: string;
-}
-
-function Eye({ blinking, delayMs = 0, irisGradient, sizeClass }: EyeProps) {
-  return (
-    <div
-      className={['rounded-full', sizeClass].filter(Boolean).join(' ')}
-      style={{
-        background: irisGradient,
-        ...(blinking ? { animation: `av-blink 3.6s ease-in-out ${delayMs}ms infinite` } : {}),
-      }}
-    />
-  );
-}
-
-function Avatar({
-  blinking = true,
-  color = 'blue',
+/**
+ * Human specialist portrait avatar representing an atmospheric science analyst.
+ * Designed with warm, human detailing rather than a cold robotic orb.
+ */
+export default function Avatar({
   size = 'md',
   shape = 'circle',
-  className = '',
-  track = false,
+  className,
   state = 'idle',
-  halo = false,
 }: AvatarProps) {
-  const uid = useId();
-  const noiseId = `av-n${uid.replace(/\W/g, '')}`;
-  const preset = PRESETS[color] ?? PRESETS.blue;
-  const dims = SIZE[size] ?? SIZE.md;
-  const orbRef = useRef<HTMLDivElement>(null);
+  const isListening = state === 'listening';
 
-  // Gaze. Motion values rather than state: a pointer move must not re-render
-  // React - this orb sits on every terminal route, and a setState per mouse
-  // move would re-run the page's component tree a hundred times a second.
-  // The spring is what makes it read as looking rather than snapping.
-  const gazeX = useMotionValue(0);
-  const gazeY = useMotionValue(0);
-  const x = useSpring(gazeX, { stiffness: 260, damping: 20, mass: 0.3 });
-  const y = useSpring(gazeY, { stiffness: 260, damping: 20, mass: 0.3 });
-
-  useEffect(() => {
-    if (!track) return;
-    // No cursor to follow on a touch screen, and someone who asked for less
-    // motion did not ask for a thing that watches them.
-    if (typeof window === 'undefined') return;
-    if (!window.matchMedia?.('(pointer: fine)').matches) return;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-
-    let frame = 0;
-    const onMove = (e: PointerEvent) => {
-      // Coalesced to one read per frame. `getBoundingClientRect` is a layout
-      // read, and doing it per event rather than per frame is how a smooth
-      // idea turns into a janky one.
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        const el = orbRef.current;
-        if (!el) return;
-        const r = el.getBoundingClientRect();
-        const dx = e.clientX - (r.left + r.width / 2);
-        const dy = e.clientY - (r.top + r.height / 2);
-        const dist = Math.hypot(dx, dy) || 1;
-        // The eyes travel a fraction of the orb, and only reach full deflection
-        // once the cursor is a few hundred pixels away - so a cursor resting
-        // just off the orb does not peg them at the edge.
-        const reach = Math.min(1, dist / 260);
-        const max = r.width * 0.1;
-        gazeX.set((dx / dist) * max * reach);
-        gazeY.set((dy / dist) * max * reach);
-      });
-    };
-    window.addEventListener('pointermove', onMove, { passive: true });
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      if (frame) cancelAnimationFrame(frame);
-    };
-  }, [track, gazeX, gazeY]);
-
-  const listening = state === 'listening';
+  const sizePx = size === 'sm' ? 32 : size === 'lg' ? 56 : 42;
+  const radiusClass =
+    shape === 'circle'
+      ? 'rounded-full'
+      : shape === 'squircle'
+        ? 'rounded-2xl'
+        : 'rounded-xl';
 
   return (
-    <>
-      <style>{BLINK_KEYFRAMES}</style>
-      <span className="relative inline-flex shrink-0 items-center justify-center">
-        {/* Iridescent ring, behind and slightly larger than the orb. A conic
-            gradient rotated by transform: the compositor owns it, so it costs
-            nothing per frame and keeps turning on a phone that is throttling
-            JavaScript. Sibling rather than child because the orb clips. */}
-        {halo && (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute -inset-[3px] rounded-full opacity-70 blur-[3px]"
-            style={{
-              background:
-                'conic-gradient(from 0deg, #ff5ecf, #b14cff, #4c7dff, #35e6ff, #ff5ecf)',
-              animation: 'av-spin 7s linear infinite',
-            }}
-          />
-        )}
-      <motion.div
-        ref={orbRef}
-        aria-label="AI Avatar"
-        role="img"
-        whileTap={{ scaleX: 1.15, scaleY: 1.3 }}
-        transition={{ type: 'tween', duration: 0.8, ease: [0.34, 1.56, 0.64, 1] }}
-        className={[
-          'relative flex cursor-pointer items-center justify-center overflow-hidden',
-          dims.orb,
-          SHAPE_RADIUS[shape],
-          className,
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        animate={listening ? { scale: 1.06 } : { scale: 1 }}
-        style={{
-          background: preset.gradient,
-          // Brighter while it is being spoken to, so the state is visible
-          // without a second indicator to read.
-          boxShadow: listening
-            ? `${preset.boxShadow}, 0 0 34px 12px rgba(255,255,255,.14)`
-            : preset.boxShadow,
-        }}
+    <div
+      className={cn(
+        'relative inline-flex shrink-0 items-center justify-center overflow-hidden border border-slate-600/80 bg-gradient-to-b from-slate-800 to-slate-900 shadow-md',
+        radiusClass,
+        className,
+      )}
+      style={{ width: sizePx, height: sizePx }}
+    >
+      {/* Human atmospheric specialist portrait */}
+      <svg
+        viewBox="0 0 100 100"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-full w-full select-none"
       >
-        <svg
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-[0.2] mix-blend-overlay"
-          width="100%"
-          height="100%"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <defs>
-            <filter id={noiseId} x="0%" y="0%" width="100%" height="100%">
-              <feTurbulence
-                type="fractalNoise"
-                baseFrequency="0.72"
-                numOctaves="4"
-                stitchTiles="stitch"
-              />
-              <feColorMatrix type="saturate" values="0" />
-            </filter>
-          </defs>
-          <rect width="100%" height="100%" filter={`url(#${noiseId})`} />
-        </svg>
+        <defs>
+          <linearGradient id="human-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#1e293b" />
+            <stop offset="100%" stopColor="#0f172a" />
+          </linearGradient>
+          <linearGradient id="skin" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#f7d0ab" />
+            <stop offset="100%" stopColor="#e8b184" />
+          </linearGradient>
+          <linearGradient id="hair" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#332420" />
+            <stop offset="100%" stopColor="#1c1310" />
+          </linearGradient>
+          <linearGradient id="coat" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#0284c7" />
+            <stop offset="100%" stopColor="#0369a1" />
+          </linearGradient>
+          <linearGradient id="glasses-glint" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.45" />
+            <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.1" />
+          </linearGradient>
+        </defs>
 
-        <svg
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-[0.2] mix-blend-overlay"
-          width="100%"
-          height="100%"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <defs>
-            <filter
-              id={`grain-${uid.replace(/\W/g, '')}`}
-              x="0%"
-              y="0%"
-              width="100%"
-              height="100%"
-            >
-              <feTurbulence
-                type="fractalNoise"
-                baseFrequency="3.2"
-                numOctaves="1"
-                stitchTiles="stitch"
-              />
-              <feColorMatrix type="saturate" values="0" />
-            </filter>
-          </defs>
-          <rect
-            width="100%"
-            height="100%"
-            filter={`url(#grain-${uid.replace(/\W/g, '')})`}
-          />
-        </svg>
+        {/* Ambient background */}
+        <circle cx="50" cy="50" r="50" fill="url(#human-bg)" />
 
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-          style={{ background: preset.shine }}
+        {/* Shoulders / Professional attire */}
+        <path
+          d="M18 96 C 18 76, 30 70, 50 70 C 70 70, 82 76, 82 96 Z"
+          fill="url(#coat)"
+        />
+        {/* Shirt collar / V-neck */}
+        <path d="M42 70 L50 82 L58 70 Z" fill="#ffffff" />
+        <path d="M46 70 L50 76 L54 70 Z" fill="#cbd5e1" />
+
+        {/* Neck */}
+        <rect x="44" y="58" width="12" height="15" rx="3" fill="#df9f68" />
+        <path d="M44 62 C 47 65, 53 65, 56 62 L 56 69 C 53 71, 47 71, 44 69 Z" fill="#cf8e55" opacity="0.3" />
+
+        {/* Back Hair */}
+        <path
+          d="M27 48 C 26 30, 36 18, 50 18 C 64 18, 74 30, 73 48 C 73 54, 70 60, 68 62 C 64 56, 64 45, 64 45 C 50 45, 36 45, 36 45 C 36 45, 36 56, 32 62 C 30 60, 27 54, 27 48 Z"
+          fill="url(#hair)"
         />
 
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 blur-[2px]"
-          style={{
-            background:
-              'radial-gradient(circle at 62% 68%, rgba(0,0,0,0.18) 0%, transparent 55%)',
-          }}
-        />
+        {/* Face */}
+        <ellipse cx="50" cy="47" rx="19" ry="21" fill="url(#skin)" />
 
-        <motion.div
-          className={['relative z-10 flex items-center', dims.eyeGap, dims.eyeY].join(' ')}
-          // The gaze offset rides here rather than on each eye, so both move
-          // together and the pair keeps its spacing.
-          style={{ x, y }}
-          // Listening widens the eyes a little. Scale on the pair, not the
-          // orb, so the blink keyframe on each eye is untouched.
-          animate={listening ? { scaleY: 1.18, scaleX: 1.06 } : { scaleY: 1, scaleX: 1 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 22 }}
-        >
-          <Eye blinking={blinking} delayMs={0} irisGradient={preset.iris} sizeClass={dims.eye} />
-          <Eye blinking={blinking} delayMs={60} irisGradient={preset.iris} sizeClass={dims.eye} />
-        </motion.div>
-      </motion.div>
-      </span>
-    </>
+        {/* Ears */}
+        <ellipse cx="30" cy="48" rx="3.5" ry="5.5" fill="#e8b184" />
+        <ellipse cx="70" cy="48" rx="3.5" ry="5.5" fill="#e8b184" />
+
+        {/* Eyebrows */}
+        <path d="M37 37 C 40 35, 44 36, 46 37" stroke="#261b17" strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M54 37 C 56 36, 60 35, 63 37" stroke="#261b17" strokeWidth="1.8" strokeLinecap="round" />
+
+        {/* Warm, friendly human eyes */}
+        <ellipse cx="42" cy="42.5" rx="2.5" ry="2.7" fill="#1e1816" />
+        <ellipse cx="58" cy="42.5" rx="2.5" ry="2.7" fill="#1e1816" />
+        {/* Eye highlights */}
+        <circle cx="41.2" cy="41.5" r="0.9" fill="#ffffff" />
+        <circle cx="57.2" cy="41.5" r="0.9" fill="#ffffff" />
+
+        {/* Refined modern eyeglasses */}
+        <rect x="34.5" y="36.5" width="14.5" height="12" rx="3" fill="url(#glasses-glint)" stroke="#0f172a" strokeWidth="1.6" />
+        <rect x="51" y="36.5" width="14.5" height="12" rx="3" fill="url(#glasses-glint)" stroke="#0f172a" strokeWidth="1.6" />
+        {/* Eyeglass bridge */}
+        <path d="M49 41 Q 50 40 51 41" stroke="#0f172a" strokeWidth="1.6" fill="none" />
+        <path d="M34.5 41 L 30 42" stroke="#0f172a" strokeWidth="1.3" />
+        <path d="M65.5 41 L 70 42" stroke="#0f172a" strokeWidth="1.3" />
+
+        {/* Nose */}
+        <path d="M50 44 L 48.5 50 Q 50 51.5 51.5 50" stroke="#cf8e55" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+
+        {/* Friendly human smile */}
+        <path d="M45 55.5 Q 50 59.5 55 55.5" stroke="#9a432e" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+
+        {/* Front Stylish Hair & Fringe */}
+        <path
+          d="M29 35 C 30 23, 38 16, 50 16 C 62 16, 70 23, 71 35 C 68 27, 59 25, 50 27 C 42 25, 33 27, 29 35 Z"
+          fill="url(#hair)"
+        />
+        {/* Hair strand accent */}
+        <path d="M48 18 Q 55 22 58 29" stroke="#4a3731" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+      </svg>
+
+      {/* Active status indicator */}
+      <span
+        className={cn(
+          'absolute bottom-0 right-0 rounded-full border-2 border-slate-900',
+          size === 'sm' ? 'size-2.5' : 'size-3.5',
+          isListening ? 'animate-pulse bg-sky-400 ring-2 ring-sky-400/40' : 'bg-emerald-400',
+        )}
+        title={isListening ? 'Listening' : 'Online Specialist'}
+      />
+    </div>
   );
 }
-
-export default Avatar;

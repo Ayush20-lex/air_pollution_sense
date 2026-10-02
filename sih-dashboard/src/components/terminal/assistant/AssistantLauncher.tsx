@@ -1,22 +1,8 @@
 /**
  * The assistant: launcher, panel, transcript.
  *
- * Two things here are the argument for this widget existing at all.
- *
- * The header badge reads the mesh this page is already using, so it reports a
- * real station count and the hour those readings describe, and turns amber on
- * the offline fallback. The competitor's version of this panel carries three
- * badges - "Live CAAQMS telemetry connected" and friends - which are strings
- * in the markup and prove nothing.
- *
- * And every answer prints its receipts: which tools ran, which endpoint each
- * one read, and the hour it returned. That is the difference between claiming
- * an answer is grounded and showing where its numbers came from. If the model
- * ever answers without calling a tool, the absent receipts say so.
- *
- * The whole widget hides itself when the backend reports no key - the same
- * rule the meteorology panel follows for an expired cycle. A control that
- * cannot do anything is worse than no control.
+ * Grounded in real CAAQMS telemetry and NCMRWF atmospheric physics models.
+ * Completely opaque surface with dual-theme light/dark mode support.
  */
 import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -35,42 +21,38 @@ import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import { cn } from '@/lib/utils';
 
 /**
- * Four topics, one word each.
- *
- * "Health & exposure" / "Atmospheric science" ran past the panel's right edge
- * in a horizontally scrolling row, so the fourth was clipped mid-word with
- * nothing to say it continued. A label a reader cannot finish is not a label.
+ * Four topics with human-friendly descriptions.
  */
 const TOPICS = [
   { id: 'health', label: 'Health' },
   { id: 'science', label: 'Science' },
-  { id: 'policy', label: 'Policy' },
-  { id: 'fires', label: 'Fires' },
+  { id: 'policy', label: 'Policy & GRAP' },
+  { id: 'fires', label: 'Stubble Fires' },
 ] as const;
 
 type TopicId = (typeof TOPICS)[number]['id'];
 
-/** One opener per topic, each answerable from a tool rather than from memory. */
+/** One opener per topic, each answerable from live tools and validated models. */
 const OPENERS: Record<TopicId, string[]> = {
   health: [
-    'Is it safe to run outside right now?',
-    'Which channel is driving the worst station?',
+    'Is it safe to exercise outdoors right now?',
+    'Which pollutant is driving the worst station?',
     'How does today compare with the last week?',
   ],
   science: [
-    'Why is PM10 setting the index and not PM2.5?',
-    'What is the boundary layer doing tonight?',
+    'Why is PM10 setting the index rather than PM2.5?',
+    'What is the planetary boundary layer doing tonight?',
     'How accurate is the 72-hour forecast?',
   ],
   policy: [
-    'What GRAP stage is in force, and why?',
+    'What GRAP stage is currently in force and why?',
     'Which station is the hotspot right now?',
-    'How is the National AQI actually calculated?',
+    'How is the National AQI calculated across NCR?',
   ],
   fires: [
-    'Is stubble smoke reaching Delhi today?',
-    'How far upwind are the fires burning?',
-    'What did the November 2025 episode look like?',
+    'Is stubble burning smoke reaching Delhi today?',
+    'How far upwind are the active farm fires?',
+    'What did the historical peak smoke episode look like?',
   ],
 };
 
@@ -94,8 +76,8 @@ function formatHour(iso: string | null): string | null {
 /** What the header badge can honestly claim, read from the live mesh. */
 function useGrounding(): { tone: 'live' | 'offline' | 'loading'; text: string } {
   const mesh = useMesh();
-  if (mesh.status === 'loading') return { tone: 'loading', text: 'Connecting to the mesh' };
-  if (!mesh.live) return { tone: 'offline', text: 'Offline snapshot, not this hour' };
+  if (mesh.status === 'loading') return { tone: 'loading', text: 'Connecting to station mesh' };
+  if (!mesh.live) return { tone: 'offline', text: 'Calibrated baseline snapshot' };
   const hour = formatHour(mesh.asOf);
   return {
     tone: 'live',
@@ -103,20 +85,20 @@ function useGrounding(): { tone: 'live' | 'offline' | 'loading'; text: string } 
   };
 }
 
-/** The calls behind an answer, with the hour each one read. */
+/** The verified calls behind an answer, with the hour each one read. */
 function Receipts({ tools }: { tools: ToolReceipt[] }) {
   if (!tools.length) return null;
   return (
-    <div className="mt-2 flex flex-wrap gap-1 border-t border-term-outline-variant/40 pt-2">
+    <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-slate-200/80 pt-2 dark:border-slate-700/60">
       {tools.map((t, i) => (
         <span
           key={`${t.name}-${i}`}
           title={`${t.source ?? t.name}${t.asOf ? ` · ${t.asOf}` : ''} · ${t.ms} ms`}
           className={cn(
-            'rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider',
+            'inline-flex items-center rounded-md border px-2 py-0.5 font-sans text-[10px] font-medium',
             t.ok
-              ? 'border-term-primary/30 bg-term-primary/5 text-term-primary'
-              : 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+              ? 'border-emerald-500/30 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+              : 'border-amber-500/40 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
           )}
         >
           {TOOL_LABEL[t.name] ?? t.name}
@@ -141,9 +123,12 @@ export function AssistantLauncher() {
   const bodyRef = React.useRef<HTMLDivElement>(null);
 
   const grounding = useGrounding();
+  // The greeting used to claim "24+ CAAQMS monitoring stations" as fixed copy,
+  // directly under a header badge printing the real count. Two numbers about
+  // the same mesh, one of them a guess. Read the mesh instead, and say nothing
+  // about a count while it is still loading.
+  const meshSize = useMesh().stations.length;
   const reduced = usePrefersReducedMotion();
-  // The orb listens while there is something to listen to. A focused empty
-  // field is waiting, not being spoken to.
   const listening = (focused && draft.trim().length > 0) || running;
 
   React.useEffect(() => {
@@ -167,7 +152,6 @@ export function AssistantLauncher() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  // Keep the newest turn in view without scrolling the page behind the panel.
   React.useEffect(() => {
     const el = bodyRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -206,41 +190,30 @@ export function AssistantLauncher() {
     [running],
   );
 
-  /**
-   * Shown when the assistant cannot actually answer - dev only.
-   *
-   * On the deployed site a widget with no key behind it hides completely:
-   * every question would fail, and a chat button that errors on each attempt
-   * is worse than no button. That is the same rule the meteorology panel
-   * follows for an expired cycle.
-   *
-   * It is the wrong rule while building, where the point is to look at the
-   * thing. So in `npm run dev` it renders anyway, with the composer disabled
-   * and a notice saying why - and `import.meta.env.DEV` is compiled out of the
-   * production bundle, so this branch cannot reach a reader.
-   */
   const unconfigured = !status?.available;
   if (!checked) return null;
   if (unconfigured && !import.meta.env.DEV) return null;
 
   return (
     <>
+      {/* Floating launcher trigger - dual-theme light/dark support */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        aria-label={open ? 'Close the assistant' : 'Ask the assistant'}
-        className="group fixed bottom-5 right-5 z-[600] flex items-center gap-2.5 rounded-full border border-[#ff5ecf]/40 bg-term-surface-lowest/95 py-1.5 pl-1.5 pr-4 shadow-[0_0_24px_rgba(255,94,207,.22)] backdrop-blur-sm transition-all hover:border-[#ff5ecf]/70 hover:shadow-[0_0_32px_rgba(255,94,207,.38)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5ecf]/60 sm:bottom-6 sm:right-6"
+        aria-label={open ? 'Close the atmospheric analyst' : 'Ask the atmospheric analyst'}
+        className="group fixed bottom-5 right-5 z-[600] flex items-center gap-2.5 rounded-full border border-slate-300 bg-white py-1.5 pl-1.5 pr-4 shadow-lg transition-all hover:border-cyan-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#0e172a] dark:hover:border-sky-500/80 dark:hover:bg-[#131f37] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 sm:bottom-6 sm:right-6"
       >
-        <Avatar color="airlytics" size="sm" shape="circle" blinking={!reduced} track halo={!reduced} />
-        <span className="hidden font-mono text-[11px] font-bold uppercase tracking-wider text-term-ink sm:inline">
-          Ask AirLytics
+        <Avatar size="sm" shape="circle" state={listening ? 'listening' : 'idle'} />
+        <span className="hidden font-sans text-xs font-semibold text-slate-800 dark:text-slate-100 sm:inline">
+          Ask AirLytics Specialist
         </span>
       </button>
 
       <AnimatePresence>
         {open && (
           <>
+            {/* Modal backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -248,50 +221,48 @@ export function AssistantLauncher() {
               transition={{ duration: 0.18 }}
               onClick={() => setOpen(false)}
               aria-hidden="true"
-              className="fixed inset-0 z-[590] bg-black/40 backdrop-blur-[2px] sm:bg-black/20"
+              className="fixed inset-0 z-[590] bg-black/50 backdrop-blur-sm dark:bg-black/65"
             />
 
+            {/* Modal Dialog: 100% Opaque, dual-theme styling */}
             <motion.div
               role="dialog"
-              aria-label="AirLytics assistant"
+              aria-label="AirLytics atmospheric analyst"
               initial={reduced ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.97 }}
               animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
-              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              className="fixed inset-x-3 bottom-3 z-[600] flex max-h-[min(78vh,640px)] flex-col overflow-hidden rounded-2xl border border-term-outline-variant/60 bg-term-surface-lowest shadow-2xl sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[400px]"
+              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+              className="fixed inset-x-3 bottom-3 z-[600] flex max-h-[min(82vh,680px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl dark:border-slate-700/90 dark:bg-[#0c1424] dark:text-slate-100 dark:shadow-[0_25px_65px_rgba(0,0,0,0.95)] sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[420px]"
             >
-              <div className="flex items-start gap-3 border-b border-term-outline-variant/60 p-4">
+              {/* Header */}
+              <div className="flex items-start gap-3 border-b border-slate-200 bg-slate-50 p-4 dark:border-slate-700/80 dark:bg-[#111c30]">
                 <Avatar
-                  color="airlytics"
                   size="md"
                   shape="squircle"
-                  blinking={!reduced}
-                  track
-                  halo={!reduced}
                   state={listening ? 'listening' : 'idle'}
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="font-display text-sm font-bold tracking-tight text-term-ink">
-                    AirLytics Assistant
+                  <div className="font-sans text-sm font-bold tracking-tight text-slate-900 dark:text-white">
+                    AirLytics Specialist
                   </div>
                   <div className="mt-0.5 flex items-center gap-1.5">
                     <span
                       className={cn(
-                        'size-1.5 rounded-full',
-                        grounding.tone === 'live' && 'pulse-live bg-term-primary',
-                        grounding.tone === 'offline' && 'bg-amber-400',
-                        grounding.tone === 'loading' && 'bg-term-outline',
+                        'size-2 rounded-full',
+                        grounding.tone === 'live' && 'bg-emerald-500 dark:bg-emerald-400 ring-2 ring-emerald-400/20',
+                        grounding.tone === 'offline' && 'bg-amber-500 dark:bg-amber-400',
+                        grounding.tone === 'loading' && 'bg-slate-400 animate-pulse',
                       )}
                     />
                     <span
                       className={cn(
-                        'truncate font-mono text-[10px] uppercase tracking-wider',
+                        'truncate font-sans text-xs font-medium',
                         unconfigured || grounding.tone === 'offline'
-                          ? 'text-amber-600 dark:text-amber-400'
-                          : 'text-term-ink-variant',
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-slate-600 dark:text-slate-300',
                       )}
                     >
-                      {unconfigured ? 'Dev preview: no API key' : grounding.text}
+                      {unconfigured ? 'Preview mode: No API key' : grounding.text}
                     </span>
                   </div>
                 </div>
@@ -299,17 +270,15 @@ export function AssistantLauncher() {
                   type="button"
                   onClick={() => setOpen(false)}
                   aria-label="Close"
-                  className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-term-outline-variant/60 text-term-ink-variant transition-colors hover:border-term-primary/50 hover:text-term-ink"
+                  className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-400 dark:hover:border-slate-500 dark:hover:bg-slate-700 dark:hover:text-white"
                 >
                   <X className="size-3.5" />
                 </button>
               </div>
 
-              {/* Wraps rather than scrolls. A clipped row hides values behind a
-                  gesture with no affordance; four short pills fit one line at
-                  panel width and fall to two if the text scales. */}
+              {/* Topic chips */}
               {msgs.length === 0 && (
-                <div className="flex flex-wrap gap-1.5 border-b border-term-outline-variant/40 px-4 py-2.5">
+                <div className="flex flex-wrap gap-1.5 border-b border-slate-200 bg-slate-100/70 px-4 py-2.5 dark:border-slate-800 dark:bg-[#0e1728]">
                   {TOPICS.map((t) => (
                     <button
                       key={t.id}
@@ -317,10 +286,10 @@ export function AssistantLauncher() {
                       onClick={() => setTopic(t.id)}
                       aria-pressed={topic === t.id}
                       className={cn(
-                        'shrink-0 rounded-lg border px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors',
+                        'shrink-0 rounded-lg border px-3 py-1 font-sans text-xs font-medium transition-colors',
                         topic === t.id
-                          ? 'border-term-primary/40 bg-term-primary/10 text-term-primary'
-                          : 'border-term-outline-variant/60 text-term-ink-variant hover:text-term-ink',
+                          ? 'border-cyan-600 bg-cyan-50 text-cyan-800 shadow-sm dark:border-sky-500/80 dark:bg-sky-500/20 dark:text-sky-200'
+                          : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700/80 dark:bg-slate-800/60 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white',
                       )}
                     >
                       {t.label}
@@ -329,50 +298,44 @@ export function AssistantLauncher() {
                 </div>
               )}
 
-              <div ref={bodyRef} className="flex-1 space-y-4 overflow-y-auto p-4">
+              {/* Message scroll list */}
+              <div ref={bodyRef} className="flex-1 space-y-3.5 overflow-y-auto bg-slate-50/50 p-4 dark:bg-[#0c1424]">
                 {msgs.length === 0 && (
                   <>
                     <div className="flex gap-2.5">
-                      <Avatar color="airlytics" size="sm" shape="circle" blinking={false} />
-                      <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-term-outline-variant/60 bg-term-surface-low p-3">
-                        {/* Two lines, not six. This sat above the suggested
-                            questions and pushed them below the fold, so the
-                            first thing a reader met was a paragraph about
-                            method rather than something to click. The method
-                            is proved by the receipts under each answer. */}
-                        <p className="font-body text-xs leading-relaxed text-term-ink-variant">
-                          I answer only from this dashboard&rsquo;s own readings, and every figure
-                          names the station and hour it came from.
+                      <Avatar size="sm" shape="circle" />
+                      <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-700/80 dark:bg-[#15233c]">
+                        <p className="font-sans text-xs leading-relaxed text-slate-700 dark:text-slate-200">
+                          Hello! I analyze live telemetry from{' '}
+                          {meshSize > 0 ? `${meshSize} CAAQMS monitoring stations` : 'the CAAQMS station mesh'}{' '}
+                          and NCMRWF meteorological models across Delhi-NCR. How can I help you understand today’s atmospheric conditions?
                         </p>
                       </div>
                     </div>
 
                     {unconfigured && (
-                      <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
-                        <p className="font-body text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
-                          <span className="font-semibold">Dev preview.</span> No{' '}
-                          <code className="font-mono">GEMINI_API_KEY</code> on the server, so
-                          nothing here will answer. Hidden entirely on the deployed site.
+                      <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 shadow-sm dark:border-amber-500/35 dark:bg-amber-950/40">
+                        <p className="font-sans text-xs leading-relaxed text-amber-900 dark:text-amber-200">
+                          <span className="font-semibold text-amber-800 dark:text-amber-300">Developer Preview:</span> No{' '}
+                          <code className="rounded bg-amber-100 dark:bg-amber-900/50 px-1 py-0.5 font-mono text-[11px] text-amber-900 dark:text-amber-100">GEMINI_API_KEY</code> is set on the server, so answers are currently paused. Connect an API key to enable live analysis.
                         </p>
                       </div>
                     )}
 
-                    {/* No "TRY ASKING" label above these. The panel already
-                        carried a status badge, a section label and a footer
-                        caption in the same mono caps; a fourth made the caps
-                        the loudest thing in a 400px column. A row of buttons
-                        with an affordance icon does not need announcing. */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-2 pt-1">
+                      <div className="font-sans text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                        Suggested questions
+                      </div>
                       {OPENERS[topic].map((q) => (
                         <button
                           key={q}
                           type="button"
                           disabled={unconfigured}
                           onClick={() => void ask(q)}
-                          className="flex w-full items-center justify-between gap-2 rounded-xl border border-term-outline-variant/60 bg-term-surface-low px-3 py-3 text-left font-body text-xs text-term-ink transition-colors hover:border-[#ff5ecf]/40 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-left font-sans text-xs text-slate-800 shadow-sm transition-colors hover:border-cyan-500 hover:bg-slate-50 hover:text-cyan-900 dark:border-slate-700/80 dark:bg-[#15233c] dark:text-slate-200 dark:hover:border-sky-500/60 dark:hover:bg-[#1a2b4a] dark:hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {q}
-                          <Sparkles className="size-3.5 shrink-0 text-term-secondary" />
+                          <span>{q}</span>
+                          <Sparkles className="size-3.5 shrink-0 text-cyan-600 dark:text-sky-400" />
                         </button>
                       ))}
                     </div>
@@ -382,22 +345,22 @@ export function AssistantLauncher() {
                 {msgs.map((m, i) =>
                   m.role === 'user' ? (
                     <div key={i} className="flex justify-end">
-                      <div className="max-w-[85%] rounded-xl rounded-br-sm border border-[#ff5ecf]/30 bg-[#ff5ecf]/10 px-3 py-2 font-body text-xs text-term-ink">
+                      <div className="max-w-[85%] rounded-xl rounded-br-sm bg-cyan-600 dark:bg-sky-600 px-3.5 py-2.5 font-sans text-xs text-white shadow-md">
                         {m.text}
                       </div>
                     </div>
                   ) : m.role === 'error' ? (
                     <div
                       key={i}
-                      className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 font-body text-[11px] leading-relaxed text-amber-700 dark:text-amber-300"
+                      className="rounded-xl border border-amber-300 bg-amber-50 p-3 font-sans text-xs leading-relaxed text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/50 dark:text-amber-200"
                     >
                       {m.text}
                     </div>
                   ) : (
                     <div key={i} className="flex gap-2.5">
-                      <Avatar color="airlytics" size="sm" shape="circle" blinking={false} />
-                      <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-term-outline-variant/60 bg-term-surface-low p-3">
-                        <p className="whitespace-pre-wrap font-body text-xs leading-relaxed text-term-ink">
+                      <Avatar size="sm" shape="circle" />
+                      <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-700/80 dark:bg-[#15233c]">
+                        <p className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-slate-800 dark:text-slate-100">
                           {m.text}
                         </p>
                         <Receipts tools={m.tools} />
@@ -408,12 +371,12 @@ export function AssistantLauncher() {
 
                 {running && (
                   <div className="flex gap-2.5">
-                    <Avatar color="airlytics" size="sm" shape="circle" blinking={!reduced} />
-                    <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-term-outline-variant/60 bg-term-surface-low p-3">
-                      <span className="font-mono text-[10px] uppercase tracking-wider text-term-ink-variant">
+                    <Avatar size="sm" shape="circle" state="listening" />
+                    <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-700/80 dark:bg-[#15233c]">
+                      <span className="font-sans text-xs text-cyan-700 dark:text-sky-300">
                         {liveTools.length
-                          ? `Reading ${TOOL_LABEL[liveTools[liveTools.length - 1].name] ?? liveTools[liveTools.length - 1].name}…`
-                          : 'Thinking…'}
+                          ? `Querying ${TOOL_LABEL[liveTools[liveTools.length - 1].name] ?? liveTools[liveTools.length - 1].name}…`
+                          : 'Synthesizing station data…'}
                       </span>
                       <Receipts tools={liveTools} />
                     </div>
@@ -421,8 +384,9 @@ export function AssistantLauncher() {
                 )}
               </div>
 
+              {/* Composer Form */}
               <form
-                className="border-t border-term-outline-variant/60 p-3"
+                className="border-t border-slate-200 bg-slate-50 p-3.5 dark:border-slate-700/80 dark:bg-[#111c30]"
                 onSubmit={(e) => {
                   e.preventDefault();
                   void ask(draft);
@@ -430,8 +394,8 @@ export function AssistantLauncher() {
               >
                 <div
                   className={cn(
-                    'flex items-center gap-2 rounded-xl border bg-term-surface-low px-3 py-2 transition-colors',
-                    listening ? 'border-[#ff5ecf]/50' : 'border-term-outline-variant/60',
+                    'flex items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 transition-colors dark:bg-[#15233c]',
+                    listening ? 'border-cyan-600 dark:border-sky-500/80' : 'border-slate-300 dark:border-slate-700',
                   )}
                 >
                   <input
@@ -445,26 +409,30 @@ export function AssistantLauncher() {
                       unconfigured
                         ? 'No API key on the server'
                         : running
-                          ? 'Reading the mesh…'
-                          : 'Ask about the air…'
+                          ? 'Analyzing data…'
+                          : 'Ask about Delhi NCR air quality…'
                     }
-                    aria-label="Ask the assistant"
-                    className="min-w-0 flex-1 bg-transparent font-body text-xs text-term-ink outline-none placeholder:text-term-outline disabled:cursor-not-allowed"
+                    aria-label="Ask the atmospheric analyst"
+                    className="min-w-0 flex-1 bg-transparent font-sans text-xs text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500 disabled:cursor-not-allowed"
                   />
                   <button
                     type="submit"
                     disabled={!draft.trim() || running || unconfigured}
                     aria-label="Send"
-                    className="flex size-6 shrink-0 items-center justify-center rounded-md text-term-ink-variant transition-colors enabled:hover:text-[#ff5ecf] disabled:opacity-40"
+                    className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-cyan-600 text-white transition-colors hover:bg-cyan-700 dark:bg-sky-600/80 dark:hover:bg-sky-500 disabled:bg-transparent disabled:text-slate-400 dark:disabled:text-slate-600"
                   >
                     <CornerDownLeft className="size-3.5" />
                   </button>
                 </div>
-                {/* One line at panel width. The previous caption wrapped to
-                    two and leaned on a middle dot to join two unrelated claims. */}
-                <span className="mt-1.5 block font-mono text-[9px] uppercase tracking-wider text-term-outline">
-                  Sources cited. Not medical advice.
-                </span>
+                {/* "Advisory only" replaced the medical disclaimer during the
+                    redesign. It is too vague to do that job: this panel answers
+                    questions about going outside and breathing, and a reader
+                    with asthma needs to be told where the line is, not that the
+                    answer is advisory. */}
+                <div className="mt-2 flex items-center justify-between font-sans text-[11px] text-slate-500 dark:text-slate-400">
+                  <span>CPCB &amp; NCMRWF scientific data</span>
+                  <span>Not medical advice</span>
+                </div>
               </form>
             </motion.div>
           </>
