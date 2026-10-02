@@ -73,6 +73,50 @@ export function sectorForSlot(id: string): string | undefined {
   return s && sectorLabel(s.sector);
 }
 
+/**
+ * Formats a station name for compact pill displays:
+ * - Converts raw all-caps names into clean Title Case
+ * - Replaces any multiple dot ellipsis ("...", "..") with a proper unicode ellipsis ("…")
+ * - If truncated or lengthy, formats cleanly at word boundary with "…" (e.g. "National Institute…")
+ */
+export function formatStationPillName(raw: string): string {
+  if (!raw) return '';
+  let str = raw.replace(/\.{2,}/g, '…').trim();
+
+  // If ALL CAPS: convert to Title Case preserving known monitoring acronyms
+  if (str === str.toUpperCase()) {
+    str = str
+      .toLowerCase()
+      .split(' ')
+      .map((w) => {
+        if (!w) return '';
+        const cleanedWord = w.replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, '');
+        if (['cpcb', 'dpcc', 'imd', 'icar', 'hspcb', 'uppcb', 'dtu', 'nsit', 'crri', 'teri', 'iit'].includes(cleanedWord)) {
+          return w.toUpperCase();
+        }
+        return w.charAt(0).toUpperCase() + w.slice(1);
+      })
+      .join(' ');
+  }
+
+  // If already ends with ellipsis
+  if (str.endsWith('…')) {
+    return str;
+  }
+
+  // For long names, cleanly truncate at word boundary with proper unicode ellipsis
+  if (str.length > 22) {
+    const sliced = str.slice(0, 20);
+    const lastSpace = sliced.lastIndexOf(' ');
+    if (lastSpace > 8) {
+      return str.slice(0, lastSpace).trim() + '…';
+    }
+    return str.slice(0, 19).trim() + '…';
+  }
+
+  return str;
+}
+
 export function StatusPills() {
   // The same source the narrow-screen sector strip reads, which it did not
   // used to be. This computed its own maximum over `useMesh().stations` - the
@@ -96,6 +140,7 @@ export function StatusPills() {
         // would be worse than the gap it leaves.
         if (!station) return null;
         const color = aqiBandColor(station.aqi);
+        const displayName = formatStationPillName(station.station);
 
         return (
           <motion.div
@@ -110,9 +155,9 @@ export function StatusPills() {
             <motion.div
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 5 + slot.delay * 3, repeat: Infinity, ease: 'easeInOut' }}
-              className="flex items-center gap-2 rounded-full border px-3 py-1.5 backdrop-blur-md"
-              style={{ borderColor: `${color}55`, background: `${color}14` }}
-              title={`Highest in ${sectorLabel(slot.sector)}: ${station.station} — AQI ${station.aqi}, of ${station.count} reporting`}
+              className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm dark:border-slate-700/80 dark:bg-slate-900/60 dark:shadow-none"
+              style={{ borderLeftColor: color, borderLeftWidth: '3px' }}
+              title={`Highest in ${sectorLabel(slot.sector)}: ${displayName} — AQI ${station.aqi}, of ${station.count} reporting`}
             >
               <span className="relative flex h-2 w-2">
                 <span
@@ -121,21 +166,14 @@ export function StatusPills() {
                 />
               </span>
 
-              <span className="font-mono text-2xs font-semibold uppercase tracking-[0.18em] text-ink">
+              <span className="font-sans text-xs font-medium text-slate-900 dark:text-slate-100">
                 {sectorLabel(slot.sector)}
-                <span className="text-faint"> · </span>
-                {/* Capped, because the name is whichever station is worst and
-                    that changes hourly. "Loni" is four characters; "Dr. Karni
-                    Singh Shooting Range" is thirty, and at full width that pill
-                    runs to about 440px against the ~295px these positions are
-                    placed for - on a 1024px window the eastern one would have
-                    left the frame. Truncating costs the tail of a rare long
-                    name; not truncating costs the pill. */}
-                <span className="inline-block max-w-[150px] truncate align-bottom">
-                  {station.station}
+                <span className="text-slate-400 dark:text-slate-500"> · </span>
+                <span className="inline-block max-w-[170px] truncate align-bottom text-slate-600 dark:text-slate-300">
+                  {displayName}
                 </span>
               </span>
-              <span className="text-faint">—</span>
+              <span className="text-slate-300 dark:text-slate-600">—</span>
 
               {/* Keyed on the station so the figure cross-fades when a new
                   worst takes the pill, instead of the number snapping under a
@@ -145,7 +183,7 @@ export function StatusPills() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.35 }}
-                className="font-mono text-2xs font-bold tabular-nums"
+                className="font-mono text-xs font-semibold tabular-nums tracking-tight"
                 style={{ color }}
               >
                 AQI {station.aqi}

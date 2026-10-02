@@ -63,6 +63,16 @@ export const ALERT_COLOR: Record<AlertLevel, string> = {
   EMERGENCY: SEVERITY.bad,
 };
 
+/** What each level is called on screen. WARNING reads as "ELEVATED RISK",
+ *  because a bare "WARNING" on an air-quality readout says nothing about what
+ *  is elevated. The level itself is unchanged; this is only its label. */
+export const ALERT_LABEL: Record<AlertLevel, string> = {
+  NOMINAL: 'NOMINAL',
+  ADVISORY: 'ADVISORY',
+  WARNING: 'ELEVATED RISK',
+  EMERGENCY: 'EMERGENCY',
+};
+
 /** Alert level blends absolute load with the inversion-trap index. */
 export function alertLevel(pm: number, inversionIndex: number): AlertLevel {
   const score = pm / 120 + inversionIndex * 0.75;

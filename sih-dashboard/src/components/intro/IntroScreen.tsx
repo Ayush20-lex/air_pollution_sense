@@ -4,7 +4,7 @@ import { motion, useMotionValue, useMotionValueEvent, useReducedMotion, useTrans
 import { ChevronDown, Cpu, Gauge, Satellite, Wind } from 'lucide-react';
 import { ScanButton } from './ScanButton';
 import { ScanTransition } from './ScanTransition';
-import { StatusPills, SLOTS } from './StatusPills';
+import { StatusPills, SLOTS, formatStationPillName } from './StatusPills';
 import { ParticleProbe, type Probe } from './ParticleProbe';
 import { TelemetryStat } from './TelemetryOverlay';
 import { ScrollPanels, ScrollSectionHead } from './ScrollPanels';
@@ -48,7 +48,7 @@ function StaticField() {
   return (
     <div aria-hidden className="absolute inset-0 overflow-hidden">
       <div
-        className="absolute left-1/2 top-[40%] size-[min(78vw,44rem)] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        className="absolute left-1/2 top-[40%] size-[min(72vw,40rem)] -translate-x-1/2 -translate-y-1/2 rounded-full"
         style={{
           background:
             'radial-gradient(circle, rgb(var(--as-accent) / 0.30) 0%, rgb(var(--as-accent) / 0.14) 34%, rgb(var(--as-accent) / 0.05) 55%, transparent 72%)',
@@ -56,7 +56,7 @@ function StaticField() {
         }}
       />
       <div
-        className="absolute left-1/2 top-[40%] size-[min(58vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-full border"
+        className="absolute left-1/2 top-[40%] size-[min(52vw,29rem)] -translate-x-1/2 -translate-y-1/2 rounded-full border"
         style={{ borderColor: 'rgb(var(--as-accent) / 0.22)' }}
       />
     </div>
@@ -139,7 +139,7 @@ export function IntroScreen() {
       // preserveDrawingBuffer on the heaviest chunk in the build. These are
       // empirical, and the only thing they need to be is a good fit — nudge
       // them if the field's radius changes.
-      const CLOUD = { cx: 0.5, cy: 0.4, rx: 0.32, ry: 0.34 };
+      const CLOUD = { cx: 0.5, cy: 0.4, rx: 0.29, ry: 0.31 };
       const nx = (x / r.width - CLOUD.cx) / CLOUD.rx;
       const ny = (y / r.height - CLOUD.cy) / CLOUD.ry;
       if (nx * nx + ny * ny > 1) {
@@ -297,10 +297,10 @@ export function IntroScreen() {
             <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-good" />
           </div>
           <div className="leading-tight">
-            <div className="font-mono text-sm font-bold tracking-[0.2em] text-ink">
-              AIRLYTICS <span className="text-accent">/ NCR</span>
+            <div className="font-sans text-sm font-bold tracking-tight text-ink">
+              AirLytics <span className="font-normal text-muted">/</span> <span className="text-accent font-semibold">NCR</span>
             </div>
-            <div className="hud-label">Coupled forecasting system v4.2</div>
+            <div className="font-sans text-xs text-muted">Delhi-NCR Air Quality Forecasting System</div>
           </div>
         </div>
 
@@ -323,7 +323,7 @@ export function IntroScreen() {
               {provenance.label}
             </Badge>
           </span>
-          <span className="hidden font-mono text-2xs tabular-nums text-muted sm:inline">
+          <span className="hidden font-sans text-xs tabular-nums text-muted sm:inline">
           {clock} IST
           </span>
           <CommandPalette />
@@ -352,9 +352,9 @@ export function IntroScreen() {
             and the inversion index are model fields, and "24 stations
             reporting" written across all three would claim instruments behind
             two numbers that have none. */}
-        <div className="hud-label pl-3">Delhi NCR</div>
+        <div className="font-sans text-xs font-semibold uppercase tracking-wider text-muted pl-3">DELHI-NCR</div>
         <TelemetryStat
-          label={now.live ? `PM2.5 · mean of ${now.stations}` : 'PM2.5 AVG'}
+          label={now.live ? `PM2.5 · mean of ${now.stations}` : 'PM2.5 AVERAGE'}
           value={(now.pm25 ?? frame.avgPm25).toFixed(0)}
           unit="µg/m³"
           accent={aqiColor(now.pm25 ?? frame.avgPm25)}
@@ -362,14 +362,14 @@ export function IntroScreen() {
           delay={0.15}
         />
         <TelemetryStat
-          label="PBL Height · forecast"
+          label="Boundary Layer Height"
           value={String(frame.avgPbl)}
           unit="m"
           delta={signed(pblTrend, 0, ' m')}
           delay={0.25}
         />
         <TelemetryStat
-          label="Inversion Index · forecast"
+          label="Inversion Risk"
           value={frame.inversionIndex.toFixed(2)}
           accent={frame.inversionIndex > 0.75 ? SEVERITY.bad : SEVERITY.moderate}
           delta={signed(invTrend, 2, '')}
@@ -381,44 +381,32 @@ export function IntroScreen() {
           Deliberately off-axis: title left-aligned against a rule, lede and
           CTA on a second horizontal axis. Gate 6 fails a hero whose eyebrow,
           title, lede and CTA all stack on one centred vertical spine. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-5 px-5 pb-10 sm:px-8 sm:pb-12 lg:pl-[19rem] lg:pr-8">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-3 sm:gap-5 px-5 pb-6 sm:px-8 sm:pb-12 lg:pl-[19rem] lg:pr-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
-          <span className="hud-label">Problem statement ID26082 · NCMRWF</span>
-          <h1 className="mt-2 max-w-3xl font-mono text-2xl font-bold uppercase leading-tight tracking-[0.12em] text-ink [overflow-wrap:anywhere] sm:text-3xl">
-            Two-way coupled
-            <span className="text-accent"> framework</span>
+          <span className="font-mono text-2xs uppercase tracking-wider text-slate-500 dark:text-slate-400">SIH26082 · NCMRWF</span>
+          <h1 className="mt-1.5 max-w-3xl font-sans text-2xl sm:text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 [overflow-wrap:anywhere] leading-tight">
+            72-Hour Air Quality
+            <span className="text-cyan-600 dark:text-cyan-400 font-semibold"> Forecasting</span>
           </h1>
+          <p className="mt-1 font-mono text-xs font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-300">
+            Two-way aerosol–radiation–PBL coupling
+          </p>
         </motion.div>
 
-        {/* Compact telemetry strip for small screens.
-            pointer-events-auto because the masthead wrapper above is
-            pointer-events-none — it spans the lower half of the stage and would
-            otherwise swallow every pointer event heading for the particle
-            field. Children that need the cursor opt back in, as the header and
-            the CTA do; these cards carry .glass-hover and never got it, so
-            their hover treatment could not fire at any width below lg. */}
-        <div className="pointer-events-auto flex w-full items-center justify-between gap-2 lg:hidden">
-          <MiniStat icon={<Gauge className="size-3" />} label="PM2.5" value={`${(now.pm25 ?? frame.avgPm25).toFixed(0)}`} color={aqiColor(now.pm25 ?? frame.avgPm25)} />
-          <MiniStat icon={<Wind className="size-3" />} label="PBL ·fc" value={`${frame.avgPbl}m`} />
-          <MiniStat icon={<Cpu className="size-3" />} label="INV ·fc" value={frame.inversionIndex.toFixed(2)} color={SEVERITY.moderate} />
+        {/* Compact telemetry strip for small screens */}
+        <div className="pointer-events-auto flex w-full items-center justify-between gap-1.5 sm:gap-2 lg:hidden">
+          <MiniStat icon={<Gauge className="size-3 text-cyan-600 dark:text-cyan-400" />} label="PM2.5" value={`${(now.pm25 ?? frame.avgPm25).toFixed(0)}`} color={aqiColor(now.pm25 ?? frame.avgPm25)} />
+          <MiniStat icon={<Wind className="size-3 text-cyan-600 dark:text-cyan-400" />} label="PBL ·fc" value={`${frame.avgPbl}m`} />
+          <MiniStat icon={<Cpu className="size-3 text-cyan-600 dark:text-cyan-400" />} label="INV ·fc" value={frame.inversionIndex.toFixed(2)} color={SEVERITY.moderate} />
         </div>
 
-        {/* The zone pills float over the particle field from md up, and below
-            it they are hidden - on a phone they would cover the thing they
-            annotate. That took the readings with them, so the stage named no
-            sector at all and a phone reader saw a city average and nothing
-            underneath it. The same four compass sectors and the same numbers,
-            set in flow instead of over the map. The level is carried by colour, so it is
-            also written into the label for anyone who cannot use colour. */}
-        <div className="pointer-events-auto grid w-full grid-cols-4 gap-1.5 md:hidden">
+        {/* Mobile zone pills: 2-col on narrow mobile, 4-col on tablet */}
+        <div className="pointer-events-auto grid w-full grid-cols-2 gap-1.5 sm:grid-cols-4 md:hidden">
           {(now.live ? now.sectors : SLOTS).map((entry) => {
-            // Live: the sector's worst station this hour - the same figure and
-            // the same source as the globe's pills on a wide screen, which it
-            // used to disagree with. Offline: the forecast district, as before.
             const isLiveSector = 'zone' in entry;
             const slot = isLiveSector ? null : (entry as typeof SLOTS[number]);
             const d = slot ? DISTRICTS.find((x) => x.id === slot.id)! : null;
@@ -434,22 +422,22 @@ export function IntroScreen() {
               ? String((entry as { aqi: number }).aqi)
               : s!.pm25.toFixed(0);
             const aria = isLiveSector
-              ? `${label} sector, worst AQI ${value} at ${(entry as { station: string }).station}, of ${(entry as { count: number }).count} reporting`
+              ? `${label} sector, worst AQI ${value} at ${formatStationPillName((entry as { station: string }).station)}, of ${(entry as { count: number }).count} reporting`
               : `${d!.zone}, ${s!.alert}, ${s!.pm25.toFixed(0)} micrograms per cubic metre`;
             return (
               <div
                 key={key}
-                className="flex flex-col gap-0.5 rounded-lg border px-2 py-1.5"
-                style={{ borderColor: `${color}55`, background: `${color}14` }}
+                className="flex flex-col gap-0.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-none dark:hover:-translate-y-0.5 dark:hover:border-slate-600 dark:hover:bg-slate-800/80 dark:hover:shadow-lg dark:hover:shadow-cyan-950/20"
+                style={{ borderLeftColor: color, borderLeftWidth: '3px' }}
                 aria-label={aria}
               >
                 <span className="flex items-center gap-1.5">
                   <span className="size-1.5 shrink-0 rounded-full" style={{ background: color }} />
-                  <span className="truncate font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <span className="truncate font-sans text-[10px] font-medium text-slate-600 dark:text-slate-300">
                     {label}
                   </span>
                 </span>
-                <span className="font-mono text-sm font-bold tabular-nums" style={{ color }}>
+                <span className="font-mono text-sm font-bold tabular-nums tracking-tight" style={{ color }}>
                   {value}
                 </span>
               </div>
@@ -457,21 +445,32 @@ export function IntroScreen() {
           })}
         </div>
 
-        {/* second axis: lede left, action right, divided by a hairline */}
-        <div className="flex flex-col gap-4 border-t border-hairline/60 pt-4 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
-          <p className="max-w-md text-pretty text-sm leading-relaxed text-muted">
-            72-hour forecasts for Delhi NCR on a 1 km grid, resolving the
-            aerosol-radiation-PBL feedback online rather than as an offline pass.
-          </p>
+        {/* second axis: lede left, action right */}
+        <div className="flex flex-col gap-3.5 border-t border-slate-200/80 pt-3 sm:pt-4 sm:flex-row sm:items-end sm:justify-between sm:gap-8 dark:border-slate-800/80">
+          <div className="max-w-lg space-y-2">
+            <p className="text-pretty text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+              72-hour forecasts for Delhi NCR on a 1 km grid, resolving the
+              aerosol-radiation-PBL feedback online rather than as an offline pass.
+            </p>
+            <p className="font-mono text-2xs leading-relaxed tracking-wide text-slate-500 dark:text-slate-400">
+              <span>Observed: <span className="font-medium text-slate-800 dark:text-slate-200">CPCB/OpenAQ</span></span>
+              <span className="mx-1.5 text-slate-400 dark:text-slate-600">·</span>
+              <span>Meteorology: <span className="font-medium text-slate-800 dark:text-slate-200">ERA5</span></span>
+              <span className="mx-1.5 text-slate-400 dark:text-slate-600">·</span>
+              <span>Composition: <span className="font-medium text-slate-800 dark:text-slate-200">CAMS</span></span>
+              <span className="mx-1.5 text-slate-400 dark:text-slate-600">·</span>
+              <span>Fire: <span className="font-medium text-slate-800 dark:text-slate-200">NASA FIRMS</span></span>
+            </p>
+          </div>
 
           <div className="pointer-events-auto flex shrink-0 flex-col items-start gap-2.5 sm:items-end">
             <ScanButton onScan={() => startScan()} scanning={handingOff} />
             <motion.span
               style={{ opacity: hintOpacity }}
-              className="flex items-center gap-1.5 whitespace-nowrap font-mono text-2xs uppercase tracking-[0.2em] text-faint"
+              className="flex items-center gap-1.5 whitespace-nowrap font-sans text-xs text-muted"
             >
-              <ChevronDown className="size-3" />
-              Scroll or press enter
+              <ChevronDown className="size-3.5 animate-bounce" />
+              Scroll or press Enter to launch terminal
             </motion.span>
           </div>
         </div>
@@ -499,17 +498,17 @@ export function IntroScreen() {
         {/* ---- closing: where to go next ----------------------------------
             Sized by its content. It used to be min-h-[85svh] wrapped around a
             heading, a line and a button — 138px of content in a 740px box. */}
-        <section className="w-full border-t border-hairline/60 pb-[6vh] pt-10">
+        <section className="w-full border-t border-slate-200 pb-[6vh] pt-10 dark:border-slate-800">
           <motion.h2
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.4 }}
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="max-w-2xl font-mono text-xl font-bold uppercase leading-tight tracking-[0.12em] text-ink sm:text-2xl"
+            className="max-w-2xl font-sans text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-100"
           >
-            Three ways <span className="text-accent">in</span>
+            Explore the NCR <span className="text-cyan-600 dark:text-cyan-400 font-semibold">Air Shed</span>
           </motion.h2>
-          <p className="mt-2 max-w-lg text-pretty text-sm leading-relaxed text-muted">
+          <p className="mt-2 max-w-lg text-pretty text-sm leading-relaxed text-slate-600 dark:text-slate-400">
             Each one opens the public terminal. Everything it shows is read-only.
           </p>
           <div className="mt-6">
@@ -533,14 +532,14 @@ function MiniStat({
   color?: string;
 }) {
   return (
-    <div className="glass glass-hover flex flex-1 flex-col items-center gap-0.5 px-2 py-2">
-      <span className="flex items-center gap-1 font-mono text-2xs uppercase tracking-widest text-faint">
+    <div className="flex flex-1 flex-col items-center gap-0.5 rounded-md border border-slate-200 bg-white px-2 py-2 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-none dark:hover:-translate-y-0.5 dark:hover:border-slate-600 dark:hover:bg-slate-800/80 dark:hover:shadow-lg dark:hover:shadow-cyan-950/20">
+      <span className="flex items-center gap-1 font-mono text-2xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {icon}
         {label}
       </span>
       <span
-        className="font-mono text-base font-semibold tabular-nums"
-        style={{ color: color ?? 'rgb(var(--as-ink))' }}
+        className="font-mono text-base font-semibold tabular-nums tracking-tight text-slate-900 dark:text-slate-100"
+        style={{ color: color ?? undefined }}
       >
         {value}
       </span>

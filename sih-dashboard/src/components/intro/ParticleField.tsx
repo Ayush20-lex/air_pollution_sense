@@ -75,8 +75,8 @@ function rowsForViewport(): number {
  */
 const EQUATOR_FACTOR = 2;
 
-/** Radius of the globe, in world units. */
-const RADIUS = 2.45;
+/** Radius of the globe, in world units. Scaled slightly down to give more breathing room. */
+const RADIUS = 2.22;
 
 /**
  * How large a sea dot is against a land dot.

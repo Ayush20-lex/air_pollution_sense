@@ -3,35 +3,22 @@ import { motion } from 'framer-motion';
 import { Activity, AlertTriangle, Layers, LineChart } from 'lucide-react';
 import { MiniSparkline } from '@/components/charts/MiniSparkline';
 import { Badge } from '@/components/ui/badge';
-import { ALERT_COLOR, aqiColor } from '@/lib/aqi';
+import { ALERT_COLOR, ALERT_LABEL, aqiColor } from '@/lib/aqi';
 import { DISTRICTS, autoAnalysis, type Frame, type Interventions } from '@/lib/data';
 import { SERIES } from '@/lib/tokens';
 
-/**
- * Shared rise-from-below entrance, staggered across the row.
- *
- * `once: true`, and that is the whole point. With `once: false` the panels
- * animated out again every time they left the viewport and back in on the way
- * past, so scrolling up the page - or stopping with a card half off the bottom
- * edge, which at `amount` 0.35 is below the trigger - left cards sitting at
- * their `initial` opacity of zero. Three of them were measured at 0.05, 0.53
- * and 0.59 while off screen. An entrance is something a panel does once; after
- * that the reader is just trying to read it.
- *
- * `amount` is lower to match, so a card entering from the bottom commits
- * earlier rather than waiting to be a third on screen.
- */
 const rise = (i: number) => ({
-  initial: { opacity: 0, y: 56 },
+  initial: { opacity: 0, y: 32 },
   whileInView: { opacity: 1, y: 0 },
   viewport: { once: true, amount: 0.15, margin: '0px 0px -8% 0px' },
-  transition: { duration: 0.65, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] as const },
+  transition: { duration: 0.5, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] as const },
 });
 
 /**
- * The panel row that rises over the pinned particle field as the intro
- * scrolls. Every figure and every sentence is the same data the terminal
- * shows — this is a preview of what Scan NCR opens, not new content.
+ * Enterprise technical data cards:
+ * Light mode: Pure white backgrounds (bg-white), crisp borders (border-slate-200), subtle shadows (shadow-sm),
+ * dark text (text-slate-900) and medium gray sub-labels (text-slate-500).
+ * Dark mode: Strictly preserved with dark:bg-slate-900/60, dark:border-slate-800, dark:text-white.
  */
 export function ScrollPanels({
   frame,
@@ -50,36 +37,42 @@ export function ScrollPanels({
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {/* --- current telemetry ------------------------------------------ */}
-      <motion.div {...rise(0)} className="glass glass-hover p-3">
+      {/* --- current telemetry / conditions ----------------------------- */}
+      <motion.div
+        {...rise(0)}
+        className="rounded-md border border-slate-200 bg-white p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-slate-400 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-none dark:hover:-translate-y-1 dark:hover:border-slate-600 dark:hover:bg-slate-800/80 dark:hover:shadow-lg dark:hover:shadow-cyan-950/30"
+      >
         <div className="flex items-center justify-between">
-          <span className="panel-title">
-            <Activity className="size-3" />
-            Current telemetry
+          <span className="flex items-center gap-1.5 font-mono text-2xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <Activity className="size-3 text-cyan-600 dark:text-cyan-400" />
+            CURRENT CONDITIONS
           </span>
           <Badge color={aqiColor(frame.avgPm25)}>Now</Badge>
         </div>
         <dl className="mt-3 space-y-2.5">
-          <Row label="PM2.5 avg" value={frame.avgPm25.toFixed(1)} unit="µg/m³" color={aqiColor(frame.avgPm25)} />
-          <Row label="PBL height" value={String(frame.avgPbl)} unit="m" />
-          <Row label="Temperature" value={frame.avgTemp.toFixed(1)} unit="°C" />
-          <Row label="Solar" value={String(frame.avgSolar)} unit="W/m²" />
+          <Row label="PM2.5 AVERAGE" value={frame.avgPm25.toFixed(1)} unit="µg/m³" color={aqiColor(frame.avgPm25)} />
+          <Row label="BOUNDARY LAYER HEIGHT" value={String(frame.avgPbl)} unit="m" />
+          <Row label="TEMPERATURE" value={frame.avgTemp.toFixed(1)} unit="°C" />
+          <Row label="SOLAR" value={String(frame.avgSolar)} unit="W/m²" />
         </dl>
       </motion.div>
 
-      {/* --- 72h trajectory ---------------------------------------------- */}
-      <motion.div {...rise(1)} className="glass glass-hover flex flex-col p-3">
+      {/* --- 72-hour forecast -------------------------------------------- */}
+      <motion.div
+        {...rise(1)}
+        className="flex flex-col rounded-md border border-slate-200 bg-white p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-slate-400 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-none dark:hover:-translate-y-1 dark:hover:border-slate-600 dark:hover:bg-slate-800/80 dark:hover:shadow-lg dark:hover:shadow-cyan-950/30"
+      >
         <div className="flex items-center justify-between">
-          <span className="panel-title">
-            <LineChart className="size-3" />
-            72h trajectory
+          <span className="flex items-center gap-1.5 font-mono text-2xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <LineChart className="size-3 text-cyan-600 dark:text-cyan-400" />
+            72-HOUR FORECAST
           </span>
-          <span className="font-mono text-2xs text-faint">µg/m³</span>
+          <span className="font-mono text-2xs text-slate-500 dark:text-slate-400">µg/m³</span>
         </div>
         <div className="mt-4 flex-1">
           <MiniSparkline values={series} width={320} height={92} className="w-full" />
         </div>
-        <div className="mt-1 flex justify-between font-mono text-2xs text-faint">
+        <div className="mt-1 flex justify-between font-mono text-2xs tabular-nums text-slate-500 dark:text-slate-400">
           <span>NOW</span>
           <span>+24h</span>
           <span>+48h</span>
@@ -88,52 +81,59 @@ export function ScrollPanels({
       </motion.div>
 
       {/* --- coupling ----------------------------------------------------- */}
-      <motion.div {...rise(2)} className="glass glass-hover p-3">
-        <span className="panel-title">
-          <Layers className="size-3" />
+      <motion.div
+        {...rise(2)}
+        className="rounded-md border border-slate-200 bg-white p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-slate-400 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-none dark:hover:-translate-y-1 dark:hover:border-slate-600 dark:hover:bg-slate-800/80 dark:hover:shadow-lg dark:hover:shadow-cyan-950/30"
+      >
+        <span className="flex items-center gap-1.5 font-mono text-2xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <Layers className="size-3 text-cyan-600 dark:text-cyan-400" />
           {analysis.title}
         </span>
-        <p className="mt-3 text-pretty text-xs leading-relaxed text-muted">{analysis.body}</p>
-        <div className="mt-3 flex flex-wrap items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-faint">
+        <p className="mt-3 text-pretty text-xs leading-relaxed text-slate-600 dark:text-slate-300">{analysis.body}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
           {['Aerosol', 'Extinction', 'Cooling', 'PBL', 'Trapping'].map((step, i, a) => (
             <React.Fragment key={step}>
-              <span className="rounded border border-hairline bg-elevated/50 px-1.5 py-0.5">{step}</span>
-              {i < a.length - 1 && <span className="text-accent">→</span>}
+              <span className="rounded-sm border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-slate-700 transition-colors hover:border-slate-400 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300 dark:hover:border-slate-600">
+                {step}
+              </span>
+              {i < a.length - 1 && <span className="text-cyan-600 dark:text-cyan-400 font-bold">→</span>}
             </React.Fragment>
           ))}
         </div>
       </motion.div>
 
       {/* --- inversion risk ----------------------------------------------- */}
-      <motion.div {...rise(3)} className="glass glass-hover p-3">
+      <motion.div
+        {...rise(3)}
+        className="rounded-md border border-slate-200 bg-white p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-slate-400 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-none dark:hover:-translate-y-1 dark:hover:border-slate-600 dark:hover:bg-slate-800/80 dark:hover:shadow-lg dark:hover:shadow-cyan-950/30"
+      >
         <div className="flex items-center justify-between">
-          <span className="panel-title">
-            <AlertTriangle className="size-3" />
-            Inversion risk
+          <span className="flex items-center gap-1.5 font-mono text-2xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <AlertTriangle className="size-3 text-amber-500 dark:text-amber-400" />
+            INVERSION RISK
           </span>
-          <span className="font-mono text-2xs tabular-nums text-faint">
-            idx {frame.inversionIndex.toFixed(2)}
+          <span className="font-mono text-2xs font-semibold tabular-nums text-slate-500 dark:text-slate-400">
+            RISK INDEX {frame.inversionIndex.toFixed(2)}
           </span>
         </div>
         <div className="mt-3 space-y-1.5">
           {ranked.map(({ d, s }) => (
             <div
               key={d.id}
-              className="flex items-center gap-2 rounded-md px-2 py-1.5"
-              style={{ background: `${ALERT_COLOR[s.alert]}12` }}
+              className="flex items-center gap-2 rounded-sm border border-slate-200 bg-slate-50 px-2 py-1.5 dark:border-slate-800/80 dark:bg-slate-950/60"
             >
               <span
                 className="size-1.5 shrink-0 rounded-full"
                 style={{ background: ALERT_COLOR[s.alert] }}
               />
-              <span className="flex-1 truncate font-mono text-2xs uppercase tracking-[0.12em] text-ink">
+              <span className="flex-1 truncate font-mono text-2xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 {d.zone}
               </span>
               <span
-                className="font-mono text-2xs font-bold uppercase tracking-[0.1em]"
+                className="font-mono text-2xs font-bold uppercase tabular-nums tracking-wider"
                 style={{ color: ALERT_COLOR[s.alert] }}
               >
-                {s.alert}
+                {ALERT_LABEL[s.alert] ?? s.alert}
               </span>
             </div>
           ))}
@@ -155,16 +155,16 @@ function Row({
   color?: string;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-hairline/40 pb-2 last:border-0 last:pb-0">
-      <dt className="hud-label">{label}</dt>
+    <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-2 last:border-0 last:pb-0 dark:border-slate-800/60">
+      <dt className="font-mono text-2xs uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</dt>
       <dd className="flex items-baseline gap-1">
         <span
-          className="font-mono text-lg font-semibold tabular-nums"
-          style={{ color: color ?? 'rgb(var(--as-ink))' }}
+          className="font-mono text-lg font-semibold tabular-nums tracking-tight text-slate-900 dark:text-slate-100"
+          style={{ color: color ?? undefined }}
         >
           {value}
         </span>
-        <span className="font-mono text-2xs text-faint">{unit}</span>
+        <span className="font-mono text-2xs text-slate-500 dark:text-slate-400">{unit}</span>
       </dd>
     </div>
   );
@@ -173,30 +173,30 @@ function Row({
 /** Section heading that slides in from the left as the row arrives. */
 export function ScrollSectionHead({ frame }: { frame: Frame }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-4 border-b border-hairline/60 pb-4">
+    <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4 dark:border-slate-800">
       <motion.h2
-        initial={{ opacity: 0, x: -28 }}
+        initial={{ opacity: 0, x: -20 }}
         whileInView={{ opacity: 1, x: 0 }}
         viewport={{ once: true, amount: 0.4 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="font-mono text-xl font-bold uppercase tracking-[0.14em] text-ink sm:text-2xl"
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        className="font-sans text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-100"
       >
-        Local forecast <span className="text-accent">coupled</span>
+        Local 72-Hour <span className="text-cyan-600 dark:text-cyan-400 font-semibold">Forecast</span>
       </motion.h2>
       <motion.div
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
         viewport={{ once: true, amount: 0.4 }}
-        transition={{ duration: 0.6, delay: 0.15 }}
-        className="flex items-center gap-4 font-mono text-2xs uppercase tracking-[0.18em] text-faint"
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="flex flex-wrap items-center gap-3 sm:gap-4 font-mono text-xs tabular-nums text-slate-500 dark:text-slate-400"
       >
         <span>
-          Ensemble <span className="text-ink">{frame.avgPm25.toFixed(0)} µg/m³</span>
+          FORECAST ENSEMBLE <span className="font-semibold text-slate-900 dark:text-slate-100">{frame.avgPm25.toFixed(1)} µg/m³</span>
         </span>
         <span>
-          PBL <span className="text-ink">{frame.avgPbl} m</span>
+          PBL <span className="font-semibold text-slate-900 dark:text-slate-100">{frame.avgPbl} m</span>
         </span>
-        <span style={{ color: SERIES.wind }}>{frame.avgWind} m/s</span>
+        <span style={{ color: SERIES.wind }} className="font-semibold">{frame.avgWind} m/s</span>
       </motion.div>
     </div>
   );

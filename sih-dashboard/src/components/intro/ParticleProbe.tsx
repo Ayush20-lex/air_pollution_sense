@@ -53,6 +53,10 @@ function Card({ district, frame }: { district: District; frame: Frame }) {
   const color = ALERT_COLOR[level];
   const band = bandForPm25(s.pm25);
 
+  const isInversionWarning =
+    level === 'WARNING' && (s.inversion >= 0.55 || frame.inversionIndex >= 0.55);
+  const displayLevel = isInversionWarning ? 'INVERSION WARNING' : level;
+
   return (
     <div
       className="flex flex-col gap-1.5 rounded-lg border px-3 py-2 backdrop-blur-xl"
@@ -62,32 +66,29 @@ function Card({ district, frame }: { district: District; frame: Frame }) {
         boxShadow: `0 0 0 1px ${color}33, 0 14px 34px -14px ${color}`,
       }}
     >
-      <span className="flex items-center gap-1.5 font-mono text-2xs uppercase tracking-[0.2em] text-faint">
-        <Crosshair className="size-3" />
-        Probe
+      <span className="flex items-center gap-1.5 font-sans text-xs font-medium text-muted">
+        <Crosshair className="size-3 text-accent" />
+        Station Reading
       </span>
 
-      {/* The sector, matching the pill this readout sits beside. It used to
-          print `district.zone` - "DELHI-NCR-NORTH" - while the pill two inches
-          away now says "North", and the whole point of mapping the cursor to
-          the nearest slot is that the two cannot disagree. */}
-      <span className="font-mono text-2xs font-semibold uppercase tracking-[0.18em] text-ink">
+      <span className="font-sans text-xs font-semibold text-ink">
         {sectorForSlot(district.id) ?? district.zone}
       </span>
 
       <span
-        className="flex items-center gap-1 font-mono text-2xs font-bold uppercase tracking-[0.14em]"
+        className="flex items-center gap-1 font-sans text-xs font-semibold"
         style={{ color }}
       >
         <AlertIcon level={level} />
-        {level}
+        {displayLevel}
       </span>
 
-      <div className="flex items-baseline gap-1.5 border-t border-hairline/60 pt-1.5">
-        <span className="font-mono text-lg font-semibold tabular-nums" style={{ color }}>
+      <div className="flex items-baseline gap-1.5 border-t border-hairline/60 pt-1.5 font-sans text-xs text-muted">
+        <span>PM2.5</span>
+        <span className="text-base font-semibold tabular-nums" style={{ color }}>
           {s.pm25.toFixed(0)}
         </span>
-        <span className="font-mono text-2xs text-muted">µg/m³ · {band.label}</span>
+        <span>µg/m³ · {band.label}</span>
       </div>
     </div>
   );

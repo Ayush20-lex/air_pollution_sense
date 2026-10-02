@@ -11,40 +11,23 @@ import { useAdvisories } from '@/lib/terminal/advisories';
 import { cn } from '@/lib/utils';
 
 /**
- * The closing panel of the intro track.
- *
- * It replaced a heading, one line of copy and a lone button sitting in an
- * 85svh box — 602px of empty space on a 1478px row, with the content filling
- * neither axis. The gap was the symptom; the cause was that the section had
- * nothing in it. Three destinations existed and only one of them was reachable
- * from here, with the other two hidden behind the command palette.
- *
- * Deliberately unequal tiles rather than three matching cards: a bento reads
- * as a considered layout, three equal boxes read as a template. The telemetry
- * tile is widest because it is where most visitors should land first.
- *
- * Every figure is real and pulled from the same source the destination uses —
- * the AQI is the live frame, the node count is STATIONS.length, the channel
- * count is POLLUTANTS.length. None of it is written down twice.
- *
- * All three tiles open the public terminal. They used to be three separate
- * surfaces, but the engineering console was removed, so what is left is one
- * destination entered at three different depths.
+ * Enterprise technical tiles:
+ * Light mode: Pure white backgrounds (bg-white), crisp borders (border-slate-200), subtle shadows (shadow-sm),
+ * dark text (text-slate-900) and medium gray sub-labels (text-slate-500).
+ * Dark mode: Strictly preserved with dark:bg-slate-900/60, dark:border-slate-800, dark:text-white.
  */
 
-/** Worst level in the feed, so the count is not painted calmer than it reads. */
 function worstColor(items: { level: string }[]): string {
   if (items.some((i) => i.level === 'CRITICAL')) return ALERT_COLOR.EMERGENCY;
   if (items.some((i) => i.level === 'WARNING')) return ALERT_COLOR.WARNING;
   return ALERT_COLOR.ADVISORY;
 }
 
-/** See ScrollPanels' `rise`: revealed once, and low enough to commit early. */
 const rise = (i: number) => ({
-  initial: { opacity: 0, y: 40 },
+  initial: { opacity: 0, y: 32 },
   whileInView: { opacity: 1, y: 0 },
   viewport: { once: true, amount: 0.15, margin: '0px 0px -8% 0px' },
-  transition: { duration: 0.6, delay: i * 0.07, ease: [0.22, 1, 0.36, 1] as const },
+  transition: { duration: 0.5, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] as const },
 });
 
 function Tile({
@@ -72,23 +55,6 @@ function Tile({
 }) {
   const startScan = useAppStore((s) => s.startScan);
 
-  /**
-   * Hands off through the scan curtain instead of navigating straight there.
-   *
-   * These cards and the Scan NCR button below them go to the same place, and
-   * only the button played the hand-off - so entering by a card cut from the
-   * globe to the terminal in one frame, which reads as the page having
-   * reloaded rather than as one move. `startScan` already takes a
-   * destination; the command palette has been handing off to a station that
-   * way all along, so the cards need no new machinery, only to stop bypassing
-   * it.
-   *
-   * Still a real <Link>. The element has to stay an anchor with a live href
-   * so it can be opened in a new tab, copied, or followed by a screen reader
-   * as the link it is - and the modified clicks that mean "not here" are let
-   * through untouched, because a curtain over a tab the reader is not looking
-   * at is a curtain that never lifts.
-   */
   const handoff = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (e.defaultPrevented) return;
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -102,32 +68,34 @@ function Tile({
         to={to}
         onClick={handoff}
         className={cn(
-          'glass glass-hover group flex h-full flex-col justify-between gap-6 p-5',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
+          'group flex h-full flex-col justify-between gap-6 rounded-md border border-slate-200 bg-white p-5 shadow-sm',
+          'transition-all duration-200 hover:-translate-y-1 hover:border-slate-400 hover:shadow-md',
+          'dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-none dark:hover:-translate-y-1 dark:hover:border-slate-600 dark:hover:bg-slate-800/80 dark:hover:shadow-lg dark:hover:shadow-cyan-950/30',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60',
         )}
       >
         <div>
-          <span className="panel-title">
+          <span className="flex items-center gap-1.5 font-mono text-2xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
             {icon}
             {eyebrow}
           </span>
-          <h3 className="mt-3 font-mono text-base font-bold uppercase leading-tight tracking-[0.1em] text-ink [overflow-wrap:anywhere] sm:text-lg">
+          <h3 className="mt-2.5 font-sans text-base font-semibold tracking-tight text-slate-900 dark:text-slate-100 [overflow-wrap:anywhere] sm:text-lg">
             {title}
           </h3>
-          <p className="mt-2 max-w-prose text-pretty text-sm leading-relaxed text-muted">{body}</p>
+          <p className="mt-2 max-w-prose text-pretty text-sm leading-relaxed text-slate-600 dark:text-slate-400">{body}</p>
         </div>
 
-        <div className="flex items-end justify-between gap-3 border-t border-hairline/60 pt-3">
+        <div className="flex items-end justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800/80">
           <div className="min-w-0">
-            <div className="hud-label">{statLabel}</div>
+            <div className="font-mono text-2xs tracking-wider text-slate-500 dark:text-slate-400">{statLabel}</div>
             <div
-              className="font-mono text-2xl font-semibold tabular-nums tracking-tight"
-              style={{ color: statColor ?? 'rgb(var(--as-ink))' }}
+              className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-slate-900 dark:text-slate-100"
+              style={{ color: statColor ?? undefined }}
             >
               {stat}
             </div>
           </div>
-          <ArrowUpRight className="size-4 shrink-0 text-faint transition-[color,translate] duration-200 ease-out group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-accent" />
+          <ArrowUpRight className="size-4 shrink-0 text-slate-400 transition-[color,translate] duration-150 ease-out group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-cyan-600 dark:text-slate-500 dark:group-hover:text-cyan-400" />
         </div>
       </Link>
     </motion.div>
@@ -144,69 +112,58 @@ export function EntryGrid({
   scanning: boolean;
 }) {
   const mesh = useMesh();
-  // Null until the backend answers; MODEL_META carries the same figure as the
-  // fallback so the panel never shows a blank where a number belongs.
   const source = useAppStore((st) => st.source);
   const { items: advisories } = useAdvisories();
   const band = bandForPm25(frame.avgPm25);
 
   return (
-    // Two rows of three on desktop, with the wide tiles at opposite corners so
-    // the grid never resolves into even columns. Collapses to two up on
-    // tablets and one on phones; every tile carries min-w-0 so a long word
-    // cannot push a track wider than its share.
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <Tile
         index={0}
-        className="sm:col-span-2"
         to="/terminal"
-        icon={<Gauge className="size-3" />}
-        eyebrow="Public terminal"
-        title="Live telemetry"
-        body={`Composite AQI on the CPCB National scale, ${POLLUTANTS.length}-channel chemical grid with per-species trajectories, and the station mesh with its incident feed.`}
-        stat={String(frame.avgAqi)}
-        statLabel={`NCR mean · ${band.label}`}
+        icon={<Gauge className="size-3 text-cyan-600 dark:text-cyan-400" />}
+        eyebrow="PUBLIC TERMINAL"
+        title="Live station telemetry"
+        body={`Now: ${band.label}. ${mesh.stations.length} CAAQMS stations reporting ${POLLUTANTS.length} criteria channels across Delhi, Noida, Ghaziabad, Gurugram, and Faridabad.`}
+        stat={frame.avgPm25.toFixed(1)}
+        statLabel="NCR PM2.5 · µg/m³"
         statColor={aqiColor(frame.avgPm25)}
       />
 
       <Tile
         index={1}
         to="/terminal/geo-map"
-        icon={<MapPin className="size-3" />}
-        eyebrow="Public terminal"
-        title="Geospatial plume"
+        icon={<MapPin className="size-3 text-cyan-600 dark:text-cyan-400" />}
+        eyebrow="PUBLIC TERMINAL"
+        title="Geospatial pollution map"
         body="Dispersion field, PM2.5 iso-contours, source-to-receptor ribbons and wind streamlines over the NCR basin."
         stat={String(mesh.stations.length)}
-        statLabel="Mesh nodes"
+        statLabel="MESH NODES"
       />
 
       <Tile
         index={2}
         to="/terminal#alerts"
-        icon={<AlertTriangle className="size-3" />}
-        eyebrow="Public terminal"
-        title="Incident warnings"
+        icon={<AlertTriangle className="size-3 text-amber-500 dark:text-amber-400" />}
+        eyebrow="PUBLIC TERMINAL"
+        title="Pollution & incident warnings"
         body="The advisory feed: the GRAP stage in force, the zones about to trap, and how much of the mesh is reporting."
         stat={String(advisories.length)}
-        statLabel={advisories.length === 1 ? 'Open advisory' : 'Open advisories'}
+        statLabel={advisories.length === 1 ? 'OPEN ADVISORY' : 'OPEN ADVISORIES'}
         statColor={worstColor(advisories)}
       />
 
-      {/* The CTA keeps its own tile so the scan hand-off stays the largest
-          target in the row rather than becoming a fourth equal card. */}
-      <motion.div {...rise(3)} className="glass flex min-w-0 flex-col justify-between gap-5 p-5 sm:col-span-2">
+      {/* The CTA keeps its own tile with pure white surface, 1px border, rounded-md */}
+      <motion.div
+        {...rise(3)}
+        className="flex min-w-0 flex-col justify-between gap-5 rounded-md border border-slate-200 bg-white p-5 shadow-sm sm:col-span-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-none dark:hover:border-slate-600 dark:hover:bg-slate-800/80 dark:hover:shadow-lg dark:hover:shadow-cyan-950/30"
+      >
         <div>
-          <span className="panel-title">Start here</span>
-          <h3 className="mt-3 font-mono text-base font-bold uppercase leading-tight tracking-[0.1em] text-ink sm:text-lg">
-            Open the <span className="text-accent">live terminal</span>
+          <span className="font-mono text-2xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Start Here</span>
+          <h3 className="mt-2.5 font-sans text-base font-semibold tracking-tight text-slate-900 sm:text-lg dark:text-slate-100">
+            Open <span className="text-cyan-600 dark:text-cyan-400 font-semibold">Live Terminal</span>
           </h3>
-          {/* This sentence used to claim a WRF-Chem run on a nested 3 km
-              domain. It is the first line anyone reads and it described a
-              system nobody built; see MODEL_META. The RMSE is taken from the
-              backend when it has answered, so the figure on the landing panel
-              is the one the forecast was actually scored at rather than a
-              number typed beside it. */}
-          <p className="mt-2 max-w-md text-pretty text-sm leading-relaxed text-muted">
+          <p className="mt-2 max-w-md text-pretty text-sm leading-relaxed text-slate-600 dark:text-slate-400">
             {FORECAST_HOURS}-hour PM2.5 forecast for Delhi NCR on a{' '}
             {MODEL_META.resolution} grid, scored at{' '}
             {(source?.validated_rmse_ugm3 ?? MODEL_META.validatedRmse).toFixed(2)} µg/m³
