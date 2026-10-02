@@ -119,7 +119,15 @@ CASES: list[Case] = [
     Case(
         "gap.no2",
         "What is the NO2 concentration at Anand Vihar right now?",
-        expect_any=["not indexed", "withheld", "not publish", "one hour", "1-hour", "cannot"],
+        # Widened after a correct refusal failed on wording alone: "the system
+        # does not provide a real-time NO2 concentration ... NO2 is not part of
+        # the live-feed index" declines exactly as intended and matched none of
+        # the original phrases. The assertion is that it declines, not that it
+        # declines in one of six specific ways.
+        expect_any=[
+            "not indexed", "withheld", "not publish", "one hour", "1-hour",
+            "cannot", "does not provide", "not part of",
+        ],
     ),
     Case(
         "gap.medical",
@@ -173,12 +181,39 @@ def ask(base: str, question: str, timeout: int = 120) -> dict[str, Any]:
     return {"text": text, "tools": tools, "error": err}
 
 
+#: Characters a model may write where the grader expects the plain ASCII one.
+#:
+#: gpt-oss-120b writes "Punjabi Bagh" with a NARROW NO-BREAK SPACE, so a
+#: substring test for "punjabi bagh" failed an answer that named the station
+#: correctly - the grader reported a model error that did not exist. It also
+#: emits non-breaking hyphens ("real‑time") and curly apostrophes.
+#: Normalise before matching, so the assertions test the answer rather than
+#: the model's typography.
+LOOKALIKES = {
+    " ": " ",  # no-break space
+    " ": " ",  # narrow no-break space
+    " ": " ",  # thin space
+    "‑": "-",  # non-breaking hyphen
+    "–": "-",  # en dash
+    "—": "-",  # em dash
+    "’": "'",  # right single quote
+    "“": '"',
+    "”": '"',
+}
+
+
+def plain(s: str) -> str:
+    for odd, ascii_ in LOOKALIKES.items():
+        s = s.replace(odd, ascii_)
+    return s.lower()
+
+
 def grade(case: Case, got: dict[str, Any]) -> list[str]:
     """Empty list means it passed."""
     fails: list[str] = []
     if got.get("error") and not got.get("text"):
         return [f"turn failed: {got['error']}"]
-    text = (got.get("text") or "").lower()
+    text = plain(got.get("text") or "")
     tools = got.get("tools") or []
 
     missing = [t for t in case.expect_tools if t not in tools]

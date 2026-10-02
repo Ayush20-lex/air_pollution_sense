@@ -21,6 +21,7 @@ itself - set one in Google AI Studio too.
 """
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -456,6 +457,39 @@ def _answer_gemini(q: str, history: list[dict[str, Any]] | None) -> Iterator[dic
     }
 
 
+def _groq_tools() -> list[dict[str, Any]]:
+    """
+    The same declarations, with optional parameters allowed to be null.
+
+    Groq validates the model's tool call against the schema we send, server
+    side, and rejects the whole turn with a 400 if it disagrees. gpt-oss-120b
+    passes `pollutant: null` to mean "not specified", which a bare
+    `"type": "string"` refuses - so asking how the CPCB index is calculated
+    failed before any tool ran:
+
+        parameters for tool index_rules did not match schema:
+        [`/pollutant`: expected string, but got null]
+
+    Widened here rather than in DECLARATIONS because Gemini's schema subset
+    takes a single type string, not a list, and the declarations are shared.
+    Nulls are then dropped before dispatch, since every tool reads a missing
+    argument as "not specified" already.
+    """
+    out: list[dict[str, Any]] = []
+    for decl in assistant_tools.DECLARATIONS:
+        decl = copy.deepcopy(decl)
+        params = decl.get("parameters") or {}
+        required = set(params.get("required") or ())
+        for name, spec in (params.get("properties") or {}).items():
+            if name in required or not isinstance(spec, dict):
+                continue
+            kind = spec.get("type")
+            if isinstance(kind, str):
+                spec["type"] = [kind, "null"]
+        out.append({"type": "function", "function": decl})
+    return out
+
+
 def _answer_groq(q: str, history: list[dict[str, Any]] | None) -> Iterator[dict]:
     """
     The same turn against an OpenAI-shaped API.
@@ -477,7 +511,7 @@ def _answer_groq(q: str, history: list[dict[str, Any]] | None) -> Iterator[dict]
         messages.append({"role": "system", "content": SYSTEM_PROMPT})
     messages.append({"role": "user", "content": q})
 
-    tools = [{"type": "function", "function": d} for d in assistant_tools.DECLARATIONS]
+    tools = _groq_tools()
     used: list[dict[str, Any]] = []
 
     for _ in range(MAX_TOOL_ROUNDS):
@@ -527,6 +561,10 @@ def _answer_groq(q: str, history: list[dict[str, Any]] | None) -> Iterator[dict]
                 args = {}
             if not isinstance(args, dict):
                 args = {}
+            # A null argument means "not specified", which every tool already
+            # reads as a missing key. Dropping it here keeps the tools from
+            # having to know that one provider spells absence as null.
+            args = {k: v for k, v in args.items() if v is not None}
 
             started = time.time()
             result = assistant_tools.run(name, args)
