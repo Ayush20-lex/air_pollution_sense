@@ -1362,15 +1362,16 @@ def assistant_status():
     """
     return {
         "available": assistant.available() and not assistant.kill_switch_on(),
-        # Which upstream is answering, not just which model. The provider is
-        # chosen from the environment at import, so without this the only way
-        # to tell a Groq deployment from a Gemini one is to recognise the model
-        # name - and the point of the switch is that it changes under you.
-        "provider": assistant.PROVIDER,
-        "model": assistant.MODEL if assistant.available() else None,
+        # Which upstream is answering, not just which model, and which others
+        # are configured to take over. Read per request rather than fixed at
+        # import: a provider whose quota ran out is benched and the next one
+        # answers, so this field is the only way to know who just replied.
+        "provider": assistant.provider(),
+        "providers": assistant.configured(),
+        "model": assistant.model() if assistant.available() else None,
         "tools": [d["name"] for d in assistant_tools.DECLARATIONS],
         "limits": {
-            "per_minute": assistant.RATE_PER_MIN,
+            "per_minute": assistant.rate_per_min(),
             "per_day": assistant.RATE_PER_DAY,
             "max_turns": assistant.MAX_TURNS,
             "max_question_chars": assistant.MAX_QUESTION_CHARS,

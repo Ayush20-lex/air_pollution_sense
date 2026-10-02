@@ -39,28 +39,10 @@ log = logging.getLogger("assistant")
 
 # ── configuration ───────────────────────────────────────────────────────────
 
-def _detect_provider() -> str:
-    """
-    Which upstream answers. `ASSISTANT_PROVIDER` decides; absent, a Groq key
-    being present decides.
-
-    Two providers rather than one because the binding constraint here is a free
-    tier, not a capability. A day of debugging exhausted the daily quota on
-    three Gemini models in turn, and each exhaustion is per model per project -
-    so the useful thing to own is a switch, not a better default. Flipping one
-    variable and restarting beats editing code at the moment the panel is dark.
-    """
-    explicit = os.environ.get("ASSISTANT_PROVIDER", "").strip().lower()
-    if explicit in ("groq", "gemini"):
-        return explicit
-    return "groq" if os.environ.get("GROQ_API_KEY", "").strip() else "gemini"
-
-
-PROVIDER = _detect_provider()
-
-#: Left unset on purpose. Put it in /etc/airsense.env beside WAQI_TOKEN and
-#: never in the repository. Absent, the endpoint reports itself unavailable and
-#: the widget does not render - the same rule the meteorology panel follows.
+#: The two upstreams this can answer from. Keys are left unset in the
+#: repository and live in /etc/airsense.env beside WAQI_TOKEN; with neither
+#: key the endpoint reports itself unavailable and the widget does not render,
+#: the same rule the meteorology panel follows.
 #:
 #: Model names are overridable because they expire faster than this codebase
 #: does. The Gemini default was once gemini-2.5-flash, which a newly issued key
@@ -68,19 +50,71 @@ PROVIDER = _detect_provider()
 #: ListModels, so only generateContent reveals it, and the refusal arrives as
 #: 404 model-not-found rather than a permission error - which reads exactly
 #: like a dead endpoint.
-if PROVIDER == "groq":
-    API_KEY_ENV = "GROQ_API_KEY"
-    #: gpt-oss-120b over the 20b and the Llamas: this assistant lives or dies
-    #: on following one instruction - never state a figure a tool did not
-    #: return - and that is a reasoning job, not a throughput one.
-    MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
-    BASE = "https://api.groq.com/openai/v1"
-else:
-    API_KEY_ENV = "GEMINI_API_KEY"
-    #: Flash: the cheap, fast tier, which is the right one for a public widget
-    #: answering from tool output rather than from its own reasoning.
-    MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
-    BASE = "https://generativelanguage.googleapis.com/v1beta"
+PROVIDERS: dict[str, dict[str, str]] = {
+    # Flash: the cheap, fast tier, which is the right one for a public widget
+    # answering from tool output rather than from its own reasoning.
+    "gemini": {
+        "key_env": "GEMINI_API_KEY",
+        "model": os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
+        "base": "https://generativelanguage.googleapis.com/v1beta",
+    },
+    # gpt-oss-120b over the 20b and the Llamas: this assistant lives or dies on
+    # following one instruction - never state a figure a tool did not return -
+    # and that is a reasoning job, not a throughput one.
+    "groq": {
+        "key_env": "GROQ_API_KEY",
+        "model": os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b"),
+        "base": "https://api.groq.com/openai/v1",
+    },
+}
+
+#: How long a provider sits out after it says its quota is gone.
+#:
+#: This is what makes the switch automatic in both directions. A daily quota
+#: has no published reset this code can read - Google says "midnight Pacific",
+#: Groq says nothing - so rather than model a calendar, the exhausted provider
+#: is benched and re-tried later. If it is still out it goes back on the bench;
+#: when its window has rolled over it simply works again and the preferred
+#: provider resumes. Nobody restarts anything.
+COLD_AFTER_QUOTA_S = 30 * 60
+
+#: Set a provider name to pin it and disable failover; "auto" (the default)
+#: prefers Groq when its key is present and falls back to whichever other
+#: provider is configured and not benched.
+PREFERRED = os.environ.get("ASSISTANT_PROVIDER", "auto").strip().lower()
+
+#: provider -> the monotonic time it may be tried again.
+_benched: dict[str, float] = {}
+
+
+def configured() -> list[str]:
+    """Providers with a key, preferred first."""
+    order = (
+        [PREFERRED] + [p for p in PROVIDERS if p != PREFERRED]
+        if PREFERRED in PROVIDERS
+        else ["groq", "gemini"]
+    )
+    return [p for p in order if os.environ.get(PROVIDERS[p]["key_env"], "").strip()]
+
+
+def provider() -> str:
+    """
+    The provider to use for the next call: the first configured one that is not
+    benched, or the first configured one if they are all benched - a turn
+    against an exhausted upstream reports a real quota message, which beats
+    reporting nothing.
+    """
+    ready = [p for p in configured() if _benched.get(p, 0.0) <= time.monotonic()]
+    return (ready or configured() or ["gemini"])[0]
+
+
+def bench(name: str, seconds: float = COLD_AFTER_QUOTA_S) -> None:
+    _benched[name] = time.monotonic() + seconds
+    log.warning("provider %s benched for %.0fs", name, seconds)
+
+
+def model(name: str | None = None) -> str:
+    return PROVIDERS[name or provider()]["model"]
 
 #: Upstream capacity blips, retried with a widening gap. Kept small: the caller
 #: is a person waiting on a stream, not a batch job.
@@ -118,7 +152,12 @@ MAX_QUESTION_CHARS = 600
 #: or two questions a minute. Six would have every reader bouncing off the
 #: upstream's limit instead of this one, which is the wrong message from the
 #: wrong place: ours names a wait, theirs reads as the assistant being broken.
-RATE_PER_MIN = 2 if PROVIDER == "groq" else 6
+#: Read per call, because the active provider can change under us when one
+#: is benched - and the limit has to follow the provider actually answering.
+def rate_per_min() -> int:
+    return 2 if provider() == "groq" else 6
+
+
 RATE_PER_DAY = 120
 
 #: Whole-deployment ceiling. The last line before the key gets drained.
@@ -127,13 +166,13 @@ DAILY_CALL_CEILING = 1500
 REQUEST_TIMEOUT_S = 45
 
 
-def api_key() -> str | None:
-    key = os.environ.get(API_KEY_ENV, "").strip()
+def api_key(name: str | None = None) -> str | None:
+    key = os.environ.get(PROVIDERS[name or provider()]["key_env"], "").strip()
     return key or None
 
 
 def available() -> bool:
-    return api_key() is not None
+    return bool(configured())
 
 
 SYSTEM_PROMPT = """\
@@ -200,7 +239,7 @@ class _Budget:
         """None when the call may proceed, else why it may not."""
         now = time.time()
         for q, span, cap, msg in (
-            (self.minute[ip], 60, RATE_PER_MIN, "Too many questions in a minute"),
+            (self.minute[ip], 60, rate_per_min(), "Too many questions in a minute"),
             (self.day[ip], 86400, RATE_PER_DAY, "Daily question limit reached"),
             (self.total_day, 86400, DAILY_CALL_CEILING, "The assistant is over its daily budget"),
         ):
@@ -259,8 +298,8 @@ def _retry_after(r: "requests.Response") -> float | None:
     return value / 1000.0 if m.group(2).lower() == "ms" else value
 
 
-def _post(payload: dict[str, Any]) -> dict[str, Any]:
-    key = api_key()
+def _post(payload: dict[str, Any], name: str) -> dict[str, Any]:
+    key = api_key(name)
     if key is None:
         raise RuntimeError("no API key")
     # 503 from this API means the model is momentarily out of capacity, not
@@ -272,12 +311,13 @@ def _post(payload: dict[str, Any]) -> dict[str, Any]:
     # the body; Gemini puts the key in the query string and the model in the
     # path. Everything after this - the retry, the scrubbing, the quota
     # reading - is the same either way, which is the point of one transport.
-    if PROVIDER == "groq":
-        url = f"{BASE}/chat/completions"
+    base, mdl = PROVIDERS[name]["base"], PROVIDERS[name]["model"]
+    if name == "groq":
+        url = f"{base}/chat/completions"
         params: dict[str, str] = {}
         headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
     else:
-        url = f"{BASE}/models/{MODEL}:generateContent"
+        url = f"{base}/models/{mdl}:generateContent"
         params = {"key": key}
         headers = {"Content-Type": "application/json"}
 
@@ -333,7 +373,7 @@ def _post(payload: dict[str, Any]) -> dict[str, Any]:
     if quota_ids:
         reason = f"{reason} [quota: {','.join(quota_ids)}]"[:400]
     reason = reason.replace(key, "<key>")
-    log.warning("%s HTTP %s %s (model=%s)", PROVIDER, r.status_code, reason, MODEL)
+    log.warning("%s HTTP %s %s (model=%s)", name, r.status_code, reason, mdl)
 
     if r.status_code == 429:
         # Whose limit this is matters to whoever is reading the panel: a pause
@@ -376,10 +416,103 @@ def answer(question: str, history: list[dict[str, Any]] | None = None) -> Iterat
         yield {"type": "error", "message": "That question is too long for me to take."}
         return
 
-    if PROVIDER == "groq":
-        yield from _answer_groq(q, history)
-    else:
-        yield from _answer_gemini(q, history)
+    order = [p for p in configured() if _benched.get(p, 0.0) <= time.monotonic()]
+    order = order or configured()
+    if not order:
+        yield {"type": "error", "message": "The assistant is not switched on."}
+        return
+
+    # Try each configured provider in turn, but only while nothing has reached
+    # the reader yet. A quota refusal arrives on the first upstream call, so
+    # this covers it; once a tool receipt or an answer has been sent, switching
+    # would duplicate chips or stitch two voices into one reply, and a plain
+    # error is the honest outcome.
+    held: dict[str, Any] | None = None
+    for index, name in enumerate(order):
+        emitted = False
+        for event in _run_provider(name, q, history):
+            if event["type"] == "error" and not emitted:
+                held = event
+                if index + 1 < len(order) and _worth_failing_over(event["message"]):
+                    bench(name)
+                    break
+                yield event
+                return
+            emitted = True
+            yield event
+        else:
+            return
+    if held:
+        yield held
+
+
+def _run_provider(name: str, q: str, history: list[dict[str, Any]] | None) -> Iterator[dict]:
+    fn = _answer_groq if name == "groq" else _answer_gemini
+    return fn(q, _history_for(name, history))
+
+
+#: Failures that another provider might not have. A spent quota, a minute's
+#: rate limit, a model name a key cannot call, a rejected key: all of them mean
+#: "this upstream will not answer", and the other one may. A 5xx is not here -
+#: the transport already retried it, and a second provider is unlikely to be
+#: down at the same moment for a different reason.
+_FAILOVER_SIGNS = ("quota", "too many questions", "no api key", "http 4")
+
+
+def _worth_failing_over(message: str) -> bool:
+    low = (message or "").lower()
+    return any(sign in low for sign in _FAILOVER_SIGNS)
+
+
+def _history_for(name: str, history: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """
+    The transcript in the shape this provider speaks.
+
+    The two wire formats are not interchangeable - Gemini carries `parts`,
+    Groq carries `content` and matches tool results to ids - so a transcript
+    recorded against one provider cannot be replayed against the other. What
+    converts cleanly is the conversation: who said what, in text.
+
+    So a failover keeps the thread of the exchange and drops the tool payloads
+    from earlier turns. The receipts the reader already saw stay on screen, and
+    the current turn calls whatever tools it needs again, against live
+    readings. The cost is that a follow-up cannot lean on a figure fetched two
+    turns ago without fetching it again, which is the right way round for data
+    that moves by the hour.
+    """
+    history = history or []
+    if not history:
+        return []
+    looks_gemini = any(isinstance(h, dict) and "parts" in h for h in history)
+    if looks_gemini == (name == "gemini"):
+        return list(history)
+
+    plain: list[tuple[str, str]] = []
+    for turn in history:
+        if not isinstance(turn, dict):
+            continue
+        role = turn.get("role")
+        if looks_gemini:
+            text = "".join(
+                p.get("text", "")
+                for p in (turn.get("parts") or [])
+                if isinstance(p, dict) and "text" in p
+            ).strip()
+            if text and role in ("user", "model"):
+                plain.append(("user" if role == "user" else "assistant", text))
+        else:
+            text = (turn.get("content") or "").strip() if isinstance(turn.get("content"), str) else ""
+            if text and role in ("user", "assistant"):
+                plain.append((role, text))
+
+    if name == "gemini":
+        return [
+            {"role": "user" if who == "user" else "model", "parts": [{"text": said}]}
+            for who, said in plain
+        ]
+    return [{"role": "system", "content": SYSTEM_PROMPT}] + [
+        {"role": who, "content": said} for who, said in plain
+    ]
 
 
 def _record(name: str, args: dict[str, Any], result: dict[str, Any], started: float) -> dict:
@@ -412,7 +545,7 @@ def _answer_gemini(q: str, history: list[dict[str, Any]] | None) -> Iterator[dic
             },
         }
         try:
-            data = _post(payload)
+            data = _post(payload, "gemini")
         except Exception as exc:  # noqa: BLE001 - surfaced to the reader as text
             yield {"type": "error", "message": f"The assistant is unavailable ({exc})."}
             return
@@ -516,7 +649,7 @@ def _answer_groq(q: str, history: list[dict[str, Any]] | None) -> Iterator[dict]
 
     for _ in range(MAX_TOOL_ROUNDS):
         payload = {
-            "model": MODEL,
+            "model": model("groq"),
             "messages": messages,
             "tools": tools,
             "tool_choice": "auto",
@@ -524,7 +657,7 @@ def _answer_groq(q: str, history: list[dict[str, Any]] | None) -> Iterator[dict]
             "temperature": 0.2,
         }
         try:
-            data = _post(payload)
+            data = _post(payload, "groq")
         except Exception as exc:  # noqa: BLE001 - surfaced to the reader as text
             yield {"type": "error", "message": f"The assistant is unavailable ({exc})."}
             return
