@@ -72,6 +72,25 @@ function currentHour(): number {
   return d.getTime();
 }
 
+/**
+ * "· typically off by 82 µg/m³", with the unit held out of the uppercase run.
+ *
+ * The legend sets `uppercase`, and CSS uppercases µ (U+00B5 MICRO SIGN) to Μ
+ * (U+039C GREEK CAPITAL MU), which renders as a Latin M in this face. So the
+ * one figure on the page that states how wrong the forecast usually is read
+ * "82 MG/M³" - a thousandfold error, on an accuracy claim, in the legend that
+ * exists to keep the reader from mistaking the number for AQI.
+ */
+function Rmse({ value }: { value?: number }) {
+  if (!value) return null;
+  return (
+    <>
+      {` · typically off by ${Math.round(value)} `}
+      <span className="normal-case">µg/m³</span>
+    </>
+  );
+}
+
 export function ForecastTrack({
   points,
   source,
@@ -160,7 +179,8 @@ export function ForecastTrack({
                 {/* Units matter here more than anywhere on the page: the axis
                     is AQI and this figure is PM2.5 in ug/m3, so printing the
                     bare number beside an AQI chart read as "+/- 62 AQI". */}
-                anchored to readings{rmse.blend ? ` · typically off by ${Math.round(rmse.blend)} µg/m³` : ''}
+                anchored to readings
+                <Rmse value={rmse.blend} />
               </span>
             ) : null}
             {camsLeads > 0 ? (
@@ -171,7 +191,8 @@ export function ForecastTrack({
                     backgroundImage: `repeating-linear-gradient(90deg, ${TERM.secondary} 0 4px, transparent 4px 7px)`,
                   }}
                 />
-                model only{rmse.cams_only ? ` · typically off by ${Math.round(rmse.cams_only)} µg/m³` : ''}
+                model only
+                <Rmse value={rmse.cams_only} />
               </span>
             ) : null}
           </span>
