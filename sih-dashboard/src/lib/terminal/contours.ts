@@ -221,17 +221,3 @@ export function smoothPath(path: GridPoint[], passes = 2): GridPoint[] {
   return closed ? [...pts, pts[0]] : pts;
 }
 
-/** Bilinear sample, used to verify a contour actually sits on its threshold. */
-export function sampleGrid(grid: ScalarGrid, x: number, y: number): number {
-  const { w, h, values } = grid;
-  const cx = Math.max(0, Math.min(w - 1.0001, x));
-  const cy = Math.max(0, Math.min(h - 1.0001, y));
-  const x0 = Math.floor(cx);
-  const y0 = Math.floor(cy);
-  const fx = cx - x0;
-  const fy = cy - y0;
-  const v = (xx: number, yy: number) => values[yy * w + xx];
-  const top = v(x0, y0) * (1 - fx) + v(x0 + 1, y0) * fx;
-  const bottom = v(x0, y0 + 1) * (1 - fx) + v(x0 + 1, y0 + 1) * fx;
-  return top * (1 - fy) + bottom * fy;
-}

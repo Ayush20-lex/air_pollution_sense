@@ -224,21 +224,6 @@ export function windAt(lat: number, lng: number, ctx: WindContext): WindVec {
   return { u: (u / mag) * speed, v: (v / mag) * speed, speed };
 }
 
-/**
- * Meteorological direction the wind blows *from*, degrees, as the inverse of
- * `windAt`.
- *
- * `(u, v)` is the direction the air travels, so `(-u, -v)` already points back
- * at the source and `atan2(east, north)` reads the bearing straight off it. An
- * earlier version added a further 180, inverting a vector that was inverted
- * already and reporting every wind as its own opposite. Nothing consumed it, so
- * nothing on the page was wrong; a probe of the interpolated field was, which
- * is how it surfaced.
- */
-export function windFromDegrees({ u, v }: WindVec): number {
-  return (((Math.atan2(-u, -v) * 180) / Math.PI) + 360) % 360;
-}
-
 export type StreamOptions = {
   /** Seed lattice resolution. */
   seeds?: number;

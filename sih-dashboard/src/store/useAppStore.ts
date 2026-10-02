@@ -204,9 +204,3 @@ export const useAppStore = create<AppState>((set, get) => ({
   setDrawerOpen: (drawerOpen) => set({ drawerOpen }),
 }));
 
-/** Currently-scrubbed frame. */
-export const useCurrentFrame = (): Frame => {
-  const frames = useAppStore((s) => s.frames);
-  const hour = useAppStore((s) => s.hour);
-  return frames[Math.min(hour, frames.length - 1)];
-};

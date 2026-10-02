@@ -196,10 +196,11 @@ function TerminalSidebar({ open, onClose }: { open: boolean; onClose: () => void
         {/* navigation */}
         <nav className="space-y-1">
           {NAV.map((item) => {
-            // Hash links share the overview route; only the bare paths own an
-            // active state, so exactly one item lights up.
-            const isHash = item.href.includes('#');
-            const active = !isHash && pathname === item.href;
+            // Every item is its own route now, so the path alone decides and
+            // exactly one lights up. This used to exclude hash links, which
+            // shared the overview route and would otherwise all light up at
+            // once; no item carries a hash any more.
+            const active = pathname === item.href;
             return (
               <Link
                 key={item.href}

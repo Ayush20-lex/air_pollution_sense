@@ -74,25 +74,6 @@ export type TerminalField = 'PM2.5' | 'PM10' | 'O3' | 'NOx' | 'PBL' | 'WIND' | '
 export const TERMINAL_FIELDS: TerminalField[] = ['PM2.5', 'PM10', 'O3', 'NOx', 'PBL', 'WIND', 'MODEL'];
 
 /**
- * Colour ramp for a value of the selected field. PBL inverts — a deep mixing
- * layer is good news, a collapsed one is not.
- */
-export function fieldColor(value: number, field: TerminalField): string {
-  switch (field) {
-    case 'PBL':
-      return value > 900 ? SEVERITY.good : value > 500 ? SEVERITY.moderate : value > 250 ? SEVERITY.poor : SEVERITY.bad;
-    case 'O3':
-      return value > 120 ? SEVERITY.bad : value > 80 ? SEVERITY.poor : value > 45 ? SEVERITY.moderate : SEVERITY.good;
-    case 'NOx':
-      return value > 140 ? SEVERITY.severe : value > 90 ? SEVERITY.bad : value > 55 ? SEVERITY.poor : SEVERITY.good;
-    case 'WIND':
-      return value > 4 ? SEVERITY.good : value > 2.5 ? SEVERITY.fair : value > 1.2 ? SEVERITY.moderate : SEVERITY.bad;
-    default:
-      return pm25Color(value);
-  }
-}
-
-/**
  * Atmospheric dispersion ramp for the map overlay.
  *
  * Deliberately separate from `AQI_RAMP`: that one is categorical and must stay

@@ -81,14 +81,6 @@ export const STATIONS: Station[] = [
 export const MASTER_STATION: Station =
   STATIONS.find((s) => s.master) ?? STATIONS[0];
 
-export function stationById(id: string | null): Station | undefined {
-  if (!id) return undefined;
-  return STATIONS.find((s) => s.id === id);
-}
-
-/** Worst-to-best, the order the mesh ranking and ledger both use. */
-export const STATIONS_BY_SEVERITY: Station[] = [...STATIONS].sort((a, b) => b.aqi - a.aqi);
-
 /**
  * The same orderings and rollups, over whichever mesh is actually on screen.
  *
@@ -137,20 +129,6 @@ export type ZoneSummary = {
   delta: number;
   count: number;
 };
-
-/**
- * Zone means over the fallback mesh.
- *
- * One implementation, shared with the live path. The copy that used to live
- * here indexed `Object.entries(tally).sort(...)[0][0]` without checking that
- * the zone had any members, which was safe only while every zone was
- * guaranteed one - and stopped being safe the moment the station list became
- * the archive's rather than a hand-written set that happened to cover all six.
- * South lost its only node (R K Puram cannot meet the three-pollutant rule),
- * the tally came back empty, and the whole module threw at import: a blank
- * terminal, from a station list that was otherwise correct.
- */
-export const ZONE_SUMMARY: ZoneSummary[] = zoneSummary(STATIONS);
 
 /**
  * Upwind source apportionment for the current synoptic situation.

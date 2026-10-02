@@ -26,13 +26,6 @@ export const SERIES = {
   inactive: '#94A3B8',
 } as const;
 
-/** One colour per policy lever, reused by slider, label and legend. */
-export const LEVER = {
-  stubble: SEVERITY.poor,
-  traffic: SERIES.wind,
-  industry: SEVERITY.severe,
-} as const;
-
 /**
  * Aerosol-parcel pigments for the intro canvas. The neon set greys out against
  * a white ground, so light mode gets deeper equivalents.

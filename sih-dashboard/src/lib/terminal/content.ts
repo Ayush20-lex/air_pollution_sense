@@ -164,13 +164,6 @@ export const INCIDENTS = [
   },
 ];
 
-export const COVERAGE_KPIS = [
-  { label: 'Mesh Coverage', value: '94.2', unit: '%', color: TERM.primary, series: [88, 89, 90, 91, 92, 93, 94, 94.2] },
-  { label: 'Interpolation Confidence', value: '96.8', unit: '%', color: TERM.secondary, series: [93, 94, 93.5, 95, 95.4, 96, 96.4, 96.8] },
-  { label: 'Spatial Resolution', value: '250', unit: 'm', color: TERM.outline, series: [250, 250, 250, 250, 250, 250, 250, 250] },
-  { label: 'Last Full Sweep', value: '12', unit: 's ago', color: SEVERITY.poor, series: [9, 14, 8, 16, 11, 15, 10, 12] },
-] as const;
-
 /**
  * Footer strip. It claims no conformance, and that is deliberate: EN 16450 and
  * EPA CFR 40 are real instrument standards, and nothing here is the output of

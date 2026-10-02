@@ -23,13 +23,6 @@
 const W = 720;
 const H = 360;
 
-/**
- * Area-weighted share of the sphere this mask calls land, measured when the
- * mask was baked. Exported so samplers can solve for a land quota instead of
- * guessing a rejection rate and checking the result by eye.
- */
-export const LAND_FRACTION = 0.294;
-
 const PACKED =
   'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' +
   'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' +
