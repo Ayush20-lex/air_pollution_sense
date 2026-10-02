@@ -35,7 +35,7 @@ AirLytics is built the other way around. Every figure is traceable to a station 
 
 ![Geospatial plume map: interpolated PM2.5 across the NCR mesh with wind flow and source attribution](docs/screenshots/geo-map.png)
 
-*The plume map. Source attribution reports only what it can measure: 2.1% from stubble transport, with the rest named as local emission that no feed here quantifies, rather than split into invented percentages.*
+*The plume map. Source attribution reports only the share it can measure from upwind fire transport, and names the rest as local emission that no feed here quantifies, rather than splitting it into invented percentages.*
 
 ![72-hour forecast track with CPCB category bands](docs/screenshots/forecast.png)
 
