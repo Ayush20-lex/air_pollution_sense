@@ -22,11 +22,13 @@ import '@/terminal.css';
 /**
  * Scrolls to the element named by the URL hash.
  *
- * Four of the rail's six items are hash links into the overview — Temporal
- * Trends, Pollutant Matrices, Incident Warnings, Spectrometry Ledger. Next's
- * Link scrolled to them on its own; react-router does not, so porting the
- * terminal silently turned two thirds of the navigation into buttons that
- * changed the address bar and nothing else.
+ * The rail itself no longer needs this: all five of its items are routes now.
+ * What still needs it are the deep links that arrive from outside the overview
+ * and point at a section inside it — the landing page's warnings card and the
+ * shell's advisory link both go to `/terminal#alerts`, and the overview carries
+ * anchors for alerts, analytics, corridor, grap, grid, inversion, ledger and
+ * map. react-router does not scroll to a hash on its own (Next's Link did),
+ * so without this they would change the address bar and nothing else.
  *
  * Two things make this more than a getElementById:
  *
@@ -37,6 +39,17 @@ import '@/terminal.css';
  *   - the header is sticky, so scrolling the target to y=0 parks it underneath.
  *     Its height is measured rather than hardcoded — it changes with the
  *     viewport, and the search field inside it wraps at narrow widths.
+ *
+ * Known broken, 2 Oct 2026. Neither path scrolls any more: landing on
+ * `/terminal#alerts` cold, and clicking through to it from another route, both
+ * leave the reader at the top of the overview. MAX_FRAMES gives up after about
+ * half a second, and the overview now takes seconds to put `#alerts` in the
+ * document, because the section waits on the live mesh. Raising the cap alone
+ * trades one bug for another: a scroll that lands four seconds late yanks the
+ * page out from under someone already reading it. The fix wants a condition as
+ * well as a longer window, something like "only if the reader has not scrolled
+ * yet", so it is left for a change of its own rather than widened into a copy
+ * pass.
  */
 const MAX_FRAMES = 30;
 
