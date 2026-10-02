@@ -206,15 +206,34 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://127.0.0.1:8000")
     ap.add_argument("--only", default="", help="run cases whose id contains this")
+    ap.add_argument(
+        "--gap",
+        type=float,
+        default=None,
+        help="seconds between cases; default derives from the server's per-minute limit",
+    )
     args = ap.parse_args()
 
     status = requests.get(f"{args.base.rstrip('/')}/api/v1/assistant/status", timeout=20).json()
     if not status.get("available"):
-        print("assistant is not available - is GEMINI_API_KEY set on the server?")
+        print("assistant is not available - is the provider's API key set on the server?")
         return 2
 
+    # Pace from the server's own per-minute budget rather than a number typed
+    # here. It differs by provider: Groq's free tier meters 8000 tokens a
+    # minute and one tool-calling turn spends about 4000, so the server allows
+    # two questions a minute where Gemini allows six. A fixed 11s gap was right
+    # for one and five times too fast for the other, and the eval then reported
+    # the upstream's rate limit as a dozen failed cases.
+    per_min = status.get("limits", {}).get("per_minute") or 6
+    gap = args.gap if args.gap is not None else 60.0 / per_min + 2.0
+
     cases = [c for c in CASES if args.only in c.id] if args.only else CASES
-    print(f"{len(cases)} cases against {args.base} ({status.get('model')})\n")
+    print(
+        f"{len(cases)} cases against {args.base} "
+        f"({status.get('provider', '?')} / {status.get('model')}), "
+        f"{gap:.0f}s between cases for {per_min}/min\n"
+    )
 
     passed, failed = 0, []
     for c in cases:
@@ -233,7 +252,7 @@ def main() -> int:
             passed += 1
         # A public endpoint rate-limits per IP; the eval is a client like any
         # other and has to live inside the same budget.
-        time.sleep(11)
+        time.sleep(gap)
 
     print(f"\n{passed}/{len(cases)} passed")
     if failed:

@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
@@ -85,6 +86,22 @@ else:
 RETRY_ON_503 = 2
 RETRY_BACKOFF_S = 2.0
 
+#: Total attempts per upstream call, covering 503s and short 429s together.
+MAX_UPSTREAM_ATTEMPTS = RETRY_ON_503 + 1
+
+#: A 429 is worth waiting out when the upstream says the wait is short.
+#:
+#: Groq meters tokens per minute - 8000 on the free tier - and one turn here
+#: costs 1300 to 1700 tokens, mostly the system prompt and eight tool
+#: declarations. So a sliding window runs out mid-conversation and refills
+#: seconds later, and Groq says exactly when: "try again in 52.5ms", "in
+#: 7.67s". Refusing to retry that turns a 50 ms pause into a dead panel.
+#:
+#: A daily quota is the opposite and is still never retried. The difference is
+#: the stated wait, not the status code: anything past this ceiling is a budget
+#: to respect rather than a blip to ride out.
+RETRY_AFTER_MAX_S = 10.0
+
 #: Hard ceilings. `MAX_TURNS` bounds one conversation; `MAX_TOOL_ROUNDS` bounds
 #: one answer, so a model that loops on tools cannot bill forever.
 MAX_OUTPUT_TOKENS = 900
@@ -93,7 +110,14 @@ MAX_TURNS = 12
 MAX_QUESTION_CHARS = 600
 
 #: Per-IP budget. Generous for a reader, useless for a scraper.
-RATE_PER_MIN = 6
+#:
+#: Tighter on Groq, and the arithmetic is why. Its free tier meters 8000 tokens
+#: per minute, one turn here costs 1300 to 1700 of them, and a turn that calls
+#: a tool spends that two or three times - so roughly 4000 tokens a question,
+#: or two questions a minute. Six would have every reader bouncing off the
+#: upstream's limit instead of this one, which is the wrong message from the
+#: wrong place: ours names a wait, theirs reads as the assistant being broken.
+RATE_PER_MIN = 2 if PROVIDER == "groq" else 6
 RATE_PER_DAY = 120
 
 #: Whole-deployment ceiling. The last line before the key gets drained.
@@ -209,6 +233,31 @@ def kill_switch_on() -> bool:
 # ── the turn ────────────────────────────────────────────────────────────────
 
 
+def _retry_after(r: "requests.Response") -> float | None:
+    """
+    How long the upstream asked us to wait, in seconds, or None if it did not.
+
+    The `Retry-After` header first, since it is the standard. Groq also states
+    it in prose - "Please try again in 7.672499999s", or in milliseconds under
+    a second - and that sentence is sometimes the only place it appears, so it
+    is read as a fallback rather than trusted as the primary.
+    """
+    header = (r.headers.get("Retry-After") or "").strip()
+    if header:
+        try:
+            return max(0.0, float(header))
+        except ValueError:
+            pass  # HTTP-date form; not worth parsing for a sub-minute window
+    m = re.search(r"try again in\s*([\d.]+)\s*(ms|s)\b", r.text or "", re.I)
+    if not m:
+        return None
+    try:
+        value = float(m.group(1))
+    except ValueError:
+        return None
+    return value / 1000.0 if m.group(2).lower() == "ms" else value
+
+
 def _post(payload: dict[str, Any]) -> dict[str, Any]:
     key = api_key()
     if key is None:
@@ -232,7 +281,7 @@ def _post(payload: dict[str, Any]) -> dict[str, Any]:
         headers = {"Content-Type": "application/json"}
 
     r = None
-    for attempt in range(RETRY_ON_503 + 1):
+    for attempt in range(MAX_UPSTREAM_ATTEMPTS):
         r = requests.post(
             url,
             params=params,
@@ -240,9 +289,21 @@ def _post(payload: dict[str, Any]) -> dict[str, Any]:
             timeout=REQUEST_TIMEOUT_S,
             headers=headers,
         )
-        if r.status_code != 503 or attempt == RETRY_ON_503:
+        if r.ok:
+            return r.json()
+        if attempt == MAX_UPSTREAM_ATTEMPTS - 1:
             break
-        time.sleep(RETRY_BACKOFF_S * (attempt + 1))
+        if r.status_code == 503:
+            time.sleep(RETRY_BACKOFF_S * (attempt + 1))
+            continue
+        if r.status_code == 429:
+            wait = _retry_after(r)
+            if wait is not None and wait <= RETRY_AFTER_MAX_S:
+                # A shade over what it asked for: the window is sliding, and
+                # arriving on the exact boundary just earns another 429.
+                time.sleep(wait + 0.3)
+                continue
+        break
 
     if r.ok:
         return r.json()
