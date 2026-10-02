@@ -265,6 +265,12 @@ function Avatar({
   const x = useSpring(gazeX, { stiffness: 260, damping: 20, mass: 0.3 });
   const y = useSpring(gazeY, { stiffness: 260, damping: 20, mass: 0.3 });
 
+  const listening = state === 'listening';
+  const listeningRef = useRef(listening);
+  useEffect(() => {
+    listeningRef.current = listening;
+  }, [listening]);
+
   useEffect(() => {
     if (!track) return;
     // No cursor to follow on a touch screen, and someone who asked for less
@@ -275,6 +281,9 @@ function Avatar({
 
     let frame = 0;
     const onMove = (e: PointerEvent) => {
+      // Typing wins. Read through a ref rather than a dependency so the
+      // listener is not torn down and re-attached on every keystroke.
+      if (listeningRef.current) return;
       // Coalesced to one read per frame. `getBoundingClientRect` is a layout
       // read, and doing it per event rather than per frame is how a smooth
       // idea turns into a janky one.
@@ -303,7 +312,25 @@ function Avatar({
     };
   }, [track, gazeX, gazeY]);
 
-  const listening = state === 'listening';
+  // Look down at the composer while someone types. Without this the orb only
+  // swelled and widened its eyes, which reads as surprise rather than
+  // attention: it was getting bigger while still staring straight ahead.
+  //
+  // The drop is set directly on the motion values, so it shares the spring the
+  // pointer uses and arrives as a glance rather than a jump. It also outranks
+  // pointer tracking for as long as the state holds, because what the person
+  // is doing is typing, not moving the mouse. On release the eyes centre, and
+  // the next pointer move takes over again.
+  useEffect(() => {
+    if (!listening) {
+      gazeX.set(0);
+      gazeY.set(0);
+      return;
+    }
+    const width = orbRef.current?.getBoundingClientRect().width ?? 0;
+    gazeX.set(0);
+    gazeY.set(width * 0.1);
+  }, [listening, gazeX, gazeY]);
 
   return (
     <>
