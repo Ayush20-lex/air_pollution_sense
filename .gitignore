@@ -164,3 +164,6 @@ ml_pipeline/data/cache/
 # the 27 September merge and did not survive it, and `git add -A` then swept
 # 1.2MB of it into a commit.
 backups/
+
+# Design-hook local state - per-machine, not project code
+.impeccable/

@@ -69,6 +69,13 @@ const config: Config = {
       fontSize: {
         '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
       },
+      // Named rather than written inline. As `ease-[cubic-bezier(0.16,1,0.3,1)]`
+      // Tailwind v3 calls it ambiguous and generates nothing, so the CTA's fill
+      // would have slid in on the default easing while the class sat there
+      // looking correct.
+      transitionTimingFunction: {
+        'out-expo': 'cubic-bezier(0.16, 1, 0.3, 1)',
+      },
       boxShadow: {
         glass: '0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 18px 50px -20px rgb(0 0 0 / 0.55)',
         'glass-light': '0 1px 0 0 rgb(255 255 255 / 0.9) inset, 0 12px 32px -18px rgb(15 23 42 / 0.25)',
