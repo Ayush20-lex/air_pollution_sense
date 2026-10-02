@@ -204,7 +204,18 @@ export function AssistantLauncher() {
         aria-label={open ? 'Close the atmospheric analyst' : 'Ask the atmospheric analyst'}
         className="group fixed bottom-5 right-5 z-[600] flex items-center gap-2.5 rounded-full border border-slate-300 bg-white py-1.5 pl-1.5 pr-4 shadow-lg transition-all hover:border-cyan-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#0e172a] dark:hover:border-sky-500/80 dark:hover:bg-[#131f37] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 sm:bottom-6 sm:right-6"
       >
-        <Avatar size="sm" shape="circle" state={listening ? 'listening' : 'idle'} />
+        {/* The orb tracks the pointer and carries a halo on the launcher,
+            which is the one place it sits against the page rather than inside
+            the panel. Both are gated on reduced motion. */}
+        <Avatar
+          color="airlytics"
+          size="sm"
+          shape="circle"
+          state={listening ? 'listening' : 'idle'}
+          blinking={!reduced}
+          track={!reduced}
+          halo={!reduced}
+        />
         <span className="hidden font-sans text-xs font-semibold text-slate-800 dark:text-slate-100 sm:inline">
           Ask AirLytics Specialist
         </span>
@@ -237,9 +248,11 @@ export function AssistantLauncher() {
               {/* Header */}
               <div className="flex items-start gap-3 border-b border-slate-200 bg-slate-50 p-4 dark:border-slate-700/80 dark:bg-[#111c30]">
                 <Avatar
+                  color="airlytics"
                   size="md"
                   shape="squircle"
                   state={listening ? 'listening' : 'idle'}
+                  blinking={!reduced}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="font-sans text-sm font-bold tracking-tight text-slate-900 dark:text-white">
@@ -303,7 +316,7 @@ export function AssistantLauncher() {
                 {msgs.length === 0 && (
                   <>
                     <div className="flex gap-2.5">
-                      <Avatar size="sm" shape="circle" />
+                      <Avatar color="airlytics" size="sm" shape="circle" blinking={false} />
                       <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-700/80 dark:bg-[#15233c]">
                         <p className="font-sans text-xs leading-relaxed text-slate-700 dark:text-slate-200">
                           Hello! I analyze live telemetry from{' '}
@@ -358,7 +371,7 @@ export function AssistantLauncher() {
                     </div>
                   ) : (
                     <div key={i} className="flex gap-2.5">
-                      <Avatar size="sm" shape="circle" />
+                      <Avatar color="airlytics" size="sm" shape="circle" blinking={false} />
                       <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-700/80 dark:bg-[#15233c]">
                         <p className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-slate-800 dark:text-slate-100">
                           {m.text}
@@ -371,7 +384,7 @@ export function AssistantLauncher() {
 
                 {running && (
                   <div className="flex gap-2.5">
-                    <Avatar size="sm" shape="circle" state="listening" />
+                    <Avatar color="airlytics" size="sm" shape="circle" state="listening" blinking={!reduced} />
                     <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-700/80 dark:bg-[#15233c]">
                       <span className="font-sans text-xs text-cyan-700 dark:text-sky-300">
                         {liveTools.length
