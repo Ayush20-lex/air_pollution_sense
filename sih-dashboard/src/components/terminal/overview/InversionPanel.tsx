@@ -60,7 +60,7 @@ export function InversionPanel() {
   if (zones == null) {
     return (
       <div id="inversion" className="space-y-3">
-        <SectionHead title="Inversion Trap Zones" sub="Where the boundary layer collapses, and when" />
+        <SectionHead title="Inversion Risk Zones" sub="Where the boundary layer collapses, and when" />
         <TelemetryCard className="flex h-24 items-center justify-center p-6">
           <span className="font-mono text-xs text-term-outline">
             {status === 'loading' ? 'Scoring the forecast…' : 'Inversion service unreachable'}
@@ -75,7 +75,7 @@ export function InversionPanel() {
   return (
     <div id="inversion" className="space-y-3">
       <SectionHead
-        title="Inversion Trap Zones"
+        title="Inversion Risk Zones"
         sub="Where the boundary layer collapses over the next 72 hours, and when"
         right={
           <span className="font-mono text-xs uppercase tracking-wider text-term-ink-variant">
@@ -90,7 +90,7 @@ export function InversionPanel() {
             <Wind className="size-5 shrink-0 text-term-primary" />
             <div>
               <div className="font-display text-base font-bold text-term-primary">
-                No trapping zones in the next 72 hours
+                No Trapping Zones In The Next 72 Hours
               </div>
               <div className="mt-0.5 font-mono text-xs text-term-ink-variant">
                 Every zone's worst hour scores below the reporting threshold — the layer
@@ -134,13 +134,13 @@ export function InversionPanel() {
 
                 <div className="flex gap-5">
                   <div>
-                    <Label>Layer depth</Label>
+                    <Label>Layer Depth</Label>
                     <div className="font-mono text-lg font-bold" style={{ color: ink(tier.color) }}>
                       {z.pbl_min.toFixed(0)}<span className="text-[10px]"> m</span>
                     </div>
                   </div>
                   <div>
-                    <Label>PM2.5 then</Label>
+                    <Label>PM2.5 Peak</Label>
                     <div className="font-mono text-lg font-bold text-term-ink-variant">
                       {z.pm25_peak.toFixed(0)}<span className="text-[10px]"> µg/m³</span>
                     </div>

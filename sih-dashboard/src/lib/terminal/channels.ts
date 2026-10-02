@@ -64,14 +64,14 @@ export const MIN_VALID_HOURS: Record<number, number> = { 24: 16, 8: 6 };
  * alone is enough to push a station past Satisfactory. Change one, change both.
  */
 export const CHANNEL_STANDARD: Record<string, { value: number; unit: string }> = {
-  'PM2.5': { value: 60, unit: 'ug/m3' },
-  PM10: { value: 100, unit: 'ug/m3' },
-  NO2: { value: 80, unit: 'ug/m3' },
-  SO2: { value: 80, unit: 'ug/m3' },
-  NH3: { value: 400, unit: 'ug/m3' },
-  Pb: { value: 1.0, unit: 'ug/m3' },
-  CO: { value: 2.0, unit: 'mg/m3' },
-  O3: { value: 100, unit: 'ug/m3' },
+  'PM2.5': { value: 60, unit: 'µg/m³' },
+  PM10: { value: 100, unit: 'µg/m³' },
+  NO2: { value: 80, unit: 'µg/m³' },
+  SO2: { value: 80, unit: 'µg/m³' },
+  NH3: { value: 400, unit: 'µg/m³' },
+  Pb: { value: 1.0, unit: 'µg/m³' },
+  CO: { value: 2.0, unit: 'mg/m³' },
+  O3: { value: 100, unit: 'µg/m³' },
 };
 
 /**

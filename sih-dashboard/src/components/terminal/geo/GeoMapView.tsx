@@ -65,7 +65,7 @@ export function GeoMapView() {
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="font-display text-2xl font-extrabold tracking-tight text-term-ink lg:text-3xl">
-              Geospatial Plume Map
+              Geospatial Pollution &amp; Plume Map
             </h1>
             <span className="rounded border border-orange-500/40 bg-orange-500/15 px-2.5 py-0.5 font-mono text-xs font-bold text-orange-700 dark:text-orange-400">
               DELHI NCR MESH • {stations.length - mesh.supplemented} NODES{' '}

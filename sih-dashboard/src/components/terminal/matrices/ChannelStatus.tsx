@@ -62,7 +62,7 @@ export function ChannelStatus() {
   return (
     <div className="space-y-3">
       <SectionHead
-        title="Why Four Channels Are Blank"
+        title="What Determines AQI"
         sub="The index covers eight pollutants. Three are withheld on method, two are never published, and the difference matters"
         right={
           <span className="font-mono text-xs uppercase tracking-wider text-term-ink-variant">

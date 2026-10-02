@@ -34,14 +34,14 @@ function StationMesh() {
   return (
     <div id="grid" className="space-y-3">
       <SectionHead
-        title="Regional Telemetry Stations Mesh"
+        title="Regional Monitoring Stations"
         sub="Six highest-load nodes of the 26-station regional array"
         right={
           <Link
             to="/terminal/geo-map"
             className="rounded-lg border border-term-outline-variant/60 bg-term-surface-high px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-term-ink transition-colors hover:border-term-primary/60"
           >
-            Open geo map
+            View Live Network
           </Link>
         }
       />
@@ -153,16 +153,16 @@ export function IncidentBanners({ limit }: { limit?: number } = {}) {
       )}
 
       <SectionHead
-        title="Incident &amp; Anomaly Warnings"
+        title="Pollution &amp; Incident Warnings"
         sub="Derived from the inversion scoring, the GRAP stage and the mesh's own health"
         right={
           limit ? (
             <SeeAll to="/terminal/warnings">
-              {all.length === 0 ? 'Open warnings' : `All ${all.length} active`}
+              {all.length === 0 ? 'Active Advisories' : `All ${all.length} Active`}
             </SeeAll>
           ) : (
             <span className="font-mono text-xs uppercase tracking-wider text-term-ink-variant">
-              {all.length === 0 ? 'nothing active' : `${all.length} active`}
+              {all.length === 0 ? 'No Active Advisories' : `${all.length} Active`}
             </span>
           )
         }
@@ -173,7 +173,7 @@ export function IncidentBanners({ limit }: { limit?: number } = {}) {
             <Info className="size-5 shrink-0 text-term-primary" />
             <div>
               <div className="font-display text-base font-bold text-term-primary">
-                {loading ? 'Checking the forecast…' : 'No active warnings'}
+                {loading ? 'Checking The Forecast…' : 'No Active Warnings'}
               </div>
               <div className="mt-0.5 font-mono text-xs text-term-ink-variant">
                 {loading

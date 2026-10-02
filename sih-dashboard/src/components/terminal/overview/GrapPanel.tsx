@@ -87,7 +87,7 @@ export function GrapPanel() {
   if (!data) {
     return (
       <div id="grap" className="space-y-3">
-        <SectionHead title="GRAP Response Stage" sub="Graded Response Action Plan · CAQM" />
+        <SectionHead title="GRAP Stage & Restrictions" sub="Graded Response Action Plan · CAQM" />
         <TelemetryCard className="flex h-28 items-center justify-center p-6">
           <span className="font-mono text-xs text-term-outline">
             {status === 'loading' ? 'Asking the policy engine…' : 'Policy engine unreachable — no stage shown'}
@@ -106,7 +106,7 @@ export function GrapPanel() {
   return (
     <div id="grap" className="space-y-3">
       <SectionHead
-        title="GRAP Response Stage"
+        title="GRAP Stage & Restrictions"
         sub="What the forecast requires under CAQM's Graded Response Action Plan"
         right={
           <span className="font-mono text-xs uppercase tracking-wider text-term-ink-variant">
@@ -138,7 +138,7 @@ export function GrapPanel() {
               assume it decided the stage. */}
           <div className="flex gap-6">
             <div>
-              <Label>City AQI · sets the stage</Label>
+              <Label>City AQI · Sets The Stage</Label>
               <div className="font-mono text-2xl font-bold text-term-ink">{data.city_aqi}</div>
               <div className="font-mono text-[10px] text-term-outline">
                 {data.city_pm25_ugm3.toFixed(1)} µg/m³ · {data.window_hours}h mean
@@ -146,7 +146,7 @@ export function GrapPanel() {
             </div>
             {data.hotspot ? (
               <div>
-                <Label>Worst station · not stage-setting</Label>
+                <Label>Worst Station · Not Stage-Setting</Label>
                 <div className="font-mono text-2xl font-bold text-term-ink-variant">
                   {data.hotspot.aqi}
                 </div>

@@ -120,7 +120,7 @@ export function ArrivalStrip({ data }: { data: FireCorridor }) {
     <TelemetryCard className="space-y-3 p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">
-          Smoke Transport &amp; Arrival
+          Smoke Transport &amp; Arrival Forecast
         </h3>
         <span
           className={cn(

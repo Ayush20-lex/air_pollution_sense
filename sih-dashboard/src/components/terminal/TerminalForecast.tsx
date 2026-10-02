@@ -20,7 +20,7 @@ export default function TerminalForecast() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-extrabold tracking-tight text-term-ink lg:text-3xl">
-          AQI Trend &amp; Forecast
+          AQI Forecast
         </h1>
         <p className="mt-1 font-body text-sm text-term-ink-variant">
           The next 72 hours from the coupled baseline, against the archive&rsquo;s own record of
@@ -38,7 +38,7 @@ export default function TerminalForecast() {
 
       <div className="space-y-3">
         <SectionHead
-          title="Observed Trend"
+          title="Archived Observations"
           sub="Daily city AQI from the archive — measured, not modelled"
         />
         {/* Full width here. Beside the stressor donut it was eight of twelve

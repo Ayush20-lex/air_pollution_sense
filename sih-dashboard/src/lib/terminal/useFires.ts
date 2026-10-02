@@ -77,7 +77,7 @@ let current: FiresState = { data: null, status: 'idle', window: LIVE_WINDOW };
 const listeners = new Set<() => void>();
 /** One entry per window, so switching back is instant and costs nothing. */
 const cache = new Map<string, FireCorridor>();
-let timer: number | undefined;
+let timer: ReturnType<typeof setTimeout> | undefined;
 let attempt = 0;
 let seq = 0;
 

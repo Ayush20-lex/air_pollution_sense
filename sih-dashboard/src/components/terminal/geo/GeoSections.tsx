@@ -268,16 +268,13 @@ function TrappingProfile() {
 
       <div className="grid grid-cols-3 gap-2 border-t border-term-outline-variant/40 pt-2 text-center">
         <div>
-          <Label className="block">Mixing depth</Label>
+          <Label className="block">Boundary-Layer Height</Label>
           <span className="font-mono text-sm font-bold text-term-ink">
             {pbl == null ? '—' : `${pbl.toFixed(0)} m`}
           </span>
         </div>
         <div>
-          {/* This slot read "Mixing depth 0.38" - a dimensionless index under a
-              label that means a height in metres. The index belongs here and
-              the depth belongs beside it, which is now how they sit. */}
-          <Label className="block">Inversion index</Label>
+          <Label className="block">Inversion Risk</Label>
           <span className="font-mono text-sm font-bold text-orange-700 dark:text-orange-400">
             {inv == null ? '—' : inv.toFixed(2)}
           </span>

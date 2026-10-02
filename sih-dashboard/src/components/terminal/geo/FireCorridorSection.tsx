@@ -76,7 +76,7 @@ export function FireCorridorSection() {
   return (
     <div id="corridor" ref={host} className="space-y-3">
       <SectionHead
-        title="Upwind Fire Corridor"
+        title="Upwind Fire &amp; Smoke Corridor"
         sub="Every thermal anomaly NASA FIRMS reports between Delhi and the Punjab belt, and what the measured flow does with it"
         right={
           <div className="flex items-center gap-1 rounded-lg border border-term-outline-variant/60 bg-term-surface-low p-0.5">

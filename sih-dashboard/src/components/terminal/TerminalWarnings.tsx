@@ -14,7 +14,7 @@ export default function TerminalWarnings() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-extrabold tracking-tight text-term-ink lg:text-3xl">
-          Incident Warnings
+          Pollution &amp; Incident Warnings
         </h1>
         <p className="mt-1 font-body text-sm text-term-ink-variant">
           What is in force, what is about to trap, and how much of the mesh is reporting

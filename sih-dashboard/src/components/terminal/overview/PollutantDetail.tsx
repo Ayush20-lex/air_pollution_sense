@@ -171,12 +171,12 @@ export function PollutantDetail({
                 />
 
                 <dl className="space-y-1.5 font-mono text-[11px]">
-                  <Row label="CPCB sub-index" value={String(p.subIndex)} color={p.color} />
-                  <Row label="Band" value={p.status} color={p.color} />
-                  <Row label="Standard" value={`${p.reference} ${p.unit}`} />
-                  <Row label="Averaging window" value={`${windowHours} hours`} />
+                  <Row label="CPCB Sub-Index" value={String(p.subIndex)} color={p.color} />
+                  <Row label="AQI Category" value={p.status} color={p.color} />
+                  <Row label="CPCB Standard" value={`${p.reference} ${p.unit}`} />
+                  <Row label="Averaging Period" value={`${windowHours} hours`} />
                   <Row
-                    label="Valid hours"
+                    label="Valid Observations"
                     value={`${valid} of ${windowHours}${thin ? ' · thin' : ''}`}
                   />
                 </dl>

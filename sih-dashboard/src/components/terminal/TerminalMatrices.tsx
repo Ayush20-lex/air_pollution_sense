@@ -15,7 +15,7 @@ export default function TerminalMatrices() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-extrabold tracking-tight text-term-ink lg:text-3xl">
-          Pollutant Matrices
+          Pollutant Measurements
         </h1>
         <p className="mt-1 font-body text-sm text-term-ink-variant">
           Every channel the CPCB National AQI indexes, with the 24-hour window behind each

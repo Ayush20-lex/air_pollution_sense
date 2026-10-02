@@ -47,16 +47,11 @@ type NavItem = {
 };
 
 export const NAV: NavItem[] = [
-  { href: '/terminal', label: 'Live Telemetry', icon: <Radio className="size-4" /> },
-  { href: '/terminal/geo-map', label: 'Geo Map', icon: <MapIcon className="size-4" /> },
-  // Was '/terminal#analytics', a hash into the middle of Live Telemetry. The
-  // forecast and the observed trend are a page now, so this points at it.
-  { href: '/terminal/forecast', label: 'AQI Trend & Forecast', icon: <LineChart className="size-4" /> },
-  { href: '/terminal/matrices', label: 'Pollutant Matrices', icon: <ScatterChart className="size-4" /> },
-  // No literal badge. "3 PENDING" said three whatever the air was doing, on
-  // every page, including a day with nothing wrong. The count is now the number
-  // of advisories that are actually active - see lib/terminal/advisories.
-  { href: '/terminal/warnings', label: 'Incident Warnings', icon: <AlertTriangle className="size-4 text-amber-700 dark:text-amber-400" /> },
+  { href: '/terminal', label: 'Live Monitoring', icon: <Radio className="size-4" /> },
+  { href: '/terminal/geo-map', label: 'Pollution Map', icon: <MapIcon className="size-4" /> },
+  { href: '/terminal/forecast', label: 'AQI Forecast', icon: <LineChart className="size-4" /> },
+  { href: '/terminal/matrices', label: 'Pollutants', icon: <ScatterChart className="size-4" /> },
+  { href: '/terminal/warnings', label: 'Alerts & Risks', icon: <AlertTriangle className="size-4 text-amber-700 dark:text-amber-400" /> },
 ];
 
 export function TerminalShell({ children }: { children: React.ReactNode }) {
@@ -417,7 +412,7 @@ function TerminalHeader({ onOpenNav }: { onOpenNav: () => void }) {
             className="flex w-full items-center gap-2.5 rounded-lg border border-term-outline-variant/80 bg-term-surface-c py-2 pl-3.5 pr-2.5 text-left font-body text-sm text-term-ink-variant transition-colors hover:border-term-secondary/60 hover:text-term-ink focus-visible:border-term-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-term-secondary"
           >
             <Search className="size-4 shrink-0" />
-            <span className="flex-1 truncate">Find station, zone or coordinates</span>
+            <span className="flex-1 truncate">Find Station, Zone Or Coordinates</span>
             <kbd className="shrink-0 rounded bg-term-surface-highest px-1.5 py-0.5 font-mono text-[11px] text-term-ink-variant">
               ⌘K
             </kbd>
@@ -482,7 +477,7 @@ function TerminalHeader({ onOpenNav }: { onOpenNav: () => void }) {
               </>
             ) : (
               <>
-                Demo<span className="sr-only xl:not-sr-only"> / Synthetic</span>
+                Demo<span className="sr-only xl:not-sr-only"> · Synthetic Data</span>
               </>
             )}
           </span>

@@ -106,10 +106,10 @@ export type PollutantReading = {
  * prominent pollutant and the two screens still agree.
  */
 export const POLLUTANTS: PollutantReading[] = [
-  { id: 'pm25', symbol: 'PM2.5', name: 'Fine Particulate', value: 68, unit: 'µg/m³', reference: '< 30', pct: 78, delta: 12.4, status: 'Unhealthy', color: SEVERITY.poor, note: 'Threshold Exceeded', trend: [44, 47, 43, 52, 58, 61, 55, 64, 66, 67, 68, 68] },
-  { id: 'pm10', symbol: 'PM10', name: 'Coarse Particulate', value: 118, unit: 'µg/m³', reference: '< 60', pct: 68, delta: 8.1, status: 'Poor', color: SEVERITY.moderate, note: 'Threshold Exceeded', trend: [92, 96, 99, 104, 101, 108, 112, 109, 114, 116, 117, 118] },
+  { id: 'pm25', symbol: 'PM2.5', name: 'Fine Particulate Matter', value: 68, unit: 'µg/m³', reference: '< 30', pct: 78, delta: 12.4, status: 'Unhealthy', color: SEVERITY.poor, note: 'Threshold Exceeded', trend: [44, 47, 43, 52, 58, 61, 55, 64, 66, 67, 68, 68] },
+  { id: 'pm10', symbol: 'PM10', name: 'Coarse Particulate Matter', value: 118, unit: 'µg/m³', reference: '< 60', pct: 68, delta: 8.1, status: 'Poor', color: SEVERITY.moderate, note: 'Threshold Exceeded', trend: [92, 96, 99, 104, 101, 108, 112, 109, 114, 116, 117, 118] },
   { id: 'nh3', symbol: 'NH₃', name: 'Ammonia', value: 41, unit: 'µg/m³', reference: '< 400', pct: 18, delta: -2.6, status: 'Normal', color: SEVERITY.good, note: 'Within Limits', trend: [46, 45, 44, 44, 43, 42, 43, 42, 41, 41, 41, 41] },
-  { id: 'o3', symbol: 'O₃', name: 'Ground Ozone', value: 41, unit: 'µg/m³', reference: '< 100', pct: 34, delta: 5.2, status: 'Normal', color: SEVERITY.good, note: 'Within Limits', trend: [22, 26, 31, 36, 44, 51, 55, 52, 47, 44, 42, 41] },
+  { id: 'o3', symbol: 'O₃', name: 'Ground-Level Ozone', value: 41, unit: 'µg/m³', reference: '< 100', pct: 34, delta: 5.2, status: 'Normal', color: SEVERITY.good, note: 'Within Limits', trend: [22, 26, 31, 36, 44, 51, 55, 52, 47, 44, 42, 41] },
   { id: 'pb', symbol: 'Pb', name: 'Lead Aerosol', value: 0.42, unit: 'µg/m³', reference: '< 1.0', pct: 42, delta: 1.1, status: 'Normal', color: SEVERITY.good, note: 'Within Limits', trend: [0.38, 0.39, 0.4, 0.39, 0.41, 0.42, 0.41, 0.42, 0.42, 0.43, 0.42, 0.42] },
   { id: 'so2', symbol: 'SO₂', name: 'Sulphur Dioxide', value: 22, unit: 'µg/m³', reference: '< 80', pct: 28, delta: 3.4, status: 'Normal', color: SEVERITY.good, note: 'Within Limits', trend: [17, 18, 19, 18, 20, 21, 20, 21, 22, 22, 23, 22] },
   { id: 'co', symbol: 'CO', name: 'Carbon Monoxide', value: 1.8, unit: 'mg/m³', reference: '< 2.0', pct: 62, delta: 6.9, status: 'Elevated', color: SEVERITY.moderate, note: 'Approaching Limit', trend: [1.2, 1.3, 1.4, 1.4, 1.5, 1.6, 1.6, 1.7, 1.7, 1.8, 1.8, 1.8] },

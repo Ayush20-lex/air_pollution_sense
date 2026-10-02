@@ -120,7 +120,7 @@ export function MetSourcePanel() {
 
           <div className="flex gap-6">
             <div>
-              <Label>Cycle age</Label>
+              <Label>Cycle Age</Label>
               <div className="font-mono text-2xl font-bold text-term-ink">
                 {f.cycle_age_hours == null ? '—' : `${f.cycle_age_hours.toFixed(0)}h`}
               </div>
@@ -129,7 +129,7 @@ export function MetSourcePanel() {
               </div>
             </div>
             <div>
-              <Label>Window left</Label>
+              <Label>Window Left</Label>
               <div
                 className="font-mono text-2xl font-bold"
                 style={{ color: ink(f.expired ? tone.color : undefined) }}

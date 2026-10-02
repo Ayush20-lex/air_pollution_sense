@@ -114,7 +114,7 @@ export function ChannelCoverage() {
   return (
     <div className="space-y-3">
       <SectionHead
-        title="Channel Coverage"
+        title="Reporting Coverage &amp; Thresholds"
         sub="How many stations carry each channel, and how close they sit to CPCB's validity rule"
         right={
           <span className="font-mono text-xs uppercase tracking-wider text-term-ink-variant">

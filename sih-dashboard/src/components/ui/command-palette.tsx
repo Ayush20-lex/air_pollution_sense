@@ -42,7 +42,7 @@ type Cmd = {
   id: string;
   title: string;
   hint?: string;
-  group: 'Go to' | 'Stations' | 'Appearance';
+  group: 'Navigate to' | 'Monitoring Stations' | 'Appearance';
   icon: React.ReactNode;
   run: () => void;
   /** Extra text matched against the query but not displayed. */
@@ -142,49 +142,37 @@ export function CommandPalette({ hideTrigger = false }: { hideTrigger?: boolean 
         id: 'go-intro',
         title: 'Landing track',
         hint: 'Aerosol globe intro',
-        group: 'Go to',
+        group: 'Navigate to',
         icon: <Radio className="size-4" />,
         run: () => go('/'),
         keywords: 'home intro particles scan start',
       },
       {
         id: 'go-terminal',
-        title: 'Live Telemetry',
+        title: 'Live Measurements',
         hint: 'Public terminal overview',
-        group: 'Go to',
+        group: 'Navigate to',
         icon: <Gauge className="size-4" />,
         run: () => go('/terminal'),
-        keywords: 'terminal aqi pollutants overview public',
+        keywords: 'terminal aqi pollutants overview public live measurements telemetry',
       },
       {
         id: 'go-geo',
-        title: 'Geospatial Plume Map',
+        title: 'Pollution & Plume Map',
         hint: 'Dispersion, contours, wind',
-        group: 'Go to',
+        group: 'Navigate to',
         icon: <MapPin className="size-4" />,
         run: () => go('/terminal/geo-map'),
-        keywords: 'map plume heatmap contours wind geo mesh',
+        keywords: 'map plume heatmap contours wind geo mesh pollution',
       },
     ];
 
     // The mesh the map itself draws, not the curated fallback list.
-    //
-    // This used to map `STATIONS`, which is the 18-node offline snapshot, while
-    // the map renders the 80 the backend reports. Two thirds of the network was
-    // therefore unsearchable - and worse, not one id was shared between the two
-    // lists: the snapshot keys on slugs like `wazirpur` and the live mesh on
-    // `m900000`, so `?station=` matched nothing and picking a station from here
-    // opened the map and highlighted none of it.
-    //
-    // Reading the same source is what keeps the ids aligned, rather than a
-    // translation table that would go stale the next time either list moved.
-    // Offline `useMesh` hands back the curated list anyway, so the fallback is
-    // the one it always was.
     const stations: Cmd[] = mesh.stations.map((s) => ({
       id: `station-${s.id}`,
       title: s.name,
       hint: `${s.zone} · ${s.agency} · AQI ${s.aqi}`,
-      group: 'Stations',
+      group: 'Monitoring Stations',
       icon: <MapPin className="size-4" />,
       dot: aqiColor(s.aqi),
       run: () => go(`/terminal/geo-map?station=${encodeURIComponent(s.id)}`),
@@ -297,11 +285,11 @@ export function CommandPalette({ hideTrigger = false }: { hideTrigger?: boolean 
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Open command palette"
-          className="flex items-center gap-2 rounded-lg border border-hairline bg-elevated/60 px-2.5 py-1.5 font-mono text-2xs uppercase tracking-wider text-muted transition-colors hover:border-accent/40 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+          className="group flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-mono text-2xs uppercase tracking-wider text-slate-700 shadow-sm transition-all duration-300 ease-out hover:border-slate-900 hover:bg-slate-900 hover:text-white dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:border-cyan-400/60 dark:hover:bg-slate-800 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
         >
-          <Search className="size-3.5" />
+          <Search className="size-3.5 transition-colors duration-300 group-hover:text-cyan-400" />
           <span className="hidden sm:inline">Search</span>
-          <kbd className="hidden rounded border border-hairline bg-base/60 px-1 py-px text-[10px] sm:inline">
+          <kbd className="hidden rounded border border-slate-200 bg-slate-100 px-1 py-px text-[10px] text-slate-500 transition-colors duration-300 group-hover:border-slate-700 group-hover:bg-slate-800 group-hover:text-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 sm:inline">
             ⌘K
           </kbd>
         </button>
@@ -352,7 +340,7 @@ export function CommandPalette({ hideTrigger = false }: { hideTrigger?: boolean 
                     // at the cause avoids a second render pass per character.
                     setCursor(0);
                   }}
-                  placeholder="Search stations, screens…"
+                  placeholder="Search stations & views..."
                   aria-label="Search commands"
                   className="h-12 w-full bg-transparent font-mono text-sm text-ink placeholder:text-faint focus:outline-none"
                 />
@@ -369,7 +357,7 @@ export function CommandPalette({ hideTrigger = false }: { hideTrigger?: boolean 
                 ) : (
                   <>
                     {results.recent.length > 0 && (
-                      <Group label="Recent">
+                      <Group label="Recent Views">
                         {results.recent.map((c, i) => (
                           <Row
                             key={c.id}
@@ -381,7 +369,7 @@ export function CommandPalette({ hideTrigger = false }: { hideTrigger?: boolean 
                         ))}
                       </Group>
                     )}
-                    {(['Go to', 'Stations', 'Appearance'] as const).map((group) => {
+                    {(['Navigate to', 'Monitoring Stations', 'Appearance'] as const).map((group) => {
                       const rows = results.rest.filter((c) => c.group === group);
                       if (!rows.length) return null;
                       return (

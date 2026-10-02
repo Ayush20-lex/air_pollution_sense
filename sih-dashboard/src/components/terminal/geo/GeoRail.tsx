@@ -186,7 +186,7 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
   return (
     <TelemetryCard className="space-y-3 p-5">
       <div className="flex items-center justify-between">
-        <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Selected Node</h3>
+        <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Selected Monitoring Station</h3>
         {station.master ? (
           <span className="rounded border border-term-primary/40 bg-term-primary/15 px-2 py-0.5 font-mono text-[10px] font-bold text-term-primary">
             MASTER
@@ -341,14 +341,14 @@ function TrappingDispersion({ frame }: { frame: TerminalFrame }) {
         : '—',
       cls: 'text-term-ink',
     },
-    { label: 'Boundary layer', value: pbl == null ? '—' : `${pbl.toFixed(0)} m`, cls: 'text-term-ink' },
+    { label: 'Boundary-Layer Height', value: pbl == null ? '—' : `${pbl.toFixed(0)} m`, cls: 'text-term-ink' },
     {
       label: 'Ventilation idx',
       value: ventilation == null ? '—' : `${ventilation.toFixed(0)} m²/s ${ventLabel}`,
       cls: 'text-orange-700 dark:text-orange-400',
     },
     {
-      label: 'Inversion risk',
+      label: 'Inversion Risk',
       value: inv == null ? '—' : `${invLabel} (${inv.toFixed(2)})`,
       cls: 'text-amber-700 dark:text-amber-400',
     },
@@ -356,7 +356,7 @@ function TrappingDispersion({ frame }: { frame: TerminalFrame }) {
 
   return (
     <TelemetryCard className="space-y-3 p-5">
-      <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Trapping &amp; Dispersion</h3>
+      <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Atmospheric Trapping Conditions</h3>
 
       <div className="flex items-center gap-4">
         <svg viewBox="0 0 100 100" className="size-24 shrink-0" aria-label="Wind direction north-west">

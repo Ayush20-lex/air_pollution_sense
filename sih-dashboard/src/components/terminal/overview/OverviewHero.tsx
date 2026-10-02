@@ -36,7 +36,7 @@ function StatusBanner() {
       <div>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="font-display text-2xl font-extrabold tracking-tight text-term-ink lg:text-3xl">
-            AIR Quality Overview
+            Air Quality Overview
           </h1>
           <span className="rounded border border-orange-500/40 bg-orange-500/15 px-2.5 py-0.5 font-mono text-xs font-bold text-orange-700 dark:text-orange-400">
             {live ? `${station.name} • ${station.zone} zone • ${station.agency}` : HUB.station}
@@ -153,7 +153,7 @@ function AqiGauge() {
         </div>
         <div className="flex items-center gap-2 rounded-full border border-orange-500/50 bg-orange-500/20 px-3.5 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 shadow-[0_0_15px_rgba(249,115,22,0.3)]">
           <span className="size-2.5 animate-pulse rounded-full bg-orange-500" />
-          {band.label} air quality
+          {band.label} Air Quality
         </div>
       </div>
 

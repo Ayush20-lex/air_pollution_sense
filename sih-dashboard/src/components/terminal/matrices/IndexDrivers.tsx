@@ -63,7 +63,7 @@ export function IndexDrivers() {
   return (
     <div className="space-y-3">
       <SectionHead
-        title="What Is Setting The Index"
+        title="Primary AQI Driver"
         sub="The AQI is the worst of a station's sub-indices, so one channel decides each number. This is which one, and where"
         right={
           <span className="font-mono text-xs uppercase tracking-wider text-term-ink-variant">

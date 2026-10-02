@@ -160,7 +160,7 @@ export function ForecastTrack({
                 {/* Units matter here more than anywhere on the page: the axis
                     is AQI and this figure is PM2.5 in ug/m3, so printing the
                     bare number beside an AQI chart read as "+/- 62 AQI". */}
-                anchored to readings{rmse.blend ? ` · typically off by ${Math.round(rmse.blend)} ug/m3` : ''}
+                anchored to readings{rmse.blend ? ` · typically off by ${Math.round(rmse.blend)} µg/m³` : ''}
               </span>
             ) : null}
             {camsLeads > 0 ? (
@@ -171,7 +171,7 @@ export function ForecastTrack({
                     backgroundImage: `repeating-linear-gradient(90deg, ${TERM.secondary} 0 4px, transparent 4px 7px)`,
                   }}
                 />
-                model only{rmse.cams_only ? ` · typically off by ${Math.round(rmse.cams_only)} ug/m3` : ''}
+                model only{rmse.cams_only ? ` · typically off by ${Math.round(rmse.cams_only)} µg/m³` : ''}
               </span>
             ) : null}
           </span>
