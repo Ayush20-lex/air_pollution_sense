@@ -213,7 +213,7 @@ function TrappingProfile() {
     // Flex column so the cross-section absorbs whatever height the taller
     // ranking card forces on this one, instead of leaving a void at the foot.
     <TelemetryCard className="flex h-full flex-col gap-3 p-5 lg:col-span-5">
-      <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Topographic Trapping Profile</h3>
+      <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Atmospheric Trapping Conditions</h3>
       <p className="font-body text-[11px] leading-relaxed text-term-ink-variant">
         Cross-section looking north. The Aravalli range to the south-west and the Himalayan foothills to
         the north-east form a closed basin; the inversion lid currently caps vertical mixing at{' '}

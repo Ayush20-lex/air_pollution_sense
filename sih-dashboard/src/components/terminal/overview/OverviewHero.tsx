@@ -244,7 +244,7 @@ function AqiGauge() {
           value={live ? `${range.low} / ${range.high} AQI` : `${HUB.min24} / ${HUB.max24} AQI`}
         />
         <MicroStat
-          label="Dominant Stressor"
+          label="Primary AQI Driver"
           value={
             dominantSub
               ? dominantSub.concentration != null

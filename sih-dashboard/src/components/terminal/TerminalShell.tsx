@@ -266,7 +266,7 @@ function TerminalSidebar({ open, onClose }: { open: boolean; onClose: () => void
             <span className="shrink-0 font-semibold text-term-secondary">AQI {hub.aqi}</span>
           </div>
           <div className="flex justify-between border-t border-term-outline-variant/40 pt-1.5 font-mono text-[10px] text-term-ink-variant">
-            <span>Data source</span>
+            <span>Data Sources</span>
             <span
               className={cn(
                 'font-semibold',

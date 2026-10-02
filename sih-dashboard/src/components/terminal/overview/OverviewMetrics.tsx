@@ -90,7 +90,7 @@ export function PollutantMatrix({ limit }: { limit?: number }) {
   return (
     <div id="matrices" className="space-y-3">
       <SectionHead
-        title="8-Pollutant Chemical Telemetry Grid"
+        title="Pollutant Monitoring"
         sub={
           isLive(station)
             ? `${station.name} only • hover any card for its 24-hour trajectory, sampled every 2 hours`

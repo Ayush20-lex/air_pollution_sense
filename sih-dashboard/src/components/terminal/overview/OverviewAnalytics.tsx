@@ -270,7 +270,7 @@ function StressorDonut() {
        breathing room rather than a stretched chart. */
     <TelemetryCard className="space-y-4 p-5 lg:col-span-12">
       <div>
-        <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Dominant Stressor</h3>
+        <h3 className="font-display text-sm font-bold tracking-tight text-term-ink">Primary AQI Driver</h3>
         <Label>Share of reporting stations each pollutant leads</Label>
       </div>
 
@@ -406,7 +406,7 @@ function Correlator() {
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
       <TelemetryCard className="space-y-3 p-5 lg:col-span-8">
         <SectionHead
-          title="Multi-Pollutant Correlator"
+          title="Pollutant Trends"
           // Says which 24 hours, because it is not always this one. The
           // instantaneous series come from the archive half of the mesh; the
           // live half publishes a rolling mean with no shape left in it.
