@@ -1,7 +1,7 @@
 /**
- * Pollutant Matrices — all eight channels, at full size.
+ * Pollutants — all eight channels, at full size.
  *
- * Live Telemetry shows the first four as a preview. The grid was never the
+ * Live Monitoring shows the first four as a preview. The grid was never the
  * problem there; the page under it was, at four screens of scrolling before a
  * reader reached anything else.
  */

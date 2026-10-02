@@ -1,8 +1,8 @@
 /**
- * Incident Warnings — the advisory list, and the three panels it is derived
+ * Alerts & Risks — the advisory list, and the three panels it is derived
  * from.
  *
- * The preview on Live Telemetry carries the first two warnings and none of
+ * The preview on Live Monitoring carries the first two warnings and none of
  * those panels. GRAP, the inversion scoring and the meteorology source are
  * each one indivisible statement, so they belong where there is room to make
  * them rather than half-made beside a link.

@@ -64,7 +64,7 @@ export function GeoMapPanel({
           space beside it - but the floor, not the rail, is what sets the size.
 
           It used to be 320px, which made the map's height depend on whether a
-          station happened to be selected: the rail carries a Selected Node card,
+          station happened to be selected: the rail carries a Selected Monitoring Station card,
           nothing is selected on a fresh load, so the rail came up short and the
           map collapsed onto the floor. Pick a station and it grew; refresh and it
           shrank again. The map is the point of this page and it was being sized

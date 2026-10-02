@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 /**
  * The way out of a preview.
  *
- * Live Telemetry shows the first few of several sections and each has a page
+ * Live Monitoring shows the first few of several sections and each has a page
  * of its own. Without this the preview is a dead end that looks like the whole
  * thing - a reader counting four pollutant cards has no way to know there are
  * eight.

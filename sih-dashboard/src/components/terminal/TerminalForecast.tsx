@@ -1,8 +1,8 @@
 /**
- * AQI Trend & Forecast — where the terminal is read for time rather than for
+ * AQI Forecast — where the terminal is read for time rather than for
  * this hour.
  *
- * Both panels used to sit on Live Telemetry, below the gauge, the pollutant
+ * Both panels used to sit on Live Monitoring, below the gauge, the pollutant
  * grid and the advisory. That page answers "what is the air doing now"; these
  * two answer "where has it been" and "where is it going", and a reader after
  * either had to scroll past everything that was not it. The nav's "Temporal

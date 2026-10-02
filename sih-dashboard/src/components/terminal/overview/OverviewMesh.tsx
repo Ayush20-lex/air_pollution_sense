@@ -17,7 +17,7 @@ export function OverviewMesh() {
   return (
     <>
       <StationMesh />
-      {/* Previews. Each of these has a page now; Live Telemetry shows enough to
+      {/* Previews. Each of these has a page now; Live Monitoring shows enough to
           say whether it is worth opening. */}
       <IncidentBanners limit={2} />
     </>

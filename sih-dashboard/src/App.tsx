@@ -13,7 +13,7 @@
  *
  * Routes:
  *   /                  the intro scroll track; Scan NCR hands off to /terminal
- *   /terminal          public terminal, Live Telemetry
+ *   /terminal          public terminal, Live Monitoring
  *   /terminal/geo-map  public terminal, geospatial plume map
  *
  * /console — the engineering console, and the Next route tree's third surface

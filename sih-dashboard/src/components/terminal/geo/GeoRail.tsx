@@ -302,7 +302,7 @@ function SelectedNode({ frame }: { frame: TerminalFrame }) {
  * Every row here was a literal: a 412 m boundary layer, a dispersion index of
  * 0.38 "POOR", an inversion risk of "HIGH" and 3.4 days of bowl retention. The
  * first of those was the problem - the frames payload puts the layer at 52 m
- * right now, and the Inversion Trap Zones panel a few inches down the same page
+ * right now, and the Inversion Risk Zones panel a few inches down the same page
  * reports 50 m. The page was disagreeing with itself by a factor of eight.
  *
  * Three rows have a real source and use it. "Bowl retention" does not: nothing

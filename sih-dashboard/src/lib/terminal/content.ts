@@ -1,5 +1,5 @@
 /**
- * Static content for the Live Telemetry overview.
+ * Static content for the Live Monitoring overview.
  *
  * Readings, thresholds and copy that the overview renders but does not
  * compute. Kept out of the components so the numbers live in one place and a

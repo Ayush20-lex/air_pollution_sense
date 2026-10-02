@@ -122,7 +122,7 @@ function TerminalSidebar({ open, onClose }: { open: boolean; onClose: () => void
         )}
       />
       {/* Below md this rail was `hidden`, which took the whole of NAV with it:
-          Geo Map, AQI Trend & Forecast, Pollutant Matrices, Incident Warnings and
+          Pollution Map, AQI Forecast, Pollutants, Alerts & Risks and
           the Ledger had no route on a phone at all. It is the same rail and
           the same NAV - docked from md up, and a drawer under it, rather than
           a second menu that would drift out of step with this one. */}
