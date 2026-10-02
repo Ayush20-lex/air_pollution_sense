@@ -20,32 +20,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Registered custom properties for the scan button's conic shine. Angles and
-   percentages can only be *animated* if the browser knows their type; declared
-   with plain `--x: 0deg` they are strings and jump rather than sweep.
-   Unsupported browsers (Firefox < 128) fall back to a static border, which is
-   why nothing here is load-bearing for legibility. */
-@property --shine-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
-@property --shine-offset {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
-@property --shine-spread {
-  syntax: "<percentage>";
-  initial-value: 5%;
-  inherits: false;
-}
-@property --shine-tint {
-  syntax: "<color>";
-  initial-value: rgb(255 255 255);
-  inherits: false;
-}
-
 @layer base {
   /* next/font/google used to inject these two; the families are loaded from a
      stylesheet link in index.html and bound to Tailwind's font-sans/font-mono
@@ -144,112 +118,6 @@
 }
 
 @layer components {
-  /* Conic shine for the intro's primary CTA.
-     Adapted from the "shiny-cta" pattern; the original shipped as a Next.js
-     styled-jsx block, which does nothing in Vite except leak its rules
-     globally, so the rules live here instead. Colours come from --as-accent
-     rather than the original's hardcoded blue, and type/size stay with the
-     button's Tailwind classes so it still matches the console.
-
-     The travelling border is a conic-gradient painted into border-box, with a
-     flat fill over padding-box covering the middle — which is why the element
-     needs a transparent 1px border for the gradient to show through. */
-  .shiny-cta {
-    isolation: isolate;
-    position: relative;
-    overflow: hidden;
-    border: 1px solid transparent;
-    background:
-      linear-gradient(
-          rgb(var(--as-base) / 0.72),
-          rgb(var(--as-base) / 0.72)
-        )
-        padding-box,
-      conic-gradient(
-          from calc(var(--shine-angle) - var(--shine-offset)),
-          transparent,
-          rgb(var(--as-accent) / 0.9) var(--shine-spread),
-          var(--shine-tint) calc(var(--shine-spread) * 2),
-          rgb(var(--as-accent) / 0.9) calc(var(--shine-spread) * 3),
-          transparent calc(var(--shine-spread) * 4)
-        )
-        border-box;
-    box-shadow: inset 0 0 0 1px rgb(var(--as-accent) / 0.12);
-    transition: 800ms cubic-bezier(0.25, 1, 0.5, 1);
-    transition-property: --shine-offset, --shine-spread, --shine-tint;
-    animation: shine-sweep 3s linear infinite;
-  }
-
-  /* Inner shimmer. Sits behind the label via z-index, which works because the
-     button isolates: -1 stays inside this element instead of dropping behind
-     the particle canvas. */
-  .shiny-cta::after {
-    content: '';
-    pointer-events: none;
-    position: absolute;
-    inset-inline-start: 50%;
-    inset-block-start: 50%;
-    translate: -50% -50%;
-    z-index: -1;
-    width: 100%;
-    aspect-ratio: 1;
-    background: linear-gradient(
-      -50deg,
-      transparent,
-      rgb(var(--as-accent) / 0.8),
-      transparent
-    );
-    mask-image: radial-gradient(circle at bottom, transparent 40%, black);
-    opacity: 0.55;
-    animation: shine-shimmer 7.5s linear infinite paused;
-  }
-
-  /* The lit state: the sweep opens out and the inner shimmer starts.
-     Reached three ways, because "hovered" is not a thing a phone can be.
-
-     Keyboard first, and unguarded, so focus works on any device. */
-  .shiny-cta:focus-visible {
-    --shine-spread: 20%;
-    --shine-offset: 95deg;
-    --shine-tint: rgb(var(--as-shine-peak));
-  }
-  .shiny-cta:focus-visible::after {
-    animation-play-state: running;
-  }
-
-  /* Then hover, guarded the way .glass-hover below is. Unguarded, a tap on a
-     phone leaves :hover stuck on the button until something else is tapped,
-     so the lit state arrives at the wrong moment and then will not leave. */
-  @media (hover: hover) and (pointer: fine) {
-    .shiny-cta:hover {
-      --shine-spread: 20%;
-      --shine-offset: 95deg;
-      --shine-tint: rgb(var(--as-shine-peak));
-    }
-    .shiny-cta:hover::after {
-      animation-play-state: running;
-    }
-  }
-
-  /* Touch gets neither of these, and deliberately. The lit state runs the
-     inner shimmer on top of a conic border that repaints every frame, behind
-     a backdrop-filter, over the animating globe - and a phone cannot hold a
-     frame through that. An earlier version of this rule switched it all on
-     under `(hover: none)` to stop the button looking frozen, and bought the
-     stutter that replaced it. What a phone gets instead is the composited
-     sheen at the end of this file, which moves without repainting. */
-
-  @keyframes shine-sweep {
-    to {
-      --shine-angle: 360deg;
-    }
-  }
-  @keyframes shine-shimmer {
-    to {
-      rotate: 360deg;
-    }
-  }
-
   /* Glassmorphic panel — the core surface of the whole console. */
   .glass {
     background: rgb(var(--as-glass));
@@ -637,101 +505,12 @@
 }
 
 /* Infinite decorative motion. `ping` scales and fades a layer forever and
-   `shine-sweep` translates a gradient across the CTA every three seconds;
-   neither reports anything, and both keep the compositor from ever going
-   idle. The status dot keeps its colour, which is what actually carries the
-   meaning - it just stops pulsing. */
+   reports nothing, and it keeps the compositor from ever going idle. The
+   status dot keeps its colour, which is what actually carries the meaning -
+   it just stops pulsing. */
 :root[data-perf='low'] .animate-ping,
 :root[data-perf='low'] .pulse-live,
 :root[data-perf='low'] .animate-pulse {
   animation: none !important;
 }
 
-/* The CTA keeps moving, but stops repainting to do it.
-
-   `shine-sweep` animates --shine-angle, which feeds a conic-gradient border.
-   Conic gradients are expensive to rasterise and a custom property driving one
-   cannot be composited, so every frame repaints the whole button. Killing it
-   outright was the first attempt and it was the wrong call - the sweep is the
-   one piece of motion on the page a reader actually looks at, and its absence
-   read as the page being broken rather than as the page being fast.
-
-   This replaces it with a sheen that only ever moves a layer: transform is
-   composited, so the button is rasterised once and then slid, which a weak GPU
-   can do without touching the main thread. */
-/* Defined once, switched on by the two situations that cannot afford the real
-   sweep: the low tier, and any touch device.
-
-   Touch is the addition, and it is the case this was missing. `deviceTier()`
-   only answers 'low' at two cores or fewer, or narrow *and* four cores/GB or
-   fewer, so a current phone - eight cores, eight GB, 390px - is 'mobile' and
-   matched none of the rules here. It got the full conic repaint, the
-   backdrop-filter over the globe and, briefly, the inner shimmer as well. The
-   tier is about how weak the device is; this is about a phone GPU compositing
-   a blur over a live canvas, which is expensive on a good phone too. So the
-   signal is the pointer, not the tier. */
-.shiny-cta::before {
-  content: '';
-  /* No layer at all until something below asks for one. */
-  display: none;
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: linear-gradient(
-    100deg,
-    transparent 38%,
-    rgb(var(--as-accent) / 0.45) 50%,
-    transparent 62%
-  );
-  animation: cheap-sheen 3s linear infinite;
-}
-
-:root[data-perf='low'] .shiny-cta::before {
-  display: block;
-}
-:root[data-perf='low'] .shiny-cta {
-  animation: none !important;
-}
-
-@media (hover: none) {
-  .shiny-cta::before {
-    display: block;
-  }
-  .shiny-cta {
-    animation: none !important;
-    /* The conic border still paints, once, as a static ring. What has to go
-       is the per-frame work: the blur is recomputed every frame against the
-       globe behind it, which is the single most expensive thing this button
-       does on a phone. */
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-  /* Belt and braces: the shimmer is the other continuous layer, and nothing
-     on a touch device should be starting it. */
-  .shiny-cta::after {
-    animation: none;
-  }
-}
-
-@keyframes cheap-sheen {
-  from {
-    transform: translateX(-110%);
-  }
-  to {
-    transform: translateX(110%);
-  }
-}
-
-/* Someone who asked for less motion gets less motion, tier regardless.
-   Covers the real sweep and the shimmer as well as the stand-in: the CSS
-   shine is the one animation on this page that never passed through
-   MotionConfig, so it was the one thing still moving on a page the reader had
-   asked to hold still. */
-@media (prefers-reduced-motion: reduce) {
-  .shiny-cta,
-  .shiny-cta::before,
-  .shiny-cta::after {
-    animation: none !important;
-  }
-}
