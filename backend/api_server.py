@@ -1362,6 +1362,11 @@ def assistant_status():
     """
     return {
         "available": assistant.available() and not assistant.kill_switch_on(),
+        # Which upstream is answering, not just which model. The provider is
+        # chosen from the environment at import, so without this the only way
+        # to tell a Groq deployment from a Gemini one is to recognise the model
+        # name - and the point of the switch is that it changes under you.
+        "provider": assistant.PROVIDER,
         "model": assistant.MODEL if assistant.available() else None,
         "tools": [d["name"] for d in assistant_tools.DECLARATIONS],
         "limits": {

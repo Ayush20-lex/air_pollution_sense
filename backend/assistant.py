@@ -37,21 +37,48 @@ log = logging.getLogger("assistant")
 
 # ── configuration ───────────────────────────────────────────────────────────
 
+def _detect_provider() -> str:
+    """
+    Which upstream answers. `ASSISTANT_PROVIDER` decides; absent, a Groq key
+    being present decides.
+
+    Two providers rather than one because the binding constraint here is a free
+    tier, not a capability. A day of debugging exhausted the daily quota on
+    three Gemini models in turn, and each exhaustion is per model per project -
+    so the useful thing to own is a switch, not a better default. Flipping one
+    variable and restarting beats editing code at the moment the panel is dark.
+    """
+    explicit = os.environ.get("ASSISTANT_PROVIDER", "").strip().lower()
+    if explicit in ("groq", "gemini"):
+        return explicit
+    return "groq" if os.environ.get("GROQ_API_KEY", "").strip() else "gemini"
+
+
+PROVIDER = _detect_provider()
+
 #: Left unset on purpose. Put it in /etc/airsense.env beside WAQI_TOKEN and
 #: never in the repository. Absent, the endpoint reports itself unavailable and
 #: the widget does not render - the same rule the meteorology panel follows.
-API_KEY_ENV = "GEMINI_API_KEY"
-
-#: Flash: the cheap, fast tier, which is the right one for a public widget
-#: answering from tool output rather than from its own reasoning.
-# Overridable because model names expire faster than this codebase does. The
-# original default was gemini-2.5-flash, which a newly issued key cannot call:
-# "no longer available to new users". It still appears in ListModels, so only
-# generateContent reveals it, and the refusal arrives as 404 model-not-found
-# rather than a permission error - which reads exactly like a dead endpoint.
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
-
-BASE = "https://generativelanguage.googleapis.com/v1beta"
+#:
+#: Model names are overridable because they expire faster than this codebase
+#: does. The Gemini default was once gemini-2.5-flash, which a newly issued key
+#: cannot call: "no longer available to new users". It still appears in
+#: ListModels, so only generateContent reveals it, and the refusal arrives as
+#: 404 model-not-found rather than a permission error - which reads exactly
+#: like a dead endpoint.
+if PROVIDER == "groq":
+    API_KEY_ENV = "GROQ_API_KEY"
+    #: gpt-oss-120b over the 20b and the Llamas: this assistant lives or dies
+    #: on following one instruction - never state a figure a tool did not
+    #: return - and that is a reasoning job, not a throughput one.
+    MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+    BASE = "https://api.groq.com/openai/v1"
+else:
+    API_KEY_ENV = "GEMINI_API_KEY"
+    #: Flash: the cheap, fast tier, which is the right one for a public widget
+    #: answering from tool output rather than from its own reasoning.
+    MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
+    BASE = "https://generativelanguage.googleapis.com/v1beta"
 
 #: Upstream capacity blips, retried with a widening gap. Kept small: the caller
 #: is a person waiting on a stream, not a batch job.
@@ -191,14 +218,27 @@ def _post(payload: dict[str, Any]) -> dict[str, Any]:
     # seconds later. Retrying briefly is the difference between a widget that
     # looks broken and one that is a beat slow. 429 is not retried: that one is
     # a budget, and hammering it makes it worse.
+    # Groq is OpenAI-shaped, so the key rides in a header and the model is in
+    # the body; Gemini puts the key in the query string and the model in the
+    # path. Everything after this - the retry, the scrubbing, the quota
+    # reading - is the same either way, which is the point of one transport.
+    if PROVIDER == "groq":
+        url = f"{BASE}/chat/completions"
+        params: dict[str, str] = {}
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
+    else:
+        url = f"{BASE}/models/{MODEL}:generateContent"
+        params = {"key": key}
+        headers = {"Content-Type": "application/json"}
+
     r = None
     for attempt in range(RETRY_ON_503 + 1):
         r = requests.post(
-            f"{BASE}/models/{MODEL}:generateContent",
-            params={"key": key},
+            url,
+            params=params,
             json=payload,
             timeout=REQUEST_TIMEOUT_S,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
         )
         if r.status_code != 503 or attempt == RETRY_ON_503:
             break
@@ -231,17 +271,17 @@ def _post(payload: dict[str, Any]) -> dict[str, Any]:
     if quota_ids:
         reason = f"{reason} [quota: {','.join(quota_ids)}]"[:400]
     reason = reason.replace(key, "<key>")
-    log.warning("gemini HTTP %s %s (model=%s)", r.status_code, reason, MODEL)
+    log.warning("%s HTTP %s %s (model=%s)", PROVIDER, r.status_code, reason, MODEL)
 
     if r.status_code == 429:
-        # Whose limit this is matters to whoever is reading the panel: ours is
-        # a pause of seconds, Google's daily free-tier quota is a pause until
-        # midnight Pacific, and the two deserve different expectations.
-        blob = " ".join(quota_ids).lower() or reason.lower()
-        daily = "perday" in blob.replace(" ", "")
+        # Whose limit this is matters to whoever is reading the panel: a pause
+        # of seconds and a lockout until tomorrow deserve different
+        # expectations. Google hides which in a quotaId; Groq says it in the
+        # prose ("rate limit reached ... requests per day"), so check both.
+        blob = (" ".join(quota_ids) + " " + reason).lower()
+        daily = "perday" in blob.replace(" ", "") or "rpd" in blob
         raise RuntimeError(
-            "the daily free quota for this model is spent; it resets at "
-            "midnight US Pacific"
+            "the daily free quota for this model is spent; it resets tomorrow"
             if daily
             else "too many questions in the last minute, give it a moment"
         )
@@ -274,6 +314,26 @@ def answer(question: str, history: list[dict[str, Any]] | None = None) -> Iterat
         yield {"type": "error", "message": "That question is too long for me to take."}
         return
 
+    if PROVIDER == "groq":
+        yield from _answer_groq(q, history)
+    else:
+        yield from _answer_gemini(q, history)
+
+
+def _record(name: str, args: dict[str, Any], result: dict[str, Any], started: float) -> dict:
+    """One receipt. The UI prints these under the answer, so a reader can see
+    which endpoint and which hour a figure came from."""
+    return {
+        "name": name,
+        "args": args,
+        "ms": int((time.time() - started) * 1000),
+        "ok": "error" not in result,
+        "source": result.get("source"),
+        "as_of": result.get("as_of"),
+    }
+
+
+def _answer_gemini(q: str, history: list[dict[str, Any]] | None) -> Iterator[dict]:
     contents: list[dict[str, Any]] = list(history or [])
     contents.append({"role": "user", "parts": [{"text": q}]})
 
@@ -321,20 +381,105 @@ def answer(question: str, history: list[dict[str, Any]] | None = None) -> Iterat
             args = call.get("args") or {}
             started = time.time()
             result = assistant_tools.run(name, args)
-            record = {
-                "name": name,
-                "args": args,
-                "ms": int((time.time() - started) * 1000),
-                "ok": "error" not in result,
-                "source": result.get("source"),
-                "as_of": result.get("as_of"),
-            }
+            record = _record(name, args, result, started)
             used.append(record)
             yield {"type": "tool", **record}
             responses.append(
                 {"functionResponse": {"name": name, "response": {"result": result}}}
             )
         contents.append({"role": "user", "parts": responses})
+
+    yield {
+        "type": "error",
+        "message": "I could not settle on an answer without going in circles.",
+    }
+
+
+def _answer_groq(q: str, history: list[dict[str, Any]] | None) -> Iterator[dict]:
+    """
+    The same turn against an OpenAI-shaped API.
+
+    Three things differ from Gemini and nothing else does. The system prompt is
+    a message rather than its own field. The tool declarations are the same
+    objects, wrapped one level deeper. And a tool result is its own `tool`
+    message keyed by `tool_call_id`, rather than a response part inside a user
+    turn - so the assistant's own turn, with its `tool_calls`, has to go back
+    verbatim or the ids have nothing to match.
+
+    `contents` keeps its name on the wire even though these are `messages`,
+    because the frontend stores whatever it is handed and echoes it back
+    untouched. Renaming the field would break a transcript mid-conversation
+    for no gain.
+    """
+    messages: list[dict[str, Any]] = list(history or [])
+    if not messages:
+        messages.append({"role": "system", "content": SYSTEM_PROMPT})
+    messages.append({"role": "user", "content": q})
+
+    tools = [{"type": "function", "function": d} for d in assistant_tools.DECLARATIONS]
+    used: list[dict[str, Any]] = []
+
+    for _ in range(MAX_TOOL_ROUNDS):
+        payload = {
+            "model": MODEL,
+            "messages": messages,
+            "tools": tools,
+            "tool_choice": "auto",
+            "max_completion_tokens": MAX_OUTPUT_TOKENS,
+            "temperature": 0.2,
+        }
+        try:
+            data = _post(payload)
+        except Exception as exc:  # noqa: BLE001 - surfaced to the reader as text
+            yield {"type": "error", "message": f"The assistant is unavailable ({exc})."}
+            return
+
+        choices = data.get("choices") or []
+        if not choices:
+            yield {"type": "error", "message": "The assistant had nothing to say."}
+            return
+        msg = choices[0].get("message") or {}
+        calls = msg.get("tool_calls") or []
+
+        if not calls:
+            text = (msg.get("content") or "").strip()
+            if not text:
+                yield {"type": "error", "message": "The assistant returned an empty answer."}
+                return
+            yield {"type": "text", "text": text}
+            yield {"type": "done", "tools": used, "contents": messages}
+            return
+
+        messages.append(msg)
+
+        for call in calls:
+            fn = call.get("function") or {}
+            name = fn.get("name", "")
+            # Arguments arrive as a JSON string here, not an object. A model
+            # that emits malformed JSON must not take the turn down with it:
+            # an empty mapping reaches the tool, which validates its own input
+            # and returns an error the model can read and retry from.
+            raw = fn.get("arguments") or "{}"
+            try:
+                args = json.loads(raw) if isinstance(raw, str) else dict(raw)
+            except ValueError:
+                args = {}
+            if not isinstance(args, dict):
+                args = {}
+
+            started = time.time()
+            result = assistant_tools.run(name, args)
+            record = _record(name, args, result, started)
+            used.append(record)
+            yield {"type": "tool", **record}
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.get("id", ""),
+                    "name": name,
+                    "content": json.dumps({"result": result}),
+                }
+            )
 
     yield {
         "type": "error",

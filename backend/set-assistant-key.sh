@@ -2,6 +2,7 @@
 # Set (or replace) one secret in /etc/airsense.env and restart the API.
 #
 #   sudo ./set-assistant-key.sh GEMINI_API_KEY
+#   sudo ./set-assistant-key.sh GROQ_API_KEY
 #   sudo ./set-assistant-key.sh WAQI_TOKEN
 #   sudo ./set-assistant-key.sh CPCB_API_KEY
 #   sudo ./set-assistant-key.sh NASA_FIRMS_KEY
@@ -15,10 +16,10 @@ VAR="${1:-GEMINI_API_KEY}"
 ENVF=/etc/airsense.env
 
 case "$VAR" in
-  GEMINI_API_KEY|WAQI_TOKEN|CPCB_API_KEY|NASA_FIRMS_KEY|AQICN_TOKEN) ;;
+  GEMINI_API_KEY|GROQ_API_KEY|WAQI_TOKEN|CPCB_API_KEY|NASA_FIRMS_KEY|AQICN_TOKEN) ;;
   *) echo "unknown variable: $VAR" >&2
-     echo "expected one of: GEMINI_API_KEY, WAQI_TOKEN, CPCB_API_KEY," >&2
-     echo "                 NASA_FIRMS_KEY, AQICN_TOKEN" >&2
+     echo "expected one of: GEMINI_API_KEY, GROQ_API_KEY, WAQI_TOKEN," >&2
+     echo "                 CPCB_API_KEY, NASA_FIRMS_KEY, AQICN_TOKEN" >&2
      exit 2 ;;
 esac
 
