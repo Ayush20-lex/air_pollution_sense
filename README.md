@@ -305,10 +305,10 @@ airlytics-ncr
 └── docs/screenshots/               the images in this file
 ```
 
-Three top-level files are not part of the service and are kept for the
-submission: `presentation.html` and `final_sih_presentation.md` (the deck), and
-`AirQualityDashboard.jsx` (an early single-file prototype). `DEPLOY.md` and
-`GFS_REFRESH.md` are the runbooks.
+Two top-level files are not part of the service and are kept for the
+submission: `presentation.html` (the deck) and `AirQualityDashboard.jsx` (an
+early single-file prototype). `GFS_REFRESH.md` is the runbook for the committed
+GFS extract; how the box itself is updated is in `deploy/airsense-pull.sh`.
 
 ## Team
 
