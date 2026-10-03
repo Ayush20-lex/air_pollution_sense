@@ -7,6 +7,8 @@ import { ALERT_COLOR, ALERT_LABEL, aqiColor } from '@/lib/aqi';
 import { DISTRICTS, autoAnalysis, type Frame, type Interventions } from '@/lib/data';
 import { useLiveNow } from '@/lib/useLiveNow';
 import { SERIES } from '@/lib/tokens';
+import { useAppStore } from '@/store/useAppStore';
+import { useNowFrame } from '@/lib/useNowFrame';
 
 const rise = (i: number) => ({
   initial: { opacity: 0, y: 32 },
@@ -43,6 +45,28 @@ export function ScrollPanels({
   // three model fields keep saying FC, as the hero rail already does - no
   // station measures a boundary layer.
   const now = useLiveNow();
+  // The replay origin, which the backend has always sent as `source.origin`
+  // and the page never read. It matters: the frame labelled NOW carries
+  // validTime 2026-09-28T23:00Z with localHour 4, so the three model rows below
+  // describe 4am on 29 September, not this hour and not a forecast ahead of it.
+  // "FC" was true and incomplete - it reads as "forecast", meaning "later than
+  // now" - so the rows now say which hour they replay.
+  // `covers` is false once the wall clock has run past the end of the run's
+  // 72-hour window. useNowFrame has always computed it and nothing ever read
+  // it, so a run whose window had expired looked exactly like a current one:
+  // the hook clamps to the last frame and the card kept saying "Now".
+  const { covers } = useNowFrame();
+  const origin = useAppStore((st) => st.source?.origin);
+  const replayed = React.useMemo(() => {
+    if (!origin) return null;
+    const t = new Date(origin);
+    if (Number.isNaN(t.getTime())) return null;
+    t.setUTCHours(t.getUTCHours() + frame.hour);
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(t);
+  }, [origin, frame.hour]);
   const analysis = autoAnalysis(frame, interventions)[0];
   const ranked = [...DISTRICTS]
     .map((d) => ({ d, s: frame.districts[d.id] }))
@@ -61,19 +85,39 @@ export function ScrollPanels({
             <Activity className="size-3 text-cyan-600 dark:text-cyan-400" />
             CURRENT CONDITIONS
           </span>
-          <Badge color={aqiColor(now.pm25 ?? frame.avgPm25)}>{now.live ? 'Now' : 'Forecast'}</Badge>
+          <Badge color={now.loading ? undefined : aqiColor(now.pm25 ?? frame.avgPm25)}>
+            {now.loading ? 'Reading' : now.live ? 'Now' : 'Forecast'}
+          </Badge>
         </div>
         <dl className="mt-3 space-y-2.5">
+          {/* Never the forecast under a live label, not even for the length
+              of a fetch - see useLiveNow.loading. */}
           <Row
-            label={now.live ? `PM2.5 · MEAN OF ${now.stations} LIVE` : 'PM2.5 AVERAGE · FC'}
-            value={(now.pm25 ?? frame.avgPm25).toFixed(1)}
-            unit="µg/m³"
-            color={aqiColor(now.pm25 ?? frame.avgPm25)}
+            label={now.live ? `PM2.5 · MEAN OF ${now.stations} LIVE` : now.loading ? 'PM2.5 · READING MESH' : 'PM2.5 AVERAGE · FC'}
+            value={now.loading ? '—' : (now.pm25 ?? frame.avgPm25).toFixed(1)}
+            unit={now.loading ? '' : 'µg/m³'}
+            color={now.loading ? undefined : aqiColor(now.pm25 ?? frame.avgPm25)}
           />
           <Row label="BOUNDARY LAYER HEIGHT · FC" value={String(frame.avgPbl)} unit="m" />
           <Row label="TEMPERATURE · FC" value={frame.avgTemp.toFixed(1)} unit="°C" />
-          <Row label="SOLAR · FC" value={String(frame.avgSolar)} unit="W/m²" />
+          {/* Solar is one side of the aerosol-PBL loop (PM2.5 -> AOD ->
+              shortwave -> PBL), so it stays - it runs to 778 W/m2 at midday
+              and is nonzero for 39 of the 72 forecast hours. But at 22:00 a
+              bare "0" reads as a broken field rather than as night, so the
+              zero says what it means. */}
+          <Row
+            label="SOLAR · FC"
+            value={String(frame.avgSolar)}
+            unit={frame.avgSolar === 0 ? 'W/m² · before sunrise' : 'W/m²'}
+          />
         </dl>
+        {replayed && (
+          <p className="mt-2.5 border-t border-slate-100 pt-2 font-mono text-[10px] leading-tight text-slate-500 dark:border-slate-800/60 dark:text-slate-400">
+            FC rows replay {replayed} IST
+            {covers ? ', from the archive’s latest origin' : ' — the end of this run’s 72h window, which the clock has already passed'}
+            . PM2.5 above is measured now.
+          </p>
+        )}
       </motion.div>
 
       {/* --- 72-hour forecast -------------------------------------------- */}

@@ -20,7 +20,7 @@
  */
 import * as React from 'react';
 import { aqiColor } from '@/lib/aqi';
-import { isLive, useFreshStations } from '@/lib/terminal/useMesh';
+import { isLive, useFreshStations, useMesh } from '@/lib/terminal/useMesh';
 import { stationPm25 } from '@/lib/terminal/pm25Basis';
 import type { TerminalZone } from '@/lib/terminal/stations';
 
@@ -63,6 +63,18 @@ export type LiveNow = {
   sectors: LiveSector[];
   /** True once real measurements are on screen. */
   live: boolean;
+  /**
+   * The mesh has not answered yet, so `pm25` and `aqi` are null for a reason
+   * that is not "there is nothing live".
+   *
+   * Without this the two states were indistinguishable, and every caller
+   * treated a null as "fall back to the forecast". On a fast reload that put
+   * the forecast's first hour - 85.6 ug/m3 - on screen under the label
+   * "PM2.5 AVERAGE", for as long as the fetch took, before it was replaced by
+   * the measured 52.3. A wrong number for a quarter of a second is still a
+   * wrong number, and it is the one a reader reloading the page sees first.
+   */
+  loading: boolean;
 };
 
 /** Sectors the landing page names, in the order it draws them. */
@@ -73,11 +85,16 @@ const mean = (xs: number[]): number | null =>
 
 export function useLiveNow(): LiveNow {
   const stations = useFreshStations();
+  // `status`, not just the station list: while the fetch is in flight `useMesh`
+  // serves a frozen curated snapshot, whose stations carry no `meshId` and so
+  // read as "none live" - identical to a genuine empty live feed.
+  const { status } = useMesh();
+  const loading = status === 'loading';
 
   return React.useMemo(() => {
     const live = stations.filter(isLive);
     if (!live.length) {
-      return { pm25: null, aqi: null, stations: 0, sectors: [], live: false };
+      return { pm25: null, aqi: null, stations: 0, sectors: [], live: false, loading };
     }
 
     // Only stations that actually published a PM2.5. A station reporting no
@@ -112,6 +129,7 @@ export function useLiveNow(): LiveNow {
       stations: live.length,
       sectors,
       live: true,
+      loading: false,
     };
-  }, [stations]);
+  }, [stations, loading]);
 }

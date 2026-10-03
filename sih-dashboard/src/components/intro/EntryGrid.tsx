@@ -133,9 +133,15 @@ export function EntryGrid({
         eyebrow="PUBLIC TERMINAL"
         title="Live station telemetry"
         body={`Now: ${band.label}. ${mesh.stations.length} CAAQMS stations reporting ${POLLUTANTS.length} criteria channels across Delhi, Noida, Ghaziabad, Gurugram, and Faridabad.`}
-        stat={shownPm25.toFixed(1)}
-        statLabel={now.live ? `NCR PM2.5 · MEAN OF ${now.stations} LIVE` : 'NCR PM2.5 · FORECAST'}
-        statColor={aqiColor(shownPm25)}
+        stat={now.loading ? '—' : shownPm25.toFixed(1)}
+        statLabel={
+          now.live
+            ? `NCR PM2.5 · MEAN OF ${now.stations} LIVE`
+            : now.loading
+              ? 'NCR PM2.5 · READING MESH'
+              : 'NCR PM2.5 · FORECAST'
+        }
+        statColor={now.loading ? undefined : aqiColor(shownPm25)}
       />
 
       <Tile

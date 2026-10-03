@@ -353,12 +353,16 @@ export function IntroScreen() {
             reporting" written across all three would claim instruments behind
             two numbers that have none. */}
         <div className="font-sans text-xs font-semibold uppercase tracking-wider text-muted pl-3">DELHI-NCR</div>
+        {/* While the mesh is in flight this showed `frame.avgPm25` - the
+            forecast's first hour - under a label that did not say so, then
+            swapped to the measured figure. A dash instead: a reader reloading
+            the page gets no number rather than the wrong one. */}
         <TelemetryStat
-          label={now.live ? `PM2.5 · mean of ${now.stations}` : 'PM2.5 AVERAGE'}
-          value={(now.pm25 ?? frame.avgPm25).toFixed(0)}
-          unit="µg/m³"
-          accent={aqiColor(now.pm25 ?? frame.avgPm25)}
-          delta={now.live ? undefined : signed(pmTrend)}
+          label={now.live ? `PM2.5 · mean of ${now.stations}` : now.loading ? 'PM2.5 · reading mesh' : 'PM2.5 AVERAGE'}
+          value={now.loading ? '—' : (now.pm25 ?? frame.avgPm25).toFixed(0)}
+          unit={now.loading ? '' : 'µg/m³'}
+          accent={now.loading ? undefined : aqiColor(now.pm25 ?? frame.avgPm25)}
+          delta={now.live || now.loading ? undefined : signed(pmTrend)}
           delay={0.15}
         />
         <TelemetryStat
