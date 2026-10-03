@@ -114,9 +114,23 @@ All optional. Without them the system serves the archive rather than pretending 
 | `WAQI_TOKEN` or `AQICN_TOKEN` | Live station readings | [aqicn.org/data-platform/token](https://aqicn.org/data-platform/token) |
 | `NASA_FIRMS_KEY` | Fire pixels for the corridor | [firms.modaps.eosdis.nasa.gov/api](https://firms.modaps.eosdis.nasa.gov/api/area) |
 | `CPCB_API_KEY` | CPCB's own bulletin, preferred over WAQI | [data.gov.in](https://data.gov.in) |
-| `GEMINI_API_KEY` | The assistant | [aistudio.google.com](https://aistudio.google.com) |
+| `GEMINI_API_KEY` | The assistant, on Gemini | [aistudio.google.com](https://aistudio.google.com) |
+| `GROQ_API_KEY` | The assistant, on Groq | [console.groq.com](https://console.groq.com/keys) |
 | `GEMINI_MODEL` | Override the model (default `gemini-3.8-flash`) | |
+| `GROQ_MODEL` | Override the model (default `openai/gpt-oss-120b`) | |
+| `ASSISTANT_PROVIDER` | Pin to `gemini` or `groq`; default `auto` | |
 | `OPENAQ_API_KEY` | Refreshing the archive | [openaq.org](https://openaq.org) |
+
+Live meteorology needs no key at all: Open-Meteo is keyless.
+
+Set both LLM keys if you have them. With `ASSISTANT_PROVIDER` left at `auto` the
+assistant fails over on its own - a provider that refuses on quota is benched for
+thirty minutes and the other takes the turn, and when the bench expires the
+preferred one takes it back with no restart. Failover only happens before
+anything has reached the reader, which is where a quota refusal arrives, because
+switching mid-answer would stitch two voices into one reply. The per-IP rate
+limit follows whichever provider is active, since the two free tiers differ by a
+factor of three. `/api/v1/assistant/status` reports which one is serving.
 
 `CPCB_API_KEY` is worth the slower registration. WAQI republishes CPCB as US EPA sub-indices, so that path has to invert each index back to a concentration and drops NO2 and SO2 over a window mismatch. For the same hour, Wazirpur came out 163 "Moderate" through WAQI and 231 "Poor" from the bulletin, a whole band apart, on the pollutant setting the index.
 
@@ -131,10 +145,19 @@ GET  /api/v1/fires                 fire clusters, corridor, transport
 GET  /api/v1/policy/grap           stage and restrictions
 GET  /api/v1/alerts/inversion      night-time inversion risk
 GET  /api/v1/history/city          daily city PM2.5 and AQI
-GET  /api/v1/met/gfs               NOAA GFS extract
+GET  /api/v1/met/live              live meteorology, NCEP GFS via Open-Meteo
+GET  /api/v1/met/gfs               the committed GFS extract, and its age
 GET  /api/v1/status                model, sources, provenance
+GET  /api/v1/assistant/status      which provider is answering, and its rate limit
 POST /api/v1/assistant             one grounded turn, streamed as SSE
+GET  /health                       liveness, and whether weights are loaded
 ```
+
+The two met endpoints return the same shape and both carry NCEP GFS. The
+difference is currency: one is fetched per request, the other is a parquet
+committed on a partner's schedule, and each reports its own `freshness.status`
+so a consumer can tell which it is holding. The dashboard asks for the live one
+first and falls back.
 
 ## Keeping the data current
 
@@ -150,11 +173,26 @@ About 36 to 48 hours of lag remains and cannot be closed from here. That is CPCB
 
 ## Tests
 
+They are plain scripts rather than a pytest suite, so run them directly.
+
 ```bash
 cd backend && python test_aqi_cpcb.py        # 49 cases against CPCB's published rules
-python test_observation_qc.py
-python test_waqi_live.py
-python test_firms_fire.py
+python test_observation_qc.py                # 33 - peer tests and what they drop
+python test_waqi_live.py                     # 34 - EPA sub-index inversion
+python test_firms_fire.py                    # 19 - VIIRS parsing, the NRT type column
+python test_live_history.py                  # 30 - rolling means, retention, pruning
+python test_coupled_feedback.py              # 33 - the aerosol-PBL loop
+python test_graph_topology.py                # 24 - the dynamic graph's edges
+python test_normalization.py                 # channel scales and offsets
+```
+
+222 cases across the seven that report a count.
+
+The assistant has its own harness. It spends real tokens, so it is a command you
+run deliberately rather than a test hook:
+
+```bash
+python assistant_eval.py                     # 20 questions, asserting which tools fired
 ```
 
 `test_aqi_cpcb.py` is the one that matters: it checks sub-index breakpoints, the minimum-valid-hours rule, the 8-hour window for CO and ozone, unit conversion before indexing, and that an ineligible station reports its reasons instead of a number.
@@ -165,7 +203,9 @@ Stated here rather than left to be discovered:
 
 - **The ConvLSTM is not driving the published forecast.** `weights_loaded: false`. The architecture is implemented and its feedback coupling is tested, but the served numbers come from the validated blend baseline. `/api/v1/status` says so at runtime.
 - **The aerosol-PBL feedback is a diagnostic, not a correction.** The blend is built from observations that already happened under the real feedback, so feeding the modelled PBL response back into PM2.5 would count the same physics twice.
-- **Per-station meteorology is synthetic.** PBL height, wind and NOx per station are derived, not measured.
+- **Per-station meteorology is synthetic.** PBL height, wind and NOx per station are derived, not measured. `/api/v1/met/live` measures nine 0.25 degree cells, which covers the domain but is not 68 points.
+- **Open-Meteo floors the boundary layer.** Its GFS reports 10 m overnight, where a real nocturnal mixing layer over Delhi is 100 to 300 m. Values at or below 50 m are withheld and counted in `rows_floored` rather than served, because 10 m would read as a catastrophic inversion. `gfs_global` is identical, `best_match` floors at 25 m, and ECMWF and ICON do not publish the field, so there is no model here to switch to. The same floor is already in the training archive, which is built from the same API.
+- **The committed GFS extract expires.** It carries a 72-hour window from a fixed cycle and nothing refreshes it automatically, so it can be weeks old. `/api/v1/met/gfs` reports `freshness.status` for exactly this reason, and `/api/v1/met/live` exists because that status read "expired".
 - **The archive lags.** See above.
 
 ## Repository layout
@@ -173,32 +213,69 @@ Stated here rather than left to be discovered:
 ```
 airlytics-ncr
 │
-├── backend/                      FastAPI service: indexing, forecast, assistant
-│   ├── api_server.py             the eleven endpoints
-│   ├── station_registry.py       the mesh, per-station AQI under CPCB rules
-│   ├── aqi_cpcb.py               the 2014 index itself: breakpoints and windows
-│   ├── baseline_forecaster.py    the validated blend and its published score
-│   ├── firms_fire.py             VIIRS fire pixels, cached per origin date
-│   ├── fire_corridor.py          clustering, transport alignment, arrival times
-│   ├── assistant.py              the grounded assistant and its guardrails
-│   ├── assistant_tools.py        its eight read-only tools
-│   └── test_*.py                 CPCB rules, observation QC, fire parsing
+├── backend/                        FastAPI service: indexing, forecast, assistant
+│   │
+│   │   ── the index ──
+│   ├── aqi_cpcb.py                 the 2014 index itself: breakpoints and windows
+│   ├── station_registry.py         the mesh, per-station AQI under CPCB rules
+│   ├── observation_qc.py           peer tests that drop a sensor, not a station
+│   │
+│   │   ── live feeds, each one optional ──
+│   ├── cpcb_live.py                the CPCB bulletin from data.gov.in, preferred
+│   ├── waqi_live.py                WAQI fallback, EPA sub-indices re-indexed
+│   ├── openmeteo_live.py           live meteorology, NCEP GFS via Open-Meteo
+│   ├── gfs_reader.py               the partner pipeline's committed GFS parquet
+│   ├── firms_fire.py               VIIRS fire pixels, cached per origin date
+│   ├── live_history.py             rolling 24h means, so live stations get a chart
+│   ├── archive_cache.py            the replayed window, parsed once
+│   │
+│   │   ── forecast and coupling ──
+│   ├── baseline_forecaster.py      the validated blend and its published score
+│   ├── channel_spec.py             the twelve channels, their units and scales
+│   ├── coupled_model.py            ConvLSTM + attention + DynGNN, as implemented
+│   ├── coupled_convlstm_engine.py  the cells themselves
+│   ├── coupled_feedback.py         PM2.5 to AOD to shortwave to PBL, the loop
+│   ├── physics_loss.py             the training constraint on that loop
+│   ├── spatial_fusion.py           station-to-grid interpolation
+│   │
+│   │   ── policy, fires, assistant ──
+│   ├── grap_policy.py              stage thresholds and the restrictions each implies
+│   ├── fire_corridor.py            clustering, transport alignment, arrival times
+│   ├── assistant.py                the assistant, its guardrails and provider failover
+│   ├── assistant_tools.py          its eight read-only tools
+│   ├── assistant_eval.py           twenty cases asserting which tools must fire
+│   ├── log_safety.py               redacts keys out of the journal
+│   │
+│   ├── api_server.py               the fourteen endpoints
+│   └── test_*.py                   222 cases: CPCB rules, QC, fires, coupling, history
 │
-├── sih-dashboard/                React + Vite frontend
+├── sih-dashboard/                  React + Vite frontend
 │   └── src/
-│       ├── components/terminal/  the dashboard proper
-│       ├── components/intro/     the entry sequence
-│       └── lib/terminal/         API clients and index maths
+│       ├── components/terminal/    the dashboard proper
+│       ├── components/intro/       the entry sequence
+│       ├── lib/terminal/           API clients and index maths
+│       └── lib/useLiveNow.ts       what is measured now, kept apart from the forecast
 │
 ├── ml_pipeline/
-│   ├── scripts/                  fetch, build, train, score, refresh
-│   │   ├── 14_baselines.py       scores every method, sets the published RMSE
-│   │   ├── 16_train_coupled.py   ConvLSTM training harness
-│   │   └── 19_refresh_archive.py one command to bring the archive current
-│   └── data/                     the served archive
+│   ├── scripts/                    fetch, build, train, score, refresh (01-20)
+│   │   ├── 14_baselines.py         scores every method, sets the published RMSE
+│   │   ├── 15_build_gridded_dataset.py  stations and met onto the 70x80 grid
+│   │   ├── 16_train_coupled.py     ConvLSTM training harness
+│   │   ├── 19_refresh_archive.py   one command to bring the archive current
+│   │   └── 20_score_coupling.py    what the feedback is worth, measured
+│   └── data/                       the served archive
 │
-└── external_data_pipeline/       ingestion for satellite and sensor feeds
+├── external_data_pipeline/         partner ingestion service (Open-Meteo, medallion
+│                                   layers). Present in the repo, not run in
+│                                   production - the backend fetches its own feeds.
+│
+└── docs/screenshots/               the images in this file
 ```
+
+Three top-level files are not part of the service and are kept for the
+submission: `presentation.html` and `final_sih_presentation.md` (the deck), and
+`AirQualityDashboard.jsx` (an early single-file prototype). `DEPLOY.md` and
+`GFS_REFRESH.md` are the runbooks.
 
 ## Team
 
