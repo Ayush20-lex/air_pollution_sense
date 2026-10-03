@@ -107,23 +107,36 @@ The dashboard runs with no API keys at all, replaying the bundled archive. Keys 
 
 ## Configuration
 
-All optional. Without them the system serves the archive rather than pretending to be live.
+### Keys
+
+All optional. Without them the system serves the archive rather than pretending to be live. Live meteorology is not in this table because Open-Meteo needs no key.
 
 | Variable | Gets you | Where |
 |---|---|---|
 | `WAQI_TOKEN` or `AQICN_TOKEN` | Live station readings | [aqicn.org/data-platform/token](https://aqicn.org/data-platform/token) |
-| `NASA_FIRMS_KEY` | Fire pixels for the corridor | [firms.modaps.eosdis.nasa.gov/api](https://firms.modaps.eosdis.nasa.gov/api/area) |
 | `CPCB_API_KEY` | CPCB's own bulletin, preferred over WAQI | [data.gov.in](https://data.gov.in) |
+| `NASA_FIRMS_KEY` | Fire pixels for the corridor | [firms.modaps.eosdis.nasa.gov/api](https://firms.modaps.eosdis.nasa.gov/api/area) |
 | `GEMINI_API_KEY` | The assistant, on Gemini | [aistudio.google.com](https://aistudio.google.com) |
 | `GROQ_API_KEY` | The assistant, on Groq | [console.groq.com](https://console.groq.com/keys) |
-| `GEMINI_MODEL` | Override the model (default `gemini-3.8-flash`) | |
-| `GROQ_MODEL` | Override the model (default `openai/gpt-oss-120b`) | |
-| `ASSISTANT_PROVIDER` | Pin to `gemini` or `groq`; default `auto` | |
 | `OPENAQ_API_KEY` | Refreshing the archive | [openaq.org](https://openaq.org) |
 
-Live meteorology needs no key at all: Open-Meteo is keyless.
+`CPCB_API_KEY` is also read as `DATA_GOV_IN_KEY`, whichever is set, and it is worth the slower registration. WAQI republishes CPCB as US EPA sub-indices, so that path has to invert each index back to a concentration and drops NO2 and SO2 over a window mismatch. For the same hour, Wazirpur came out 163 "Moderate" through WAQI and 231 "Poor" from the bulletin, a whole band apart, on the pollutant setting the index.
 
-Set both LLM keys if you have them. With `ASSISTANT_PROVIDER` left at `auto` the
+### Settings
+
+Not credentials, so there is nowhere to go and register. Every one of these has a working default and the system runs with none of them set.
+
+| Variable | Default | What it changes |
+|---|---|---|
+| `ASSISTANT_PROVIDER` | `auto` | Pin the assistant to `gemini` or `groq`, which disables failover |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | The Gemini model |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | The Groq model |
+| `ASSISTANT_KILL_FILE` | `/etc/airsense.assistant.off` | Create that file and the assistant stops answering - no deploy, no restart |
+| `ASSISTANT_SELF_BASE` | `http://127.0.0.1:8000` | Which API the assistant's tools read |
+| `LIVE_HISTORY_DB` | `backend/live_history.db` | Where recorded live history is kept |
+| `ARCHIVE_CACHE_DIR` | `.cache/archive` | Where the parsed archive is cached |
+
+Set both LLM keys if you have them. With `ASSISTANT_PROVIDER` at its default the
 assistant fails over on its own - a provider that refuses on quota is benched for
 thirty minutes and the other takes the turn, and when the bench expires the
 preferred one takes it back with no restart. Failover only happens before
@@ -132,7 +145,17 @@ switching mid-answer would stitch two voices into one reply. The per-IP rate
 limit follows whichever provider is active, since the two free tiers differ by a
 factor of three. `/api/v1/assistant/status` reports which one is serving.
 
-`CPCB_API_KEY` is worth the slower registration. WAQI republishes CPCB as US EPA sub-indices, so that path has to invert each index back to a concentration and drops NO2 and SO2 over a window mismatch. For the same hour, Wazirpur came out 163 "Moderate" through WAQI and 231 "Poor" from the bulletin, a whole band apart, on the pollutant setting the index.
+Two of the settings above are worth knowing before a demo. `ASSISTANT_KILL_FILE`
+is the only way to take the assistant down in a hurry, and it works by existing - `touch` it and the
+next question gets a refusal instead of a turn.
+
+`ASSISTANT_SELF_BASE` has to be right or the assistant answers with nothing
+behind it. Its tools read this API over HTTP, so the default assumes something is
+listening on loopback port 8000. On a host where uvicorn terminates TLS itself
+and nothing binds 8000, every tool failed in about a millisecond with
+`ok: false` and the assistant kept talking - a grounded assistant with no ground
+under it, which looks exactly like a working one until you read the tool chips.
+Set it to whatever URL actually serves the API.
 
 ## API
 
