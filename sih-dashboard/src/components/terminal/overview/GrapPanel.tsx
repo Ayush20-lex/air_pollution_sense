@@ -138,20 +138,35 @@ export function GrapPanel() {
               assume it decided the stage. */}
           <div className="flex gap-6">
             <div>
-              <Label>City AQI · Sets The Stage</Label>
+              {/* "Forecast" on the figure, not only in the section subtitle.
+                  Every other city number on this site is a measurement, and
+                  this one is the mean across stations of each station's worst
+                  24-hour window over the next 72 hours - which is the quantity
+                  CAQM invokes GRAP on, and is nothing like the live mesh mean.
+                  A reader comparing 166 here against the measured figure
+                  elsewhere was being invited to conclude one of them was
+                  wrong. */}
+              <Label>Forecast City AQI · Sets The Stage</Label>
               <div className="font-mono text-2xl font-bold text-term-ink">{data.city_aqi}</div>
-              <div className="font-mono text-[10px] text-term-outline">
-                {data.city_pm25_ugm3.toFixed(1)} µg/m³ · {data.window_hours}h mean
+              <div className="font-mono text-[10px] leading-tight text-term-outline">
+                peak {data.window_hours}h mean in the next {data.horizon_hours}h
+                <br />
+                {data.city_pm25_ugm3.toFixed(1)} µg/m³ · not a current reading
               </div>
             </div>
             {data.hotspot ? (
               <div>
-                <Label>Worst Station · Not Stage-Setting</Label>
+                <Label>Forecast Worst Station · Not Stage-Setting</Label>
                 <div className="font-mono text-2xl font-bold text-term-ink-variant">
                   {data.hotspot.aqi}
                 </div>
-                <div className="font-mono text-[10px] text-term-outline">
-                  station {data.hotspot.station_id} · {data.hotspot.pm25_ugm3.toFixed(1)} µg/m³
+                {/* The name, where the backend could resolve one. It used to
+                    read "station 17", which is a catalogue location_id: it is
+                    R K Puram, and an id is not an answer to "where". */}
+                <div className="font-mono text-[10px] leading-tight text-term-outline">
+                  {data.hotspot.station ?? `station ${data.hotspot.station_id}`}
+                  <br />
+                  {data.hotspot.pm25_ugm3.toFixed(1)} µg/m³ peak {data.window_hours}h mean
                 </div>
               </div>
             ) : null}
@@ -201,7 +216,9 @@ export function GrapPanel() {
             {/* The basis matters: "stations" is the real geometry, "grid_p95" is
                 the fallback when it is unavailable, and the two are not equally
                 trustworthy. */}
-            Basis: {data.basis === 'stations' ? 'station 24-hour means' : `grid percentile (${data.basis})`}
+            Basis: {data.basis === 'stations'
+              ? `forecast station ${data.window_hours}-hour means over ${data.horizon_hours}h`
+              : `forecast grid percentile (${data.basis})`}
           </Label>
           <Label className={cn(status === 'offline' && 'text-amber-700 dark:text-amber-400')}>
             {status === 'offline' ? 'Policy engine unreachable — showing the last stage received' : 'Live from the policy engine'}

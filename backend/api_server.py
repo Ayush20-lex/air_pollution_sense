@@ -1030,18 +1030,17 @@ def _km(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float:
 def _operator(full_name: str) -> str | None:
     """The agency from a catalogue name: "Pusa, Delhi - IMD" -> "IMD".
 
-    CPCB's own naming puts the operator after a dash, and it is the only thing
-    that distinguishes two instruments at one address. WAQI's names carry no
-    dash and so no operator, which is why this returns None rather than
-    guessing one.
+    CPCB's naming puts the operator after a dash, and it is the only thing that
+    distinguishes two instruments at one address. WAQI's names carry no dash and
+    so no operator, which is why this returns None rather than guessing one.
+
+    Borrows `station_registry`'s regex and its list of agencies that actually
+    exist rather than carrying a second rule: a first version here accepted any
+    short upper-case tail, which would have read the "UP" in a Noida address as
+    an operating authority.
     """
-    if " - " not in (full_name or ""):
-        return None
-    tail = full_name.rsplit(" - ", 1)[1].strip()
-    # A tail that is just more address is not an operator. Agency codes here
-    # are short and upper-case - IMD, DPCC, IITM, CPCB, NSIT - so anything
-    # long or sentence-cased is left alone.
-    return tail if tail and len(tail) <= 12 and tail.upper() == tail else None
+    m = station_registry._AGENCY_RE.search(full_name or "")
+    return m.group(1) if m and m.group(1) in station_registry.KNOWN_AGENCIES else None
 
 
 def _name_collisions(stations: list[dict[str, Any]]) -> int:
@@ -1828,6 +1827,13 @@ async def policy_grap():
 
     k = int(np.argmax(worst_24h))
     hotspot_pm25 = float(worst_24h[k])
+    # "station 17" is a catalogue location_id, which is meaningless on a public
+    # panel and not much better in an assistant answer. It is R K Puram.
+    hotspot_id = names[k] if names else None
+    try:
+        hotspot_name = station_registry.names().get(int(hotspot_id)) if hotspot_id else None
+    except (TypeError, ValueError):  # a non-numeric id from some other basis
+        hotspot_name = None
 
     response = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -1838,7 +1844,8 @@ async def policy_grap():
         "city_aqi": city_aqi,
         "grap": grap,
         "hotspot": {
-            "station_id": names[k] if names else None,
+            "station_id": hotspot_id,
+            "station": hotspot_name,
             "pm25_ugm3": round(hotspot_pm25, 2),
             "aqi": calculate_indian_aqi_pm25(hotspot_pm25),
         },

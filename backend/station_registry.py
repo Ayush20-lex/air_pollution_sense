@@ -195,6 +195,21 @@ def _catalogue() -> dict[int, dict[str, Any]]:
 KEEP_DAYS = 400
 
 
+@lru_cache(maxsize=1)
+def names() -> dict[int, str]:
+    """`location_id` -> display label, for callers that hold an id and need a name.
+
+    The GRAP engine works in forecaster indices and reported its hotspot as
+    "station 17", which is the catalogue's location_id and means nothing to a
+    reader. It is R K Puram. Everything needed to say so was already here; it
+    just had no accessor that did not also build the whole mesh.
+
+    Cached because `_catalogue` re-reads a 9,000-line JSON file on every call
+    and this is wanted on an endpoint that has no other reason to touch it.
+    """
+    return {sid: _display_name(meta["name"]) for sid, meta in _catalogue().items()}
+
+
 def _observations(
     season: int, pollutants: tuple[str, ...], end: pd.Timestamp | None = None
 ) -> dict[str, pd.DataFrame]:

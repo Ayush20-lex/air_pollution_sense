@@ -33,7 +33,9 @@ export type GrapPayload = {
     actions: string[];
   };
   /** The worst single station. Reported, never stage-setting. */
-  hotspot: { station_id: string; pm25_ugm3: number; aqi: number } | null;
+  /** `station` is the readable label; `station_id` is the catalogue id it
+   *  came from, kept so a figure stays traceable to a listing. */
+  hotspot: { station_id: string; station?: string | null; pm25_ugm3: number; aqi: number } | null;
   stations_considered: number;
   is_synthetic: boolean;
   /** The backend's own note on how the stage was reached. */
