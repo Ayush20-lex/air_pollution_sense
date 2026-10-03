@@ -56,6 +56,24 @@ export type GfsField = {
   rows_floored?: number;
 };
 
+/** One hour, over every grid cell. Field keys differ by source, so read them
+ *  defensively - the committed extract has no humidity, boundary layer or
+ *  radiation, and its precipitation is a 3-hour bucket under another name. */
+export type MetCell = {
+  lat: number;
+  lon: number;
+  temperature_c?: number | null;
+  u_wind_ms?: number | null;
+  v_wind_ms?: number | null;
+  relative_humidity_pct?: number | null;
+  boundary_layer_height_m?: number | null;
+  shortwave_radiation_wm2?: number | null;
+  precipitation_mm_1h?: number | null;
+  precipitation_mm_3h?: number | null;
+};
+
+export type MetStep = { valid_time: string; lead_hours: number; cells: MetCell[] };
+
 export type GfsPayload = {
   source: string;
   export: string;
@@ -70,6 +88,9 @@ export type GfsPayload = {
   fields: Record<string, GfsField>;
   fields_absent: string[];
   freshness: GfsFreshness;
+  series?: MetStep[];
+  /** Why a count differs from the others; see openmeteo_live.PBL_FLOOR_M. */
+  quality_note?: string;
 };
 
 /** Live first, the committed extract second. Both return the same shape. */
