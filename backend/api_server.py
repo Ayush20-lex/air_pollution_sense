@@ -1027,6 +1027,70 @@ def _km(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float:
     return float(np.hypot((a_lat - b_lat) * 111.0, (a_lon - b_lon) * 97.5))
 
 
+def _operator(full_name: str) -> str | None:
+    """The agency from a catalogue name: "Pusa, Delhi - IMD" -> "IMD".
+
+    CPCB's own naming puts the operator after a dash, and it is the only thing
+    that distinguishes two instruments at one address. WAQI's names carry no
+    dash and so no operator, which is why this returns None rather than
+    guessing one.
+    """
+    if " - " not in (full_name or ""):
+        return None
+    tail = full_name.rsplit(" - ", 1)[1].strip()
+    # A tail that is just more address is not an operator. Agency codes here
+    # are short and upper-case - IMD, DPCC, IITM, CPCB, NSIT - so anything
+    # long or sentence-cased is left alone.
+    return tail if tail and len(tail) <= 12 and tail.upper() == tail else None
+
+
+def _name_collisions(stations: list[dict[str, Any]]) -> int:
+    """Qualify display names that more than one station answers to, in place.
+
+    Three stations were all labelled "Pusa" and read 297, 108 and 111. They are
+    genuinely three instruments - IMD and DPCC share one address to within a
+    metre, and WAQI publishes a third site 2.5 km away - so none of them is
+    wrong and none is a duplicate to be dropped. But the station picker listed
+    "Pusa" three times, and the only available reading of that is that the
+    numbers cannot be trusted. Punjabi Bagh, Mundka and Lodhi Road had the same
+    problem.
+
+    `_short_name` causes it by design: it trims "Pusa, Delhi - IMD" down to the
+    locality, which is the right label right up until two localities match. So
+    the trimming stays and the operator is put back only where it is needed to
+    tell two stations apart - the common case keeps a clean name.
+
+    Returns how many stations were qualified, for the log.
+    """
+    from collections import Counter
+
+    seen = Counter(st.get("name") for st in stations)
+    clashing = {name for name, n in seen.items() if n > 1 and name}
+    if not clashing:
+        return 0
+
+    qualified = 0
+    for st in stations:
+        if st.get("name") not in clashing:
+            continue
+        who = _operator(st.get("full_name") or "")
+        if who:
+            st["name"] = f"{st['name']} · {who}"
+            qualified += 1
+
+    # One station in a clashing group usually has no operator in its name, and
+    # with the others qualified it is now unique on its own. Where that is not
+    # true - two unqualified stations sharing a locality - the id is the only
+    # thing left that differs, and an ugly label beats two identical ones.
+    still = Counter(st.get("name") for st in stations)
+    for st in stations:
+        if still[st.get("name")] > 1:
+            st["name"] = f"{st['name']} · {st.get('id')}"
+            qualified += 1
+
+    return qualified
+
+
 def _blend(live: dict[str, Any], archive: dict[str, Any] | None) -> dict[str, Any]:
     """Live stations, filled out with archived ones where nothing live exists.
 
@@ -1096,6 +1160,7 @@ def _blend(live: dict[str, Any], archive: dict[str, Any] | None) -> dict[str, An
         for s in live["stations"]
     ]
     if not archive or not archive.get("stations"):
+        _name_collisions(out)
         return {**live, "stations": out, "supplemented": 0, "supplement_as_of": None}
 
     fixes = [(s["lat"], s["lon"]) for s in live["stations"]]
@@ -1107,6 +1172,13 @@ def _blend(live: dict[str, Any], archive: dict[str, Any] | None) -> dict[str, An
         out.append({**s, "freshness": "archive", "as_of": archive["as_of"],
                     "history_kind": "hourly_readings"})
         added += 1
+
+    # Last, so it sees every station from both feeds at once. The collisions
+    # here are mostly across the two - a WAQI site and a catalogue site sharing
+    # a locality - and neither feed can spot that on its own.
+    qualified = _name_collisions(out)
+    if qualified:
+        _log.info("qualified %d colliding station names", qualified)
 
     return {
         **live,
