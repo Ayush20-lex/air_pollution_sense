@@ -1,7 +1,7 @@
 """
 Phase C, step 4 - does the aerosol-PBL feedback improve the forecast?
 
-The blend baseline scores RMSE 61.62 ug/m3 over the held-out window. This asks
+The blend baseline scores RMSE 61.12 ug/m3 over the held-out window. This asks
 one question about `backend.coupled_feedback`: if the PM2.5 response is turned
 on, so that a shallower boundary layer raises surface concentration, does the
 forecast get better or worse?

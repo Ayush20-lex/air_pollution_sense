@@ -5,12 +5,12 @@
  * These were hand-written once - `aqi: 142` was a literal, at a real
  * coordinate, which is the one combination a viewer cannot detect. They are now
  * a frozen snapshot of the archive: the same CPCB National AQI that
- * /api/v1/stations serves, recorded at 2026-09-24T16:00:00Z, the hour the console
+ * /api/v1/stations serves, recorded at 2026-10-02T07:00:00Z, the hour the console
  * replays. Every figure here was measured at the station it sits on.
  *
  * Two consequences worth knowing.
  *
- * The numbers are severe - a mean of 125, ranging 84 to 196 - because late
+ * The numbers are severe - a mean of 185, ranging 87 to 239 - because late
  * December in Delhi is severe. The old values averaged 142, so an unreachable
  * backend used to drop the mesh from "Severe" to "Moderate" and the page
  * changed its story about the city rather than about its own connectivity.
@@ -58,24 +58,23 @@ export type Station = {
 };
 
 export const STATIONS: Station[] = [
-  { id: 'wazirpur', name: 'Wazirpur', zone: 'North', agency: 'DPCC', lat: 28.6997, lng: 77.165, aqi: 192, dominant: 'PM10', source: 'Industrial', delta: -11.1, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
-  { id: 'bawana', name: 'Bawana', zone: 'North', agency: 'DPCC', lat: 28.7762, lng: 77.051, aqi: 162, dominant: 'PM2.5', source: 'Industrial', delta: -18.7, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
-  { id: 'jahangirpuri', name: 'Jahangirpuri', zone: 'North', agency: 'DPCC', lat: 28.7328, lng: 77.1707, aqi: 141, dominant: 'PM10', source: 'Industrial', delta: -19.2, sensors: 4, uptime: '91.7%', status: 'ONLINE' },
-  { id: 'dtu', name: 'DTU', zone: 'North', agency: 'CPCB', lat: 28.75, lng: 77.1112, aqi: 136, dominant: 'PM2.5', source: 'Construction', delta: -11.6, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
-  { id: 'shadipur', name: 'Shadipur', zone: 'West', agency: 'CPCB', lat: 28.6514, lng: 77.158, aqi: 127, dominant: 'NO2', source: 'Vehicular', delta: -10.8, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
-  { id: 'nsit-dwarka', name: 'NSIT Dwarka', zone: 'West', agency: 'CPCB', lat: 28.6094, lng: 77.0329, aqi: 120, dominant: 'O3', source: 'Vehicular', delta: -9.5, sensors: 4, uptime: '87.5%', status: 'DEGRADED' },
-  { id: 'crri-mathura-road', name: 'CRRI Mathura Road', zone: 'Central', agency: 'IMD', lat: 28.5512, lng: 77.2735, aqi: 84, dominant: 'PM10', source: 'Vehicular', delta: -42.4, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
-  { id: 'nehru-nagar', name: 'Nehru Nagar', zone: 'Central', agency: 'DPCC', lat: 28.5677, lng: 77.25, aqi: 153, dominant: 'PM10', source: 'Vehicular', delta: -34.6, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
-  { id: 'pusa', name: 'Pusa', zone: 'Central', agency: 'DPCC', lat: 28.6394, lng: 77.1462, aqi: 111, dominant: 'PM10', source: 'Construction', delta: -25.5, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
-  { id: 'lodhi-road', name: 'Lodhi Road', zone: 'Central', agency: 'IMD', lat: 28.5918, lng: 77.2273, aqi: 110, dominant: 'PM10', source: 'Vehicular', delta: -26.2, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
-  { id: 'okhla-phase-2', name: 'Okhla Phase-2', zone: 'East', agency: 'DPCC', lat: 28.5307, lng: 77.2712, aqi: 123, dominant: 'PM10', source: 'Industrial', delta: -32.7, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
-  { id: 'anand-vihar', name: 'Anand Vihar', zone: 'East', agency: 'DPCC', lat: 28.6503, lng: 77.3152, aqi: 104, dominant: 'PM10', source: 'Industrial + vehicular', delta: -28.1, sensors: 4, uptime: '100.0%', status: 'ONLINE', master: true },
-  { id: 'teri-gram', name: 'TERI Gram Gwal Pahari', zone: 'NCR Outer', agency: 'IMD', lat: 28.4211, lng: 77.1466, aqi: 97, dominant: 'PM2.5', source: 'Vehicular NH48', delta: -27.0, sensors: 4, uptime: '95.8%', status: 'ONLINE' },
-  { id: 'noida-62', name: 'Noida Sector-62', zone: 'NCR Outer', agency: 'IMD', lat: 28.6245, lng: 77.364, aqi: 105, dominant: 'PM10', source: 'Construction', delta: -34.8, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
-  { id: 'noida-125', name: 'Noida Sector-125', zone: 'NCR Outer', agency: 'UPPCB', lat: 28.545, lng: 77.325, aqi: 196, dominant: 'PM10', source: 'Construction', delta: -32.2, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
-  { id: 'sanjay-nagar', name: 'Sanjay Nagar', zone: 'NCR Outer', agency: 'UPPCB', lat: 28.683, lng: 77.453, aqi: 113, dominant: 'PM10', source: 'Industrial', delta: -25.7, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
-  { id: 'vasundhara', name: 'Vasundhara', zone: 'NCR Outer', agency: 'UPPCB', lat: 28.66, lng: 77.37, aqi: 85, dominant: 'PM2.5', source: 'Industrial', delta: -44.7, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
-  { id: 'indirapuram', name: 'Indirapuram', zone: 'NCR Outer', agency: 'UPPCB', lat: 28.642, lng: 77.371, aqi: 97, dominant: 'PM10', source: 'Vehicular', delta: -42.1, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'wazirpur', name: 'Wazirpur', zone: 'North', agency: 'DPCC', lat: 28.6997, lng: 77.165, aqi: 181, dominant: 'PM10', source: 'Industrial', delta: 1.5, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'bawana', name: 'Bawana', zone: 'North', agency: 'DPCC', lat: 28.7762, lng: 77.051, aqi: 239, dominant: 'PM2.5', source: 'Industrial', delta: 8.8, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'jahangirpuri', name: 'Jahangirpuri', zone: 'North', agency: 'DPCC', lat: 28.7328, lng: 77.1707, aqi: 237, dominant: 'PM10', source: 'Industrial', delta: -0.2, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'dtu', name: 'DTU', zone: 'North', agency: 'CPCB', lat: 28.75, lng: 77.1112, aqi: 174, dominant: 'PM2.5', source: 'Construction', delta: -2.7, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'shadipur', name: 'Shadipur', zone: 'West', agency: 'CPCB', lat: 28.6514, lng: 77.158, aqi: 143, dominant: 'PM10', source: 'Vehicular', delta: -13.8, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'nsit-dwarka', name: 'NSIT Dwarka', zone: 'West', agency: 'CPCB', lat: 28.6094, lng: 77.0329, aqi: 173, dominant: 'PM10', source: 'Vehicular', delta: 39.9, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'crri-mathura-road', name: 'CRRI Mathura Road', zone: 'Central', agency: 'IMD', lat: 28.5512, lng: 77.2735, aqi: 218, dominant: 'PM10', source: 'Vehicular', delta: 5.5, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'nehru-nagar', name: 'Nehru Nagar', zone: 'Central', agency: 'DPCC', lat: 28.5677, lng: 77.25, aqi: 134, dominant: 'PM10', source: 'Vehicular', delta: -8.8, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'pusa', name: 'Pusa', zone: 'Central', agency: 'DPCC', lat: 28.6394, lng: 77.1462, aqi: 234, dominant: 'PM10', source: 'Construction', delta: -2.3, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'lodhi-road', name: 'Lodhi Road', zone: 'Central', agency: 'IMD', lat: 28.5918, lng: 77.2273, aqi: 163, dominant: 'PM10', source: 'Vehicular', delta: 1.5, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'okhla-phase-2', name: 'Okhla Phase-2', zone: 'East', agency: 'DPCC', lat: 28.5307, lng: 77.2712, aqi: 186, dominant: 'PM10', source: 'Industrial', delta: -8.9, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'anand-vihar', name: 'Anand Vihar', zone: 'East', agency: 'DPCC', lat: 28.6503, lng: 77.3152, aqi: 87, dominant: 'PM2.5', source: 'Industrial + vehicular', delta: -2.3, sensors: 4, uptime: '100.0%', status: 'ONLINE', master: true },
+  { id: 'teri-gram', name: 'TERI Gram Gwal Pahari', zone: 'NCR Outer', agency: 'IMD', lat: 28.4211, lng: 77.1466, aqi: 174, dominant: 'PM10', source: 'Vehicular NH48', delta: -0.9, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'noida-62', name: 'Noida Sector-62', zone: 'NCR Outer', agency: 'IMD', lat: 28.6245, lng: 77.364, aqi: 208, dominant: 'PM2.5', source: 'Construction', delta: 15.9, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'sanjay-nagar', name: 'Sanjay Nagar', zone: 'NCR Outer', agency: 'UPPCB', lat: 28.683, lng: 77.453, aqi: 225, dominant: 'PM2.5', source: 'Industrial', delta: 5.7, sensors: 4, uptime: '87.5%', status: 'DEGRADED' },
+  { id: 'vasundhara', name: 'Vasundhara', zone: 'NCR Outer', agency: 'UPPCB', lat: 28.66, lng: 77.37, aqi: 226, dominant: 'PM10', source: 'Industrial', delta: 2.4, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
+  { id: 'indirapuram', name: 'Indirapuram', zone: 'NCR Outer', agency: 'UPPCB', lat: 28.642, lng: 77.371, aqi: 152, dominant: 'PM2.5', source: 'Vehicular', delta: -1.6, sensors: 4, uptime: '100.0%', status: 'ONLINE' },
 ];
 
 export const MASTER_STATION: Station =

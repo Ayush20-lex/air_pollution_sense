@@ -23,7 +23,7 @@ AirLytics is built the other way around. Every figure is traceable to a station 
 | | |
 |---|---|
 | **Live station mesh** | 68 CPCB stations across Delhi NCR, each indexed independently under the CPCB National AQI (2014), 59 of them eligible under its rules. The live feed covers whichever are reporting this hour; the rest come from the archive, and each station says which it is. No interpolation between neighbours. |
-| **72-hour forecast** | Validated blend baseline at **61.62 µg/m³ RMSE**, 27% better than raw CAMS, scored over 3,993,801 comparisons across a full annual cycle. |
+| **72-hour forecast** | Validated blend baseline at **61.12 µg/m³ RMSE**, 27% better than raw CAMS, scored over 4,069,348 comparisons across a full annual cycle. |
 | **Stubble fire corridor** | NASA VIIRS fire pixels clustered upwind, with transport alignment against the forecast wind field and an earliest-arrival estimate. |
 | **GRAP policy engine** | Which stage the readings imply, and which restrictions follow from it. |
 | **Inversion alerts** | Night-time boundary layer collapse, which is why the air gets worse after dark. |
@@ -70,18 +70,18 @@ Two tools for one question, the spread rather than a city average that would hid
 
 ## Validated accuracy
 
-Scored by `ml_pipeline/scripts/14_baselines.py` over December 2025 to September 2026, all leads +1 to +72h:
+Scored by `ml_pipeline/scripts/14_baselines.py` over December 2025 to October 2026, all leads +1 to +72h. Re-scored on every archive refresh, so these move: the blend was 62.23 when the archive reached 17 September and 61.12 at 27 September. Part of the drop is a longer, cleaner window rather than a better method.
 
 | Method | RMSE µg/m³ | MAE | Bias |
 |---|---|---|---|
-| **blend (diurnal + bias-corrected CAMS)** | **61.62** | 36.84 | +3.24 |
-| diurnal persistence | 66.54 | 33.54 | +0.19 |
-| climatology | 80.94 | 50.79 | −8.56 |
-| persistence | 81.84 | 40.80 | −1.99 |
-| bias-corrected CAMS | 82.49 | 54.34 | +6.81 |
-| raw CAMS | 84.67 | 56.28 | +13.12 |
+| **blend (diurnal + bias-corrected CAMS)** | **61.12** | 36.44 | +3.21 |
+| diurnal persistence | 66.04 | 33.28 | +0.12 |
+| climatology | 80.36 | 50.52 | −7.78 |
+| persistence | 81.17 | 40.49 | −2.02 |
+| bias-corrected CAMS | 81.75 | 53.68 | +6.85 |
+| raw CAMS | 83.91 | 55.61 | +13.11 |
 
-Error is flat across lead time (60.9 to 62.6 µg/m³ from +1h to +72h), which is the point of blending a diurnal parent with a corrected model field rather than trusting either alone.
+Error is flat across lead time (60.3 to 62.1 µg/m³ from +1h to +72h), which is the point of blending a diurnal parent with a corrected model field rather than trusting either alone.
 
 ## Quick start
 

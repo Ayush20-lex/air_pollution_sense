@@ -21,8 +21,8 @@ without the staleness.
 What it is not
 --------------
 A forecast input. `gfs_reader` refuses to feed `baseline_forecaster` or
-`channel_spec` because the blend baseline is validated at 61.62 ug/m3 over
-3,993,801 scored comparisons, and a new field would invalidate that number with
+`channel_spec` because the blend baseline is validated at 61.12 ug/m3 over
+4,069,348 scored comparisons, and a new field would invalidate that number with
 no time to re-score it. The source being live changes nothing about that
 reasoning, so this keeps the same discipline: a read-only side channel, reported
 and drawn, never fed back.
