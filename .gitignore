@@ -167,3 +167,5 @@ backups/
 
 # Design-hook local state - per-machine, not project code
 .impeccable/
+skills_list.txt
+*.metadata.json
