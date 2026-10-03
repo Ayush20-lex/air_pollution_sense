@@ -103,8 +103,16 @@ export function FireCorridorSection() {
       {episode && (
         /* Said at the top, not in a footnote: everything below this line
            describes November 2025, and a reader who scrolled into the middle
-           of it must not mistake it for this afternoon. */
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 font-mono text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+           of it must not mistake it for this afternoon.
+
+           Sticky, because stating it once at the top did not achieve that. The
+           section runs to two maps and a cluster table, and measured from the
+           banner's own position it had scrolled 960px out of view by the time a
+           reader reached the table - every figure there is dated 2025, but the
+           sentence saying why had left the screen. It now parks under the page
+           header (62px, z-40) for as long as the episode is on screen, so the
+           claim travels with the data it qualifies. */
+        <div className="sticky top-[62px] z-30 rounded-lg border border-amber-500/40 bg-amber-500/95 px-3 py-2 font-mono text-[11px] leading-relaxed text-amber-950 shadow-sm backdrop-blur dark:bg-amber-950/95 dark:text-amber-200">
           PAST EPISODE · 3&ndash;5 November 2025. Real VIIRS detections and the wind the
           archive recorded for those hours, fetched through the same endpoint as the live
           window. These are not current conditions.
