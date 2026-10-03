@@ -75,11 +75,11 @@ function Figure({
   tone?: 'warn' | 'calm';
 }) {
   return (
-    <div className="min-w-0 flex-1 rounded-xl border border-term-outline-variant/60 bg-term-surface-low p-3">
+    <div className="min-w-0 rounded-xl border border-term-outline-variant/60 bg-term-surface-low p-3">
       <Label className="block">{label}</Label>
       <div
         className={cn(
-          'mt-0.5 font-display text-lg font-extrabold leading-none tabular-nums text-term-ink',
+          'mt-0.5 font-display text-base font-extrabold leading-none tabular-nums text-term-ink sm:text-lg',
           tone === 'warn' && 'text-amber-600 dark:text-amber-400',
           tone === 'calm' && 'text-term-primary',
         )}
@@ -156,13 +156,21 @@ export function ArrivalStrip({ data }: { data: FireCorridor }) {
         </p>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      {/* A grid, not a flex row. Four children with `flex-1 min-w-0` share the
+          width instead of wrapping, so on a 360px phone each card got about
+          60px: "km/h" was clipped mid-word and every caption rendered one word
+          per line. Two columns on a phone and four from lg gives each cell a
+          width it can actually set type in. */}
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Figure
           label="Wind"
           value={
             t.wind ? (
-              <span className="flex items-center gap-1.5">
-                <Wind className="size-4 text-term-secondary" />
+              /* The figure and its unit in one non-breaking group: the unit
+                 was a separate flex item and broke away, leaving "NNW 19" on
+                 one line and a clipped "km/h" on the next. */
+              <span className="flex items-center gap-1.5 whitespace-nowrap">
+                <Wind className="size-3.5 shrink-0 text-term-secondary sm:size-4" />
                 {t.wind.fromCompass} {Math.round(t.wind.speedKmh)}
                 <span className="font-mono text-[10px] font-normal">km/h</span>
               </span>
@@ -174,7 +182,11 @@ export function ArrivalStrip({ data }: { data: FireCorridor }) {
         />
         <Figure
           label="Earliest arrival"
-          value={eta != null ? `+${Math.round(eta)} h` : '—'}
+          value={
+            eta != null
+              ? <span className="whitespace-nowrap">{`+${Math.round(eta)} h`}</span>
+              : '—'
+          }
           sub={
             eta != null
               ? istClock(arrivesAt ?? null) ?? 'from the window origin'
