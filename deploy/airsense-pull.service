@@ -1,0 +1,35 @@
+[Unit]
+# Fast-forward the box to origin/main and restart the API if anything moved.
+#
+# The other half of .github/workflows/refresh-archive.yml: that opens a PR with
+# a refreshed archive, and this is what makes merging it ship. Without it the
+# refresh is still manual, just manual over ssh instead of manual in a terminal.
+#
+# The logic lives in deploy/airsense-pull.sh, not inline here, because systemd
+# expands `$` in ExecStart= and a command substitution written in a unit file is
+# not one. Read that script for the safety argument.
+#
+# Install, from the repository on the box:
+#   sudo cp deploy/airsense-pull.service deploy/airsense-pull.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now airsense-pull.timer
+#
+# Check:  systemctl list-timers airsense-pull.timer
+#         sudo journalctl -u airsense-pull.service -n 50
+# Try it: sudo bash deploy/airsense-pull.sh --dry-run
+# Stop:   sudo systemctl disable --now airsense-pull.timer
+Description=Fast-forward AirLytics to origin/main and restart if it moved
+Documentation=file:///home/ubuntu/air_pollution_sense/deploy/airsense-pull.sh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# The checkout is root-owned on this box, which is why this runs as root rather
+# than as ubuntu. See the deploy notes.
+ExecStart=/usr/bin/bash /home/ubuntu/air_pollution_sense/deploy/airsense-pull.sh
+# A failed fetch or a dirty tree should be visible, not retried into a loop.
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

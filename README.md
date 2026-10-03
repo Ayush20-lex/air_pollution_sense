@@ -192,6 +192,16 @@ python ml_pipeline/scripts/19_refresh_archive.py
 
 It fetches only the missing window, merges without losing anything held, re-scores the baselines, refits the CAMS correction, rewrites the published RMSE in source, regenerates the dashboard's offline snapshot, and retunes the synthetic fallback. Those last steps are the reason it is a script and not a note: each one is a frozen view of the old window, and forgetting any of them leaves the product claiming something about data it no longer serves.
 
+It runs itself on a schedule, because nobody remembers to. `.github/workflows/refresh-archive.yml` fires at 02:00 UTC daily and opens a pull request with the result; `deploy/airsense-pull.{sh,service,timer}` fast-forwards the box to `main` overnight and restarts the API only if anything moved, so merging the PR is what ships it.
+
+The refresh opens a PR rather than pushing to `main` on purpose. Step 6 rewrites
+the published RMSE, and that figure is quoted here, in several backend
+docstrings and in the deck - it was 62.23 before the archive reached
+27 September. A scheduled job should not move a headline accuracy claim without
+somebody seeing the diff. The workflow needs `OPENAQ_API_KEY` in the
+repository's Actions secrets; without it the job fails loudly rather than
+committing a no-op.
+
 About 36 to 48 hours of lag remains and cannot be closed from here. That is CPCB's own publication delay through OpenAQ. Live readings cover the present.
 
 ## Tests

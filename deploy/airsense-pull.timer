@@ -1,0 +1,17 @@
+[Unit]
+Description=Daily fast-forward of AirLytics to origin/main
+Documentation=file:///home/ubuntu/air_pollution_sense/deploy/airsense-pull.service
+
+[Timer]
+# 22:00 UTC = 03:30 IST. Deliberately once a day and deliberately overnight:
+# what this ships is a day-granular archive refresh, and the restart it
+# triggers costs a ~17s cold first request. A quarter-hourly timer would buy
+# nothing and would eventually fire in the middle of a demo.
+OnCalendar=*-*-* 22:00:00 UTC
+# A box that was off at 22:00 still catches up, rather than waiting a day.
+Persistent=true
+# So several machines, or a reboot storm, do not all fetch on the same second.
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

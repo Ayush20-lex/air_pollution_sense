@@ -1,0 +1,122 @@
+# Bring the served archive up to date on a schedule, instead of by hand.
+#
+# The service replays a real window, so "how current is it" is a data question
+# rather than a code one, and nothing about it changes until somebody runs
+# ml_pipeline/scripts/19_refresh_archive.py. Nobody did for nine days, and the
+# dashboard spent that time replaying 29 September while claiming to describe
+# now - which is not visible unless you go looking for the replay origin.
+#
+# Why this opens a pull request instead of pushing to main
+# --------------------------------------------------------
+# Step 6 of the refresh rewrites the published RMSE in
+# backend/baseline_forecaster.py. That figure - 61.62 ug/m3 at the time of
+# writing - is quoted in the README, in eight source files and in the SIH deck.
+# It moves when the scored window grows: it was 62.23 before the archive reached
+# 27 September. An unattended job that silently changes a headline accuracy
+# claim in a competition submission is not something to set up, so the data
+# lands in a branch with the diff attached and a human merges it.
+#
+# To let it push straight to main instead, replace the "Open a pull request"
+# step with a push to main. The schedule and everything above it stay the same.
+#
+# One manual step before this can run: add OPENAQ_API_KEY to the repository
+# secrets (Settings -> Secrets and variables -> Actions). Without it the fetch
+# is skipped and the job reports that rather than committing a no-op.
+name: Refresh archive
+
+on:
+  schedule:
+    # 02:00 UTC = 07:30 IST, so a morning demo starts on data fetched overnight.
+    # OpenAQ publishes 36-48h behind CPCB regardless, so the hour matters less
+    # than the day; this one only has to miss everybody's working hours.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+# Two refreshes merging into the same season at once would interleave their
+# writes. One at a time, and a scheduled run waits rather than cancelling a
+# manual one somebody is watching.
+concurrency:
+  group: refresh-archive
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Only what the refresh chain actually imports. torch and the rest of
+      # backend/requirements.txt are not needed to fetch, merge and score.
+      - name: Install dependencies
+        run: pip install --quiet numpy pandas pyarrow requests python-dotenv
+
+      - name: Check the key is present
+        env:
+          OPENAQ_API_KEY: ${{ secrets.OPENAQ_API_KEY }}
+        run: |
+          if [ -z "$OPENAQ_API_KEY" ]; then
+            echo "::error::OPENAQ_API_KEY is not set in repository secrets, so there is nothing to fetch with. Add it under Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+      - name: How far behind is the archive
+        env:
+          OPENAQ_API_KEY: ${{ secrets.OPENAQ_API_KEY }}
+        run: python -u ml_pipeline/scripts/19_refresh_archive.py --dry-run
+
+      - name: Refresh
+        env:
+          OPENAQ_API_KEY: ${{ secrets.OPENAQ_API_KEY }}
+        run: python -u ml_pipeline/scripts/19_refresh_archive.py
+
+      # `git add -u` on purpose: it stages modifications to files already
+      # tracked and adds nothing new. ml_pipeline/data/raw/observations/ is
+      # gitignored, and the archive lives there as files committed before that
+      # rule - so the refresh updates tracked parquet in place and must not be
+      # allowed to sweep in the untracked fetch scratch beside them.
+      - name: Stage tracked changes only
+        id: stage
+        run: |
+          git add -u
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing moved - the archive was already current."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --cached --stat | tail -20
+          fi
+
+      - name: Open a pull request
+        if: steps.stage.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH="archive-refresh/$(date -u +%Y-%m-%d)"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -q -m "chore(data): refresh the served archive to $(date -u +%Y-%m-%d)" -m "Ran ml_pipeline/scripts/19_refresh_archive.py on a schedule. Review the published RMSE in backend/baseline_forecaster.py before merging - it is rewritten from the newly scored window and is quoted in the README and the deck."
+          git push -q --force-with-lease origin "$BRANCH"
+
+          # Reuse today's PR if a manual run already opened one.
+          if ! gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
+            gh pr create \
+              --title "Refresh the served archive ($(date -u +%Y-%m-%d))" \
+              --body "Scheduled run of \`ml_pipeline/scripts/19_refresh_archive.py\`.
+
+          **Check before merging:** the published RMSE in \`backend/baseline_forecaster.py\` is rewritten from the newly scored window. It is quoted in the README, in several backend docstrings and in the SIH deck, so if it moved, those need updating in the same PR.
+
+          Merging is what ships it: the box fast-forwards to \`main\` on its own timer." \
+              --base main --head "$BRANCH"
+          fi
