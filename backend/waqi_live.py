@@ -48,11 +48,14 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import requests
+
+import log_safety
 
 logger = logging.getLogger("waqi_live")
 
@@ -70,11 +73,36 @@ TIMEOUT = 20
 #: and working.
 CACHE_TTL_S = 300
 
+#: How long a mesh past its TTL is still served while a fresh one is built
+#: behind the request.
+#:
+#: The TTL alone was not enough, because nothing refreshes the cache on a
+#: schedule shorter than it. The live-history recorder rebuilds the mesh every
+#: RECORD_EVERY_S = 900s, so for 600 of every 900 seconds the cache was empty
+#: and whoever arrived in that window paid the whole fan-out: /api/v1/stations
+#: measured 8.4s against the deployed box, two thirds of the time, on the one
+#: endpoint the map and the station table both block on.
+#:
+#: Raising the TTL would have served older data; shortening the recorder would
+#: have tripled calls to a free endpoint and tied history sampling to cache
+#: warming, which are not the same concern. Serving the stale build and
+#: replacing it behind the caller costs no extra upstream calls at all and
+#: means no request waits for a rebuild once there is anything to serve.
+#:
+#: An hour, because WAQI republishes hourly: past that the cached mesh is a
+#: whole cycle behind and blocking for a real one is the better answer. The
+#: payload carries its own `as_of`, so a stale mesh is never passed off as
+#: current - it says which hour it is.
+STALE_OK_S = 3600
+
 #: Stations are independent reads, so they go out together. Eight at a time is
 #: polite to a free endpoint and turns fifteen seconds into about two.
 FETCH_WORKERS = 8
 
 _cache: tuple[float, dict | None] | None = None
+
+#: Held by whoever is rebuilding behind a stale read, so only one does.
+_refreshing = threading.Lock()
 
 #: NCR, matching the forecast grid so the two describe the same region.
 BOUNDS = (28.20, 76.80, 28.90, 77.60)   # lat1, lon1, lat2, lon2
@@ -192,7 +220,8 @@ def read_station(uid: int, tok: str) -> dict[str, Any] | None:
     try:
         d = _get(f"/feed/@{uid}/", tok)
     except Exception as exc:  # noqa: BLE001 - one bad station must not stop the mesh
-        logger.info("WAQI station %s unreadable (%s)", uid, exc)
+        # The token is in the query string, so the exception text carries it.
+        logger.info("WAQI station %s unreadable (%s)", uid, log_safety.safe(exc))
         return None
 
     iaqi = d.get("iaqi") or {}
@@ -273,14 +302,53 @@ def _cpcb_index(conc: dict[str, float]) -> tuple[int | None, str | None, dict]:
 def mesh(bounds: tuple[float, float, float, float] | None = None) -> dict | None:
     """Every live NCR station, shaped like the archive registry's payload.
 
-    Returns None when there is no token or nothing usable came back, which the
-    caller treats as an ordinary state and falls back to the archive.
+    Fresh from cache, else the stale one with a rebuild started behind it, else
+    built here and waited for. Returns None when there is no token or nothing
+    usable came back, which the caller treats as an ordinary state and falls
+    back to the archive.
     """
+    hit = _cache
+    if hit is not None:
+        age = time.monotonic() - hit[0]
+        if age < CACHE_TTL_S:
+            return hit[1]
+        # Past the TTL but still worth reading. Hand it over now and replace it
+        # off the request path; `hit[1] is not None` because a failed build is
+        # never cached, so there is nothing stale to serve after one.
+        if age < STALE_OK_S and hit[1] is not None:
+            _refresh_behind(bounds)
+            return hit[1]
+    return _build(bounds)
+
+
+def _refresh_behind(bounds: tuple[float, float, float, float] | None) -> None:
+    """Rebuild the mesh in a thread, leaving the caller with the stale one.
+
+    `acquire(blocking=False)` rather than a boolean flag: whoever takes the lock
+    owns the rebuild and everyone else returns immediately, with no window
+    between testing a flag and setting it in which two threads could both start
+    one. Daemon, so a rebuild in flight never holds up a shutdown.
+    """
+    if not _refreshing.acquire(blocking=False):
+        return
+
+    def run() -> None:
+        try:
+            _build(bounds)
+        except Exception as exc:  # noqa: BLE001 - the cached mesh still stands
+            logger.warning("background mesh refresh failed (%s); serving the cached one",
+                           log_safety.safe(exc))
+        finally:
+            _refreshing.release()
+
+    threading.Thread(target=run, name="waqi-mesh-refresh", daemon=True).start()
+
+
+def _build(bounds: tuple[float, float, float, float] | None = None) -> dict | None:
+    """The fan-out itself: one listing call plus one per station."""
     import aqi_cpcb  # noqa: F401 - imported for its side-effect-free tables
 
     global _cache
-    if _cache is not None and time.monotonic() - _cache[0] < CACHE_TTL_S:
-        return _cache[1]
 
     tok = token()
     if tok is None:
@@ -292,7 +360,8 @@ def mesh(bounds: tuple[float, float, float, float] | None = None) -> dict | None
     try:
         listed = list_stations(tok)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("WAQI station list unavailable (%s); staying on the archive", exc)
+        logger.warning("WAQI station list unavailable (%s); staying on the archive",
+                       log_safety.safe(exc))
         return None
 
     with ThreadPoolExecutor(max_workers=FETCH_WORKERS) as pool:

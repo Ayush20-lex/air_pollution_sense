@@ -56,6 +56,7 @@ from typing import Any
 import requests
 
 import aqi_cpcb
+import log_safety
 
 logger = logging.getLogger("cpcb_live")
 
@@ -266,8 +267,12 @@ def mesh(force: bool = False) -> dict[str, Any] | None:
         records = _records(tok)
     except Exception as exc:  # noqa: BLE001 - the caller has a fallback
         _failed_at = time.monotonic()
+        # `log_safety.safe`, not bare `exc`: requests puts the whole request
+        # URL in its message and the key rides in the query string, so this
+        # line wrote CPCB_API_KEY into journald every two minutes for as long
+        # as data.gov.in was refusing connections.
         logger.warning("CPCB bulletin unavailable (%s); staying on the previous feed"
-                       " and not retrying for %ds", exc, RETRY_AFTER_S)
+                       " and not retrying for %ds", log_safety.safe(exc), RETRY_AFTER_S)
         return None
     _failed_at = 0.0
 
