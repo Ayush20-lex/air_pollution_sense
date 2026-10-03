@@ -1,0 +1,24 @@
+# Line endings for files that are executed rather than read.
+#
+# This repository is developed on Windows and deployed to Linux. A shell script
+# checked out with CRLF fails on the box with `bad interpreter: /usr/bin/env
+# bash^M`, which is an obscure way to find out that a deploy timer never ran.
+# systemd parses unit files line by line and is no happier with a stray CR.
+#
+# Committed blobs are currently LF, so this pins what is already true rather
+# than fixing a break - the point is that it stays true after somebody edits one
+# of these in an editor that defaults to CRLF.
+*.sh      text eol=lf
+*.service text eol=lf
+*.timer   text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+
+# Parquet is the archive. Never touch it: these are binary, and a newline
+# "fix" inside one would corrupt a season silently.
+*.parquet binary
+*.npy     binary
+*.pt      binary
+*.png     binary
+*.jpg     binary
+*.mp4     binary
