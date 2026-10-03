@@ -5,6 +5,7 @@ import { ScanButton } from './ScanButton';
 import { ALERT_COLOR, aqiColor, bandForPm25 } from '@/lib/aqi';
 import { FORECAST_HOURS, MODEL_META, type Frame } from '@/lib/data';
 import { useMesh } from '@/lib/terminal/useMesh';
+import { useLiveNow } from '@/lib/useLiveNow';
 import { useAppStore } from '@/store/useAppStore';
 import { POLLUTANTS } from '@/lib/terminal/content';
 import { useAdvisories } from '@/lib/terminal/advisories';
@@ -114,7 +115,14 @@ export function EntryGrid({
   const mesh = useMesh();
   const source = useAppStore((st) => st.source);
   const { items: advisories } = useAdvisories();
-  const band = bandForPm25(frame.avgPm25);
+  // The tile below is the one that says "N CAAQMS stations reporting" and
+  // then prints a figure labelled NCR PM2.5. That figure was `frame.avgPm25`,
+  // the forecast's first hour, so the sentence credited the mesh with a number
+  // the mesh never produced - 85.6 against a live mean of 38. Same source as
+  // the hero now, so the tile's words and its number describe one thing.
+  const now = useLiveNow();
+  const shownPm25 = now.pm25 ?? frame.avgPm25;
+  const band = bandForPm25(shownPm25);
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -125,9 +133,9 @@ export function EntryGrid({
         eyebrow="PUBLIC TERMINAL"
         title="Live station telemetry"
         body={`Now: ${band.label}. ${mesh.stations.length} CAAQMS stations reporting ${POLLUTANTS.length} criteria channels across Delhi, Noida, Ghaziabad, Gurugram, and Faridabad.`}
-        stat={frame.avgPm25.toFixed(1)}
-        statLabel="NCR PM2.5 · µg/m³"
-        statColor={aqiColor(frame.avgPm25)}
+        stat={shownPm25.toFixed(1)}
+        statLabel={now.live ? `NCR PM2.5 · MEAN OF ${now.stations} LIVE` : 'NCR PM2.5 · FORECAST'}
+        statColor={aqiColor(shownPm25)}
       />
 
       <Tile
@@ -167,7 +175,9 @@ export function EntryGrid({
             {FORECAST_HOURS}-hour PM2.5 forecast for Delhi NCR on a{' '}
             {MODEL_META.resolution} grid, scored at{' '}
             {(source?.validated_rmse_ugm3 ?? MODEL_META.validatedRmse).toFixed(2)} µg/m³
-            against a held-out window. Current conditions are measured, live.
+            against a held-out window. PM2.5 is measured live at the stations;
+            the boundary layer and inversion index are model fields and are
+            marked FC wherever they appear.
           </p>
         </div>
         <div>

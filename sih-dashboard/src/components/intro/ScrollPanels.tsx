@@ -5,6 +5,7 @@ import { MiniSparkline } from '@/components/charts/MiniSparkline';
 import { Badge } from '@/components/ui/badge';
 import { ALERT_COLOR, ALERT_LABEL, aqiColor } from '@/lib/aqi';
 import { DISTRICTS, autoAnalysis, type Frame, type Interventions } from '@/lib/data';
+import { useLiveNow } from '@/lib/useLiveNow';
 import { SERIES } from '@/lib/tokens';
 
 const rise = (i: number) => ({
@@ -29,6 +30,19 @@ export function ScrollPanels({
   series: number[];
   interventions: Interventions;
 }) {
+  // This card said CURRENT CONDITIONS, badged it "Now", and printed
+  // `frame.avgPm25` - the forecast's first hour, which replays an archive.
+  // On 3 October it read 85.6 ug/m3 directly beneath the words FORECAST
+  // ENSEMBLE 85.6, while the live mesh was reading 38 and the assistant,
+  // which reads the mesh, answered with a city AQI 75 points lower. A reader
+  // comparing the two was right to think one of them was wrong.
+  //
+  // `useLiveNow` was written for exactly this and its own note records the
+  // hero and the sector pills being moved off `frames[0]` for the same
+  // reason; this card was missed. PM2.5 now comes from the mesh, and the
+  // three model fields keep saying FC, as the hero rail already does - no
+  // station measures a boundary layer.
+  const now = useLiveNow();
   const analysis = autoAnalysis(frame, interventions)[0];
   const ranked = [...DISTRICTS]
     .map((d) => ({ d, s: frame.districts[d.id] }))
@@ -47,13 +61,18 @@ export function ScrollPanels({
             <Activity className="size-3 text-cyan-600 dark:text-cyan-400" />
             CURRENT CONDITIONS
           </span>
-          <Badge color={aqiColor(frame.avgPm25)}>Now</Badge>
+          <Badge color={aqiColor(now.pm25 ?? frame.avgPm25)}>{now.live ? 'Now' : 'Forecast'}</Badge>
         </div>
         <dl className="mt-3 space-y-2.5">
-          <Row label="PM2.5 AVERAGE" value={frame.avgPm25.toFixed(1)} unit="µg/m³" color={aqiColor(frame.avgPm25)} />
-          <Row label="BOUNDARY LAYER HEIGHT" value={String(frame.avgPbl)} unit="m" />
-          <Row label="TEMPERATURE" value={frame.avgTemp.toFixed(1)} unit="°C" />
-          <Row label="SOLAR" value={String(frame.avgSolar)} unit="W/m²" />
+          <Row
+            label={now.live ? `PM2.5 · MEAN OF ${now.stations} LIVE` : 'PM2.5 AVERAGE · FC'}
+            value={(now.pm25 ?? frame.avgPm25).toFixed(1)}
+            unit="µg/m³"
+            color={aqiColor(now.pm25 ?? frame.avgPm25)}
+          />
+          <Row label="BOUNDARY LAYER HEIGHT · FC" value={String(frame.avgPbl)} unit="m" />
+          <Row label="TEMPERATURE · FC" value={frame.avgTemp.toFixed(1)} unit="°C" />
+          <Row label="SOLAR · FC" value={String(frame.avgSolar)} unit="W/m²" />
         </dl>
       </motion.div>
 

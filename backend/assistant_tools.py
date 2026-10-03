@@ -86,10 +86,29 @@ def city_now() -> dict[str, Any]:
         p = s.get("prominent_pollutant")
         if p:
             drivers[p] = drivers.get(p, 0) + 1
+    # The live-only mean, reported separately from the all-station one.
+    #
+    # `city_mean_aqi` averages every publishable station, live and archive
+    # together, and the archive runs about nine days behind - so the headline
+    # figure was partly a mean of last week. The page does not do this: its
+    # hero, its sector pills and its current-conditions card all read live
+    # stations only (see useLiveNow). On 3 October that put the assistant at a
+    # city AQI of 153 while the dashboard beside it reported the live mesh, and
+    # a reader comparing the two concluded one of them was lying.
+    #
+    # Both are kept, because "what is it now" and "what does the whole mesh
+    # say" are different questions and the second is still worth answering.
+    # The live one is named first in the caveat so the model prefers it when
+    # the question is about now.
+    live_aqis = [s["aqi"] for s in live]
+    live_pm = [s["pm25"] for s in live if s.get("pm25") is not None]
+
     return {
         "source": "/api/v1/stations",
         "as_of": d.get("as_of"),
         "index": d.get("index"),
+        "live_mean_aqi": round(sum(live_aqis) / len(live_aqis)) if live_aqis else None,
+        "live_mean_pm25_ugm3": round(sum(live_pm) / len(live_pm), 1) if live_pm else None,
         "city_mean_aqi": round(sum(aqis) / len(aqis)),
         "stations_reporting": len(stations),
         "live_this_hour": len(live),
@@ -99,8 +118,11 @@ def city_now() -> dict[str, Any]:
         "deciding_channel_counts": drivers,
         "channels_withheld": d.get("pollutants_excluded", {}),
         "caveat": (
-            "Archive stations describe an earlier hour than the live ones; say so "
-            "if the answer leans on them."
+            "For a question about conditions now, quote `live_mean_aqi` and say "
+            "how many stations it covers - that is the figure the dashboard "
+            "shows. `city_mean_aqi` averages live and archive stations together "
+            "and the archive runs days behind, so use it only for a question "
+            "about the whole mesh, and say that it mixes hours when you do."
         ),
     }
 
