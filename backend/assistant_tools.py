@@ -107,20 +107,33 @@ def city_now() -> dict[str, Any]:
         "source": "/api/v1/stations",
         "as_of": d.get("as_of"),
         "index": d.get("index"),
-        "live_mean_aqi": round(sum(live_aqis) / len(live_aqis)) if live_aqis else None,
-        "live_mean_pm25_ugm3": round(sum(live_pm) / len(live_pm), 1) if live_pm else None,
-        "city_mean_aqi": round(sum(aqis) / len(aqis)),
-        "stations_reporting": len(stations),
-        "live_this_hour": len(live),
-        "carried_from_archive": len(stations) - len(live),
+        # Nested, so the count travels with the means it was computed from.
+        # Flat `live_mean_aqi` beside `stations_reporting` was enough to get
+        # them paired wrongly: the first answer read "live mean AQI 182 based
+        # on 65 reporting stations", where 182 is over the 24 live ones and 65
+        # is the whole mesh. The figure was right and the attribution was not,
+        # which is the half a reader checks.
+        "live_now": {
+            "mean_aqi": round(sum(live_aqis) / len(live_aqis)) if live_aqis else None,
+            "mean_pm25_ugm3": round(sum(live_pm) / len(live_pm), 1) if live_pm else None,
+            "stations": len(live),
+        },
+        "whole_mesh": {
+            "mean_aqi": round(sum(aqis) / len(aqis)),
+            "stations": len(stations),
+            "live_this_hour": len(live),
+            "carried_from_archive": len(stations) - len(live),
+        },
         "worst": {"station": worst["name"], "aqi": worst["aqi"], "zone": worst.get("zone")},
         "cleanest": {"station": best["name"], "aqi": best["aqi"], "zone": best.get("zone")},
         "deciding_channel_counts": drivers,
         "channels_withheld": d.get("pollutants_excluded", {}),
         "caveat": (
-            "For a question about conditions now, quote `live_mean_aqi` and say "
-            "how many stations it covers - that is the figure the dashboard "
-            "shows. `city_mean_aqi` averages live and archive stations together "
+            "For a question about conditions now, quote `live_now.mean_aqi` and "
+            "attribute it to `live_now.stations` - that is the figure the "
+            "dashboard shows, over exactly those stations. Do not pair it with "
+            "`whole_mesh.stations`, which counts the archive too. "
+            "`whole_mesh.mean_aqi` averages live and archive stations together "
             "and the archive runs days behind, so use it only for a question "
             "about the whole mesh, and say that it mixes hours when you do."
         ),
