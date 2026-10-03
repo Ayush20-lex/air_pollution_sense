@@ -1,8 +1,14 @@
 /**
  * The meteorology side channel, and whether it is still worth anything.
  *
- * The GFS extract is committed to the repository rather than fetched live, so
- * it ages from the moment it lands. The backend has been computing exactly how
+ * It draws whichever source answered - the live Open-Meteo fetch first, the
+ * committed GFS extract as a fallback - and names it from the payload rather
+ * than assuming. That matters because of the line further down: this panel
+ * returns null when the source has expired, so while the only source was a
+ * 299-hour-old file the whole section was invisible.
+ *
+ * The original note, still true of the parquet path: the extract is committed to
+ * the repository rather than fetched live, so it ages from the moment it lands. The backend has been computing exactly how
  * much all along; nothing displayed it. As this was written the file is 104
  * hours old with its entire 72-hour window in the past, and the dashboard gave
  * no sign.
@@ -19,7 +25,7 @@ import * as React from 'react';
 import { useSeverityInk } from '@/lib/terminal/palette';
 import { CloudOff, CloudSun } from 'lucide-react';
 import { Label, SectionHead, TelemetryCard } from '@/components/terminal/TerminalPrimitives';
-import { fetchGfs, GFS_STATUS, type GfsPayload } from '@/lib/gfsApi';
+import { fetchGfs, GFS_STATUS, MET_SOURCE, type GfsPayload } from '@/lib/gfsApi';
 
 /** The file only changes when the partner repo is pulled; no need to poll hard. */
 const REFRESH_MS = 600_000;
@@ -90,9 +96,12 @@ export function MetSourcePanel() {
 
   return (
     <div id="met" className="space-y-3">
+      {/* `sub` comes from the payload, not a literal: this panel now draws
+          whichever of the two met sources answered, and the live one is not
+          the partner's file. */}
       <SectionHead
         title="Meteorology Source"
-        sub="NOAA GFS, clipped to the NCR domain by the partner pipeline"
+        sub={MET_SOURCE[data.source] ?? `Meteorology source: ${data.source}`}
         right={
           <span className="font-mono text-xs uppercase tracking-wider text-term-ink-variant">
             {data.grid_points} cells · {data.steps} steps

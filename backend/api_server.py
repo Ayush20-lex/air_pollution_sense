@@ -51,6 +51,7 @@ from coupled_model import (
 from physics_loss import compute_isi
 from grap_policy import calculate_indian_aqi_pm25, evaluate_grap_stage
 import gfs_reader
+import openmeteo_live
 import aqi_cpcb
 import station_registry
 import waqi_live
@@ -248,6 +249,15 @@ async def _warm_then_record() -> None:
         raise
     except Exception as exc:  # noqa: BLE001 - a cold first request, nothing worse
         log.warning("could not warm the archive (%s)", exc)
+    # One HTTP round trip, and every panel that draws met data waits on it.
+    try:
+        await asyncio.to_thread(openmeteo_live.load)
+        log.info("live met warm (Open-Meteo)")
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - the parquet still answers
+        log.warning("could not warm the live met feed (%s)", exc)
+
     try:
         warm = await asyncio.to_thread(_live_mesh)
         if warm:
@@ -659,6 +669,13 @@ def model_status():
             # published PM2.5, and describe() says why.
             "aerosol_pbl_coupling": coupled_feedback.describe(),
             "noaa_gfs": gfs_reader.describe(),
+            # The live met feed. Same model as the parquet above
+            # (gfs_seamless is NCEP GFS), fetched per call instead of
+            # committed, so it cannot expire the way that file does - and
+            # did, by 299 hours. Reported beside it rather than instead of
+            # it, because the parquet is what the partner pipeline owns and
+            # its staleness is worth seeing.
+            "open_meteo": openmeteo_live.describe(),
             "station_mesh": station_registry.describe(
                 get_settings().baseline_season, _mesh_origin()
             ),
@@ -1343,6 +1360,42 @@ def met_gfs(response: Response):
     that a body means current data.
     """
     data = gfs_reader.load()
+    if data is None:
+        response.status_code = 204
+        return None
+    return data
+
+
+@app.get("/api/v1/met/live")
+# Sync, for the same reason /api/v1/met/gfs is: this does a blocking HTTP fetch
+# and never awaits, so declared async it would hold the event loop for the whole
+# round trip and stall every other endpoint behind it.
+def met_live(response: Response):
+    """
+    Live meteorology over the same nine cells as the GFS extract.
+
+    The field this adds over `/api/v1/met/gfs` is not a field at all - it is
+    currency. Both carry NCEP GFS; that one reads a parquet committed to the
+    repository on a partner's schedule, which on 3 October 2026 was 299.6 hours
+    old with its entire window in the past, and this one fetches the same model
+    now. Both are offered so the difference is visible rather than papered over.
+
+    It also carries three quantities the extract does not: relative humidity,
+    boundary-layer height and shortwave radiation - which are three of the
+    twelve channels, and the two sides of the aerosol-PBL loop this project is
+    built around.
+
+    Still a side channel, not a forecast input. The blend baseline is validated
+    at 61.62 ug/m3 and feeding a new field into it would invalidate that number;
+    see `gfs_reader`'s docstring, which this follows deliberately.
+
+    Read `precipitation_mm_1h` as the hour ending at `valid_time`. The extract's
+    equivalent is `precipitation_mm_3h` over three hours, and the names differ on
+    purpose so the two cannot be summed as though they were the same quantity.
+
+    204 when Open-Meteo does not answer, which is an ordinary state.
+    """
+    data = openmeteo_live.load()
     if data is None:
         response.status_code = 204
         return None
