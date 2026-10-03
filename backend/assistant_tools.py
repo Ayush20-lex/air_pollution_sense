@@ -355,8 +355,11 @@ DECLARATIONS: list[dict[str, Any]] = [
         "name": "city_now",
         "description": (
             "Current air quality across Delhi NCR: city mean AQI, how many stations "
-            "are reporting, the worst and cleanest station, and which pollutant is "
-            "deciding the index. Use for any 'right now' or 'today' question."
+            "are reporting, the worst and cleanest station measured this hour, and "
+            "which pollutant is deciding the index. Use for any 'right now' or "
+            "'today' question about what the instruments are reading. The worst "
+            "station here is the worst measurement now - it is NOT the GRAP "
+            "hotspot, which is a forecast and comes from grap_stage."
         ),
         "parameters": {"type": "object", "properties": {}},
     },
@@ -416,8 +419,13 @@ DECLARATIONS: list[dict[str, Any]] = [
         "name": "grap_stage",
         "description": (
             "The Graded Response Action Plan stage in force, the restrictions it "
-            "carries, and the reading that set it. Use for rules, restrictions, "
-            "bans, odd-even, school closures or 'what is the government doing'."
+            "carries, the forecast city AQI that set it, and the hotspot station "
+            "the policy engine is watching. Use for rules, restrictions, bans, "
+            "odd-even, school closures, 'what is the government doing', and for any "
+            "question about the GRAP stage, the policy engine or its hotspot. Its "
+            "figures are forecasts - the peak 24-hour mean over the next 72 hours - "
+            "not current readings, so never present them as what the air is doing "
+            "now."
         ),
         "parameters": {"type": "object", "properties": {}},
     },
