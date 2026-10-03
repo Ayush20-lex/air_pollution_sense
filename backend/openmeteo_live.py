@@ -111,6 +111,33 @@ HOURLY = (
     "shortwave_radiation",
 )
 
+#: Below this, a boundary-layer height is a fill value and not a profile.
+#:
+#: GFS's PBL over this domain went 2760 m at 10z, 2820 m at 11z, then 15 m at
+#: 12z and sat on 10 m for most of the night. A mixed layer does not fall by two
+#: orders of magnitude in an hour, and 10 m is the exact floor the field never
+#: goes below - across `gfs_seamless` and `gfs_global` alike, with `best_match`
+#: showing the same shape against a floor of 25 m. ECMWF and ICON do not publish
+#: the field at all, so there is no model here to switch to that reports a
+#: credible nocturnal PBL.
+#:
+#: The daytime values are good and this is the field the project most needs - it
+#: is channel 9 and one whole side of the aerosol-PBL loop - so the field stays.
+#: What cannot stay is serving 10 m as a measurement: a real nocturnal boundary
+#: layer over a city is one to three hundred metres, so 10 m is not a low
+#: reading, it is no reading, and it would be read as a catastrophic inversion.
+#: Those values are published as null and counted in `rows_floored`, so the
+#: panel shows a gap it can see rather than a number it cannot question.
+#:
+#: 50 m is below any real mixed layer over Delhi and above both floors, so it
+#: removes the fills without touching a genuinely low night.
+#:
+#: Worth knowing: `channel_spec` records the observed PBL range over the
+#: training archive as "10 .. 3920 m". That archive is built by
+#: 12_fetch_openmeteo_forecast.py from this same API, so the same floor is
+#: already in the gridded dataset. This guard covers the live path only.
+PBL_FLOOR_M = 50.0
+
 #: The unit string Open-Meteo must echo back for wind. Asserted rather than
 #: assumed: the default is km/h, and silently accepting it would reproduce the
 #: 3.6x error `channel_spec` documents.
@@ -203,6 +230,7 @@ def _build() -> dict[str, Any] | None:
 
     series: list[dict[str, Any]] = []
     counted: dict[str, int] = {f: 0 for f in FIELDS}
+    floored = 0
 
     for i, stamp in enumerate(times):
         ts = datetime.fromisoformat(stamp).replace(tzinfo=timezone.utc)
@@ -218,6 +246,14 @@ def _build() -> dict[str, Any] | None:
                 return None if v is None else float(v)
 
             u, v = _uv(at("wind_speed_10m"), at("wind_direction_10m"))
+
+            # See PBL_FLOOR_M. Dropped rather than clamped: a clamp would still
+            # be a number, and the honest answer here is that there isn't one.
+            pbl = at("boundary_layer_height")
+            if pbl is not None and pbl <= PBL_FLOOR_M:
+                pbl = None
+                floored += 1
+
             cell: dict[str, Any] = {
                 # The coordinates Open-Meteo actually served, which are the
                 # model's nearest node and not necessarily what was asked for.
@@ -227,7 +263,7 @@ def _build() -> dict[str, Any] | None:
                 "u_wind_ms": None if u is None else round(u, 3),
                 "v_wind_ms": None if v is None else round(v, 3),
                 "relative_humidity_pct": at("relative_humidity_2m"),
-                "boundary_layer_height_m": at("boundary_layer_height"),
+                "boundary_layer_height_m": pbl,
                 "shortwave_radiation_wm2": at("shortwave_radiation"),
                 "precipitation_mm_1h": at("precipitation"),
             }
@@ -264,14 +300,25 @@ def _build() -> dict[str, Any] | None:
         # the parquet uses - zero meaning "none reported by the upstream", not
         # "every value independently verified". `quality_note` says so.
         "fields": {
-            f: {"unit": unit, "rows": counted[f], "rows_flagged": 0, "rows_imputed": 0}
+            f: {
+                "unit": unit,
+                "rows": counted[f],
+                "rows_flagged": 0,
+                "rows_imputed": 0,
+                # Only the one field this applies to carries the count, so a
+                # reader is not invited to look for it on the others.
+                **({"rows_floored": floored} if f == "boundary_layer_height_m" else {}),
+            }
             for f, unit in FIELDS.items()
         },
         "fields_absent": [f for f in FIELDS if counted[f] == 0],
         "quality_note": (
             "Open-Meteo publishes no QC or imputation flags; rows_flagged and "
             "rows_imputed are zero because none are reported, not because the "
-            "values were checked here."
+            f"values were checked here. boundary_layer_height_m is the exception: "
+            f"{floored} value(s) at or below {PBL_FLOOR_M:.0f} m were withheld as "
+            "fill rather than served as a boundary layer - GFS floors the field "
+            "at 10 m overnight and a real one over Delhi is 100-300 m."
         ),
         "fetched_at": fetched.isoformat(),
         "read_at": fetched.isoformat(),

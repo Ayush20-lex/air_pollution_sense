@@ -50,6 +50,10 @@ export type GfsField = {
   rows_flagged: number;
   rows_imputed: number;
   rows_no_window?: number;
+  /** Live path only: values withheld as a fill rather than served. See
+   *  openmeteo_live.PBL_FLOOR_M - GFS floors the boundary layer at 10 m
+   *  overnight, which would read as a catastrophic inversion. */
+  rows_floored?: number;
 };
 
 export type GfsPayload = {
