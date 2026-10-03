@@ -55,10 +55,29 @@ jobs:
         with:
           python-version: '3.12'
 
-      # Only what the refresh chain actually imports. torch and the rest of
-      # backend/requirements.txt are not needed to fetch, merge and score.
+      # From a file in the repo, not a line typed here. The first version of
+      # this was hand-derived from top-of-file imports and missed pyproj and
+      # scipy, which baseline_forecaster imports inside `_precompute_idw()` -
+      # so CI died 49s in, after the re-scoring, on step 7.
       - name: Install dependencies
-        run: pip install --quiet numpy pandas pyarrow requests python-dotenv
+        run: pip install --quiet -r ml_pipeline/requirements-refresh.txt
+
+      # Fail in two seconds rather than fifty. The missing dependency above was
+      # only reached after the fetch and the full re-score had run, which makes
+      # a dependency problem look like a scoring problem. This imports the
+      # module whose lazy imports are the risk and builds the one object that
+      # triggers them.
+      - name: Pre-flight - can the scoring chain even load
+        run: |
+          cd backend
+          python - <<'PY'
+          import baseline_forecaster, station_registry, observation_qc, aqi_cpcb
+          # The lazy pair live in _precompute_idw; import them directly rather
+          # than building a forecaster, which would read the whole archive.
+          from pyproj import Transformer
+          from scipy.spatial import cKDTree
+          print("scoring chain imports fine, lazy dependencies included")
+          PY
 
       - name: Check the key is present
         env:

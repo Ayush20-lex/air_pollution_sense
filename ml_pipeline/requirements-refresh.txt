@@ -1,0 +1,30 @@
+# What 19_refresh_archive.py actually needs, end to end.
+#
+# A separate list from backend/requirements.txt on purpose: the refresh fetches,
+# merges, scores and regenerates snapshots, and needs none of torch, fastapi,
+# uvicorn, redis or the database drivers that the serving API does. Installing
+# the backend's full list in CI would pull ~2GB to run a scoring job.
+#
+# It exists as a file rather than a pip line inside the workflow because the
+# first version of that line was hand-derived from top-of-file imports and was
+# wrong: baseline_forecaster imports pyproj and scipy *inside*
+# `_precompute_idw()`, so a grep for `^import` could not see them and CI died
+# 49 seconds in, after the re-scoring had already run. One list, in the repo,
+# is the thing that stops that recurring - a lazy import added later gets added
+# here too.
+#
+#   pip install -r ml_pipeline/requirements-refresh.txt
+
+# fetch
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# the archive itself
+pandas>=2.2.0
+pyarrow>=15.0.0
+numpy>=1.26.0
+
+# baseline_forecaster._precompute_idw - both imported lazily, both required to
+# regenerate the dashboard's offline station snapshot (step 7 of the refresh).
+scipy>=1.13.0
+pyproj>=3.6.0
